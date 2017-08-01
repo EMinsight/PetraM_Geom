@@ -1,0 +1,13 @@
+*.pyc
+*.so
+*.o
+*.a
+#*
+.#*
+*~
+data
+build
+dist
+*.egg-info
+petram/trash
+Makefile
