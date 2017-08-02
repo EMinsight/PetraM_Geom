@@ -1,0 +1,225 @@
+import numpy as np
+
+import petram.debug as debug
+dprint1, dprint2, dprint3 = debug.init_dprints('GmshPrimitives')
+
+from petram.phys.vtable import VtableElement, Vtable
+from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
+from petram.geom.gmsh_geom_model import get_geom_key
+
+
+cdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+          ('ax1', VtableElement('ax1', type='float',
+                                   guilabel = 'axis1',
+                                   suffix =('x', 'y', 'z'),
+                                   default = [1, 0, 0], 
+                                   tip = "axis 1" )),
+          ('ax2', VtableElement('ax2', type='float',
+                                 guilabel = 'axis2',
+                                 suffix =('x', 'y', 'z'),
+                                 default = [0, 1, 0], 
+                                 tip = "axis 2" )),
+          ('radius', VtableElement('radius', type='float',
+                                   guilabel = 'r',
+                                   default = 1.0, 
+                                   tip = "radius" )),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.1, 
+                                   tip = "characteristc length from point" )),)
+
+class Circle(GeomPB):
+    vt = Vtable(cdata)
+    def build_geom(self, geom, objs):
+        center, ax1, ax2, radius, lcar = self.vt.make_value_or_expression(self)
+        a1 = np.array(ax1);  a2 = np.array(ax2)
+        a2 = np.cross(np.cross(a1, a2), a1)
+        a1 = a1/np.sqrt(np.sum(a1**2))*radius
+        a2 = a2/np.sqrt(np.sum(a2**2))*radius                      
+
+        c =np.array(center)
+        p1 = geom.add_point(c+a1, lcar)
+        p2 = geom.add_point(c+a2, lcar)
+        p3 = geom.add_point(c-a1, lcar)
+        p4 = geom.add_point(c-a2, lcar)                      
+        pc = geom.add_point(c, lcar)
+        ca1 = geom.add_circle_arc(p1, pc, p2)
+        ca2 = geom.add_circle_arc(p2, pc, p3)
+        ca3 = geom.add_circle_arc(p3, pc, p4)
+        ca4 = geom.add_circle_arc(p4, pc, p1)
+        ll1 = geom.add_line_loop([ca1, ca2, ca3, ca4])
+        ps1 = geom.add_plane_surface(ll1)
+        newkey = objs.addobj(ps1, 'ps')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+
+rdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+          ('elen1', VtableElement('elen1', type='float',
+                                   guilabel = 'A',
+                                   default = 1.0, 
+                                   tip = "length of edge (1)" )),
+          ('elen2', VtableElement('elen2', type='float',
+                                   guilabel = 'B',
+                                   default = 1.0, 
+                                   tip = "length of edge (2)" )),
+          ('normal', VtableElement('normal', type='float',
+                                   guilabel = 'n',
+                                   suffix =('x', 'y', 'z'),
+                                   default = [0, 0, 1], 
+                                   tip = "normal vector" )),)
+
+class Rect(GeomPB):
+    vt = Vtable(rdata)
+    
+    def build_geom(self, geom, objs):
+        pass
+
+    
+pdata =  (('xarr', VtableElement('xarr', type='array',
+                              guilabel = 'X',
+                              default = '0.0',
+                              tip = "X" )),
+          ('yarr', VtableElement('yarr', type='array',
+                              guilabel = 'Y',
+                              default = '0.0',
+                              tip = "Y" )),
+          ('zarr', VtableElement('zarr', type='array',
+                              guilabel = 'Z',
+                              default = '0.0',
+                              tip = "Z" )),)
+
+class Polygon(GeomPB):
+    vt = Vtable(pdata)
+
+edata =  (('ex_target', VtableElement('ex_target', type='string',
+                                      guilabel = 'Target',
+                                      default = "",
+                                      tip = "extrusion target")),
+          ('paxis', VtableElement('paxis', type='float',
+                             guilabel = 'Point on Axis',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "point on axis" )),
+          ('taxis', VtableElement('taxis', type='float',
+                                   guilabel = 'Translation Axis',
+                                   suffix =('x', 'y', 'z'),
+                                   default = [0, 0, 1],
+                                   tip = "translation axis" )),
+          ('ex_len', VtableElement('exlen', type='float',
+                             guilabel = 'Length',
+                             default = 1.0,
+                             tip = "Extrusion length" )), )         
+
+class Extrude(GeomPB):    
+    vt = Vtable(edata)
+
+    def build_geom(self, geom, objs):
+        targets, pax, tax, len = self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+
+        tax = tax/np.sqrt(np.sum(np.array(tax)**2))*len          
+        newkeys = []
+        for t in targets:
+             if not t in objs:
+                 assert False, t + " does not exist"
+             ret = geom.extrude(objs[t],
+                          translation_axis=tax,
+                          #rotation_axis=rax,
+                          point_on_axis=pax)
+
+             #newkeys.append(objs.addobj(ret[0], t))
+             newkeys.append(objs.addobj(ret[1], 'ex'))             
+             #for o in ret[2:]:
+             #   newkeys.append(objs.addobj(o,  get_geom_key(o))
+                               
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
+edata =  (('ex_target', VtableElement('ex_target', type='string',
+                                      guilabel = 'Target',
+                                      default = "",
+                                      tip = "extrusion target")),
+          ('paxis', VtableElement('paxis', type='float',
+                             guilabel = 'Point on Axis',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "point on axis" )),
+          ('raxis', VtableElement('raxis', type='float',
+                                   guilabel = 'Translation Axis',
+                                   suffix =('x', 'y', 'z'),
+                                   default = [0, 0, 1],
+                                   tip = "translation axis" )),
+          ('angle', VtableElement('angel', type='float',
+                             guilabel = 'angle',
+                             default = 180.,
+                             tip = "Extrusion length" )), )         
+        
+class Revolve(GeomPB):    
+    vt = Vtable(edata)
+
+    def build_geom(self, geom, objs):
+        targets, pax, rax, angle = self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+
+        newkeys = []
+        for t in targets:
+             if not t in objs:
+                 assert False, t + " does not exist"
+             ret = geom.extrude(objs[t],
+                                rotation_axis=rax,
+                                point_on_axis=pax,
+                                angle = angle*np.pi/180.)
+
+             #newkeys.append(objs.addobj(ret[0], t))
+             newkeys.append(objs.addobj(ret[1], 'ex'))             
+             #for o in ret[2:]:
+             #   newkeys.append(objs.addobj(o,  get_geom_key(o))
+                               
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+
+ddata =  (('objplus', VtableElement('objplus', type='string',
+                                      guilabel = '+',
+                                      default = "",
+                                      tip = "added objects")),
+          ('objminus', VtableElement('objminus', type='string',
+                                      guilabel = '-',
+                                      default = "",
+                                      tip = "objects to be subtracted")),)
+                
+class Difference(GeomPB):    
+    vt = Vtable(ddata)
+    def build_geom(self, geom, objs):
+        tp, tm  = self.vt.make_value_or_expression(self)
+        tp = [x.strip() for x in tp.split(',')]
+        tm = [x.strip() for x in tm.split(',')]          
+
+        input_entity = [objs[x] for x in tp]
+        tool_entity  = [objs[x] for x in tm]
+        geom.set_factory('OpenCASCADE')          
+        ret = geom.boolean_difference(
+                          input_entity,
+                          tool_entity,
+                          delete = True)
+        newkeys = []
+        newkeys.append(objs.addobj(ret[0], 'diff'))
+        if len(ret) > 1:
+            for o in ret[1:]:
+                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+            
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+          
+
+        
+    
