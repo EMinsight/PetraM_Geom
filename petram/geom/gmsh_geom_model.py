@@ -12,6 +12,7 @@ import tempfile
 import meshio
 import numpy as np
 import voropy
+import traceback
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
@@ -123,17 +124,36 @@ class GmshGeom(Model, NS_mixin):
         viewer = dlg.GetParent()
         engine = viewer.engine
         engine.build_ns()
-        
-        self.build_geom()
+
+        try:
+            self.build_geom()
+        except:
+            import ifigure.widgets.dialog as dialog               
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to build geometry',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
         dlg.OnRefreshTree()
+        self.onUpdateGeoView(evt)
         evt.Skip()
         
+    def onUpdateGeoView(self, evt):
+        dlg = evt.GetEventObject()
+        viewer = dlg.GetParent()
+        
+        geo_text = self._txt_unrolled[:]
+        geo_text.extend(['Show "*";'
+                         'Transfinite Line *  = 5;'])
+        ret =  generate_mesh(dim = 1, geo_text = geo_text)
+        from .geo_plot import plot_geometry
+        plot_geometry(viewer, ret)
+    
     def build_geom(self, stop1=None, stop2=None):
         children = [x for x in self.walk()]
         children = children[1:]
 
         objs = GeomObjs()
-        
+        self._objs = objs        
         import pygmsh
         geom = pygmsh.Geometry()
         for child in children:
@@ -149,8 +169,7 @@ class GmshGeom(Model, NS_mixin):
                  print(l.strip())
         self._txt_unrolled = [x.strip() for x in txt_unrolled]
         self._num_entities = num_entities
-        print(num_entities)
-        self._objs = objs
+
 
     def onExportGeom(self, evt):
         print("export geom file")
@@ -178,20 +197,31 @@ class GmshGeom(Model, NS_mixin):
        
     def import_panel1_value(self, v):
         pass
-
+    
+        
 def generate_mesh(
-        geo_object,
+        geo_object = None,
         optimize=True,
         num_quad_lloyd_steps=10,
         num_lloyd_steps=1000,
         verbose=True,
         dim=3,
-        prune_vertices=True
+        prune_vertices=True,
+        filename = None,
+        geo_text = None
         ):
-    from pygmsh.helper import _get_gmsh_exe
-    
-    handle, geo_filename = tempfile.mkstemp(suffix='.geo')
-    os.write(handle, geo_object.get_code().encode())
+    from pygmsh.helper import _get_gmsh_exe, _is_flat
+
+    if filename is None:
+        handle, geo_filename = tempfile.mkstemp(suffix='.geo')
+    else:
+        geo_filename = filename + '.geo'
+        handle = open(geo_filename, 'r')
+        
+    if geo_object is not None:
+       os.write(handle, geo_object.get_code().encode())
+    elif geo_text is not None:
+       os.write(handle, '\n'.join(geo_text))
     if dim == 0:
         os.write(handle, "Geometry.OldNewReg=0;\n")
         os.write(handle, 'Printf("Number of entitites, : %g, %g, %g, %g :", newp, newl, news, newv);\n')
@@ -200,21 +230,24 @@ def generate_mesh(
     gmsh_executable = _get_gmsh_exe()
 
     if dim > 0:
-        handle, msh_filename = tempfile.mkstemp(suffix='.msh')
-        os.close(handle)
+        if filename is None:
+            handle, msh_filename = tempfile.mkstemp(suffix='.msh')
+            os.close(handle)            
+        else:
+            msh_filename = filename + '.msh'
         cmd = [
             gmsh_executable,
             '-{}'.format(dim), '-bin', geo_filename, '-o', msh_filename
             ]
-        gmsh_major_version = geo_object.get_gmsh_major()
-        if gmsh_major_version < 3 and optimize:
-            cmd += ['-optimize']
         if num_quad_lloyd_steps > 0:
             cmd += ['-optimize_lloyd', str(num_quad_lloyd_steps)]
         
     else:
-        handle, geou_filename = tempfile.mkstemp(suffix='.geo_unrolled')
-        os.close(handle)
+        if filename is None:
+            handle, geou_filename = tempfile.mkstemp(suffix='.geo_unrolled')
+            os.close(handle)         
+        else:
+            geou_filename = filename + '.geo_unrolled'
         cmd = [
             gmsh_executable,
             '-{}'.format(dim), geo_filename, '-o', geou_filename
@@ -237,13 +270,12 @@ def generate_mesh(
         for x in stdoutdata:
             if x.find("Number of entitites,")!= -1:
                 txt = x[x.find("Number of entitites,"):].split(":")
-                print(txt)
                 num_entities = [int(x)-1 for x in txt[1].split(',')]
                 
         fid = open(geou_filename, 'r')
         lines = fid.readlines()
         fid.close()
-        if not debug:
+        if filename is None:            
             os.remove(geo_filename)
             os.remove(geou_filename)
         return lines, num_entities
@@ -251,7 +283,7 @@ def generate_mesh(
     X, cells, pt_data, cell_data, field_data = meshio.read(msh_filename)
 
     # clean up
-    if not debug:    
+    if filename is None:    
         os.remove(geo_filename)
         os.remove(msh_filename)
 

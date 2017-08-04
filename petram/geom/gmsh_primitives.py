@@ -29,7 +29,7 @@ cdata =  (('center', VtableElement('center', type='float',
                                    tip = "radius" )),
           ('lcar', VtableElement('lcar', type='float',
                                    guilabel = 'lcar',
-                                   default = 0.1, 
+                                   default = 0.0, 
                                    tip = "characteristc length from point" )),)
 
 class Circle(GeomPB):
@@ -57,30 +57,46 @@ class Circle(GeomPB):
         self._objkeys = objs.keys()
         self._newobjs = [newkey]
 
-rdata =  (('center', VtableElement('center', type='float',
-                             guilabel = 'Center',
+rdata =  (('corner', VtableElement('corner', type='float',
+                             guilabel = 'Corner',
                              suffix =('x', 'y', 'z'),
                              default = [0,0,0],
                              tip = "Center of Circle" )),
-          ('elen1', VtableElement('elen1', type='float',
-                                   guilabel = 'A',
-                                   default = 1.0, 
-                                   tip = "length of edge (1)" )),
-          ('elen2', VtableElement('elen2', type='float',
-                                   guilabel = 'B',
-                                   default = 1.0, 
-                                   tip = "length of edge (2)" )),
-          ('normal', VtableElement('normal', type='float',
-                                   guilabel = 'n',
-                                   suffix =('x', 'y', 'z'),
-                                   default = [0, 0, 1], 
-                                   tip = "normal vector" )),)
+          ('edge1', VtableElement('edge1', type='float',
+                             guilabel = 'Edge(1)',
+                             suffix =('x', 'y', 'z'),
+                             default = [1,0,0],
+                             tip = "Edge of rectangle" )),
+          ('edge2', VtableElement('edge2', type='float',
+                             guilabel = 'Edge(2)',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,1,0],
+                             tip = "Edge of rectangle" )),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.1, 
+                              tip = "characteristc length from point" )),)
 
 class Rect(GeomPB):
     vt = Vtable(rdata)
     
     def build_geom(self, geom, objs):
-        pass
+        c1,  e1,  e2,  lcar = self.vt.make_value_or_expression(self)
+        c1 = np.array(c1);
+        e1 = np.array(e1);        e2 = np.array(e2);
+        p1 = geom.add_point(c1, lcar)
+        p2 = geom.add_point(c1+e1, lcar)
+        p3 = geom.add_point(c1+e1+e2, lcar)
+        p4 = geom.add_point(c1+e2, lcar)
+        l1 = geom.add_line(p1, p2)
+        l2 = geom.add_line(p2, p3)
+        l3 = geom.add_line(p3, p4)
+        l4 = geom.add_line(p4, p1)        
+        ll1 = geom.add_line_loop([l1, l2, l3, l4])
+        rec1 = geom.add_plane_surface(ll1)
+        newkey = objs.addobj(rec1, 'rec')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
 
     
 pdata =  (('xarr', VtableElement('xarr', type='array',
@@ -94,10 +110,31 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
           ('zarr', VtableElement('zarr', type='array',
                               guilabel = 'Z',
                               default = '0.0',
-                              tip = "Z" )),)
-
+                              tip = "Z" )),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.1, 
+                              tip = "characteristc length from point" )),)
 class Polygon(GeomPB):
     vt = Vtable(pdata)
+    def build_geom(self, geom, objs):
+        xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
+        if len(xarr) < 2: return
+        print type(xarr)
+        try:
+           pos = np.vstack((xarr, yarr, zarr)).transpose()
+        except:
+           print("can not make proper input array")
+           return
+        # check if data is already closed...
+        if np.abs(np.sum((pos[0] - pos[-1])**2)) < 1e-17:
+            pos = pos[:-1]
+        poly = geom.add_polygon(pos, lcar = lcar)
+
+        # apparently I should use this object (poly.surface)...?
+        newkey = objs.addobj(poly.surface, 'pol')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Target',
@@ -135,7 +172,7 @@ class Extrude(GeomPB):
                           #rotation_axis=rax,
                           point_on_axis=pax)
 
-             #newkeys.append(objs.addobj(ret[0], t))
+             newkeys.append(objs.addobj(ret[0], t))
              newkeys.append(objs.addobj(ret[1], 'ex'))             
              #for o in ret[2:]:
              #   newkeys.append(objs.addobj(o,  get_geom_key(o))
@@ -178,7 +215,7 @@ class Revolve(GeomPB):
                                 point_on_axis=pax,
                                 angle = angle*np.pi/180.)
 
-             #newkeys.append(objs.addobj(ret[0], t))
+             newkeys.append(objs.addobj(ret[0], t))
              newkeys.append(objs.addobj(ret[1], 'ex'))             
              #for o in ret[2:]:
              #   newkeys.append(objs.addobj(o,  get_geom_key(o))
