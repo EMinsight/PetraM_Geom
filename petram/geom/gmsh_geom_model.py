@@ -120,14 +120,17 @@ class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
         self.parent.onUpdateGeoView(evt)
-        evt.Skip()
+
         
     def onBuildBefore(self, evt):
         self._onBuildThis(evt, stop1 = self)
+        evt.Skip()
+        
     def onBuildAfter(self, evt):        
         self._onBuildThis(evt, stop2 = self)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
+        evt.Skip()        
                 
 class GmshGeom(Model, NS_mixin):
     has_2nd_panel = False
@@ -165,9 +168,12 @@ class GmshGeom(Model, NS_mixin):
         viewer = dlg.GetParent()
         
         geo_text = self._txt_unrolled[:]
-        geo_text.extend(['Show "*";'
-                         'Transfinite Line *  = 5;'])
-        ret =  generate_mesh(dim = 1, geo_text = geo_text)
+        geo_text.extend(['Show "*";',
+                         'Transfinite Line "*"  = 10;'])
+        ret =  generate_mesh(geo_object = None,
+                             dim = 1,
+                             filename = "/Users/shiraiwa/test",
+                             geo_text = geo_text)
         from .geo_plot import plot_geometry
         plot_geometry(viewer, ret)
     
@@ -237,12 +243,15 @@ def generate_mesh(
         handle, geo_filename = tempfile.mkstemp(suffix='.geo')
     else:
         geo_filename = filename + '.geo'
-        handle = open(geo_filename, 'r')
+        handle = os.open(geo_filename,  os.O_WRONLY | os.O_CREAT |
+                         os.O_TRUNC)
         
+
     if geo_object is not None:
        os.write(handle, geo_object.get_code().encode())
     elif geo_text is not None:
        os.write(handle, '\n'.join(geo_text))
+
     if dim == 0:
         os.write(handle, "Geometry.OldNewReg=0;\n")
         os.write(handle, 'Printf("Number of entitites, : %g, %g, %g, %g :", newp, newl, news, newv);\n')
