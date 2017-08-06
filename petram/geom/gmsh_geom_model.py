@@ -73,20 +73,30 @@ class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
         return v
     
     def panel1_param(self):
-        return self.vt.panel_param(self)
+        from wx import BU_EXACTFIT
+        b1 = {"label": "S", "func": self.onBuildBefore,
+              "noexpand": True, "style": BU_EXACTFIT}
+        b2 = {"label": "R", "func": self.onBuildAfter,
+              "noexpand": True, "style": BU_EXACTFIT}
+        
+        ll = [[None, None, 241, {'buttons':[b1,b2],
+                                 'alignright':True,
+                                 'noexpand': True},],]
+        ll.extend(self.vt.panel_param(self))
+        return ll
         
     def get_panel1_value(self):
-        return self.vt.get_panel_value(self)
+        return [None] + list(self.vt.get_panel_value(self))
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        return self.vt.import_panel_value(self, v)
+        return self.vt.import_panel_value(self, v[1:])
 
     def panel1_tip(self):
-        return self.vt.panel_tip()
+        return [None]+list(self.vt.panel_tip())
 
     def build_geom(self, geom, objs):
         raise NotImplementedError(
@@ -95,17 +105,30 @@ class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
     def get_special_menu(self):
         return [('Build this step', self.onBuildAfter)]
 
-    def onBuildAfter(self, evt):
-        dlg = evt.GetEventObject()
+    def _onBuildThis(self, evt, **kwargs):
+        dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
-        engine.build_ns()
-        
-        self.parent.build_geom(stop2 = self)
-        dlg.OnRefreshTree()        
+
+        try:
+            self.parent.build_geom(**kwargs)
+        except:
+            import ifigure.widgets.dialog as dialog               
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to build geometry',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+        dlg.OnRefreshTree()
+        self.parent.onUpdateGeoView(evt)
         evt.Skip()
-
-
+        
+    def onBuildBefore(self, evt):
+        self._onBuildThis(evt, stop1 = self)
+    def onBuildAfter(self, evt):        
+        self._onBuildThis(evt, stop2 = self)
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.select_next_enabled()
+                
 class GmshGeom(Model, NS_mixin):
     has_2nd_panel = False
     def __init__(self, *args, **kwargs):
@@ -117,10 +140,10 @@ class GmshGeom(Model, NS_mixin):
         return [Circle, Rect, Polygon, Extrude, Revolve, Difference]
     
     def get_special_menu(self):
-        return [('Build all', self.onBuildAll)]
+        return [('Build All', self.onBuildAll)]
 
     def onBuildAll(self, evt):
-        dlg = evt.GetEventObject()
+        dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
         engine.build_ns()
@@ -138,7 +161,7 @@ class GmshGeom(Model, NS_mixin):
         evt.Skip()
         
     def onUpdateGeoView(self, evt):
-        dlg = evt.GetEventObject()
+        dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
         geo_text = self._txt_unrolled[:]
@@ -164,9 +187,7 @@ class GmshGeom(Model, NS_mixin):
             if child is stop2: break            # for build after
 
         txt_unrolled, num_entities = generate_mesh(geom, dim = 0)
-        if debug:
-            for l in txt_unrolled:
-                 print(l.strip())
+
         self._txt_unrolled = [x.strip() for x in txt_unrolled]
         self._num_entities = num_entities
 
