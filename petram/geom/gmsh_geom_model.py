@@ -13,6 +13,7 @@ import meshio
 import numpy as np
 import voropy
 import traceback
+import warnings
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
@@ -101,6 +102,13 @@ class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
     def build_geom(self, geom, objs):
         raise NotImplementedError(
              "you must specify this method in subclass")
+
+    def gsize_hint(self, geom, objs):
+        '''
+        return quick estimate of geometry size min and max
+        '''
+        warnings.warn("Not implemented", Warning)
+        return -1, -1
     
     def get_special_menu(self):
         return [('Build this step', self.onBuildAfter)]
@@ -130,7 +138,15 @@ class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
         self._onBuildThis(evt, stop2 = self)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
-        evt.Skip()        
+        evt.Skip()
+        
+    def onItemSelChanged(self, evt):
+        '''
+        GUI response when model object is selected in
+        the dlg_edit_model
+        '''
+        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
+        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
                 
 class GmshGeom(Model, NS_mixin):
     has_2nd_panel = False
@@ -168,11 +184,16 @@ class GmshGeom(Model, NS_mixin):
         viewer = dlg.GetParent()
         
         geo_text = self._txt_unrolled[:]
+#        geo_text.extend(['Show "*";',
+#                         'Transfinite Line "*"  = 10;'])
         geo_text.extend(['Show "*";',
-                         'Transfinite Line "*"  = 10;'])
+                         'Mesh.CharacteristicLengthMax = 0.1;'])
+
         ret =  generate_mesh(geo_object = None,
-                             dim = 1,
-                             filename = "/Users/shiraiwa/test",
+                             dim = 2,
+#                             filename = "/Users/shiraiwa/test",
+                             num_quad_lloyd_steps=0,
+                             num_lloyd_steps=0,                             
                              geo_text = geo_text)
         from .geo_plot import plot_geometry
         plot_geometry(viewer, ret)
@@ -215,16 +236,26 @@ class GmshGeom(Model, NS_mixin):
         
     def panel1_param(self):
         return [["", "Geometry model using GMSH", 2, None],
+                [None, None, 141, {"label": "Build All",
+                                   "func": self.onBuildAll,
+                                   "noexpand": True}],
                 [None, None, 141, {"label": "Export...",
                                    "func": self.onExportGeom,
                                    "noexpand": True}],]
                 
     def get_panel1_value(self):
-        return [None, None]
+        return [None, None, None]
        
     def import_panel1_value(self, v):
         pass
     
+    def onItemSelChanged(self, evt):
+        '''
+        GUI response when model object is selected in
+        the dlg_edit_model
+        '''
+        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
+        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
         
 def generate_mesh(
         geo_object = None,
@@ -235,7 +266,7 @@ def generate_mesh(
         dim=3,
         prune_vertices=True,
         filename = None,
-        geo_text = None
+        geo_text = None,
         ):
     from pygmsh.helper import _get_gmsh_exe, _is_flat
 
@@ -325,6 +356,9 @@ def generate_mesh(
                 '(only works for flat triangular meshes).'
                 )
         return X, cells, pt_data, cell_data, field_data
+    if num_lloyd_steps == 0 and num_quad_lloyd_steps == 0:
+        return X, cells, pt_data, cell_data, field_data
+    
     if verbose:
         print('Lloyd smoothing...')
     # find submeshes

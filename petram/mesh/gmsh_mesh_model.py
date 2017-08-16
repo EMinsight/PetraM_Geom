@@ -53,6 +53,13 @@ class GmshMeshActionBase(Model, Vtable_mixin, NS_mixin):
         raise NotImplementedError(
              "you must specify this method in subclass")
     
+    def onItemSelChanged(self, evt):
+        '''
+        GUI response when model object is selected in
+        the dlg_edit_model
+        '''
+        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
+        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
     
 class GmshMesh(Model, NS_mixin):
     has_2nd_panel = False
@@ -113,6 +120,14 @@ class GmshMesh(Model, NS_mixin):
         self.build_mesh(geom_root)
         dlg.OnRefreshTree()
         evt.Skip()
+        
+    def onItemSelChanged(self, evt):
+        '''
+        GUI response when model object is selected in
+        the dlg_edit_model
+        '''
+        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
+        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
         
     def build_mesh(self, geom_root, stop1=None, stop2=None):
         lines = [x.strip() for x in geom_root._txt_unrolled]
