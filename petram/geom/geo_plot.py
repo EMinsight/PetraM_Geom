@@ -16,7 +16,7 @@ def plot_geometry(viewer,  ret):
                     linewidth = 0)
         obj.rename('points')
         obj._artists[0].set_gl_hl_use_array_idx(True)
-
+ 
     if 'line' in cells:
         obj = viewer.solid(X[cells['line']],
                            array_idx = cell_data['line']['geometrical'],
@@ -32,5 +32,6 @@ def plot_geometry(viewer,  ret):
 
         obj.rename('faces')
         obj._artists[0].set_gl_hl_use_array_idx(True)
-    
+
+    viewer.set_sel_mode(viewer.get_sel_mode())
 

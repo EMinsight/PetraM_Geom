@@ -13,13 +13,14 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 
 from petram.model import Model
 
+from petram.mesh.mesh_model import Mesh
 from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
 
         
-class GmshMeshActionBase(Model, Vtable_mixin, NS_mixin):
+class GmshMeshActionBase(Mesh, Vtable_mixin):
     hide_ns_menu = True
     has_2nd_panel = False
     isGmshMesh = True
@@ -61,7 +62,7 @@ class GmshMeshActionBase(Model, Vtable_mixin, NS_mixin):
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
     
-class GmshMesh(Model, NS_mixin):
+class GmshMesh(Mesh):
     has_2nd_panel = False
     isMeshGroup = True        
     def __init__(self, *args, **kwargs):

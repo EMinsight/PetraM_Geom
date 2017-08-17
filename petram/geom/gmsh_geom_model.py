@@ -20,6 +20,7 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
 
 from petram.model import Model
 
+from petram.geom.geom_model import GeomBase
 from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
@@ -59,7 +60,7 @@ class GeomObjs(dict):
         self[newkey] = obj
         return newkey
 
-class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
+class GmshPrimitiveBase(GeomBase, Vtable_mixin):
     hide_ns_menu = True
     has_2nd_panel = False
     isGeom = True
@@ -140,15 +141,7 @@ class GmshPrimitiveBase(Model, Vtable_mixin, NS_mixin):
         dlg.select_next_enabled()
         evt.Skip()
         
-    def onItemSelChanged(self, evt):
-        '''
-        GUI response when model object is selected in
-        the dlg_edit_model
-        '''
-        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
-        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
-                
-class GmshGeom(Model, NS_mixin):
+class GmshGeom(GeomBase):
     has_2nd_panel = False
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
@@ -197,7 +190,8 @@ class GmshGeom(Model, NS_mixin):
                              geo_text = geo_text)
         from .geo_plot import plot_geometry
         plot_geometry(viewer, ret)
-    
+        viewer._s_v_loop = read_loops(self._txt_unrolled)
+        
     def build_geom(self, stop1=None, stop2=None):
         children = [x for x in self.walk()]
         children = children[1:]
@@ -216,6 +210,7 @@ class GmshGeom(Model, NS_mixin):
         txt_unrolled, num_entities = generate_mesh(geom, dim = 0)
 
         self._txt_unrolled = [x.strip() for x in txt_unrolled]
+        
         self._num_entities = num_entities
 
 
@@ -249,13 +244,50 @@ class GmshGeom(Model, NS_mixin):
     def import_panel1_value(self, v):
         pass
     
-    def onItemSelChanged(self, evt):
-        '''
-        GUI response when model object is selected in
-        the dlg_edit_model
-        '''
-        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
-        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
+        
+def read_loops(unrolled):
+    ll = {}  # line loop
+    sl = {}  # surface loop
+    v = {}
+    s = {}
+
+    def split_line(line):
+        a, b = line.split("=")
+        k = int(a[a.find("(")+1:a.find(")")])
+        idx = [abs(int(x)) for x in b[b.find("{")+1:b.find("}")].split(",")]
+        return k, idx
+    
+    for line in unrolled:
+        line = line.strip()
+        if line.startswith("Surface Loop("):
+            k, idx = split_line(line)
+            sl[k] = idx
+        elif line.startswith("Line Loop("):
+            k, idx = split_line(line)
+            ll[k] = idx
+        elif line.startswith("Volume("):
+            k, idx = split_line(line)
+            v[k] = idx
+        elif line.startswith("Plane Surface("):
+            k, idx = split_line(line)
+            s[k] = idx
+        elif line.startswith("Surface("):
+            k, idx = split_line(line)
+            s[k] = idx
+        else:
+            pass
+
+    for kv in v.keys():
+        tmp = []
+        for k in v[kv]:
+            tmp.extend(sl[k])
+        v[kv] = list(set(tmp))
+    for ks in s.keys():
+        tmp = []
+        for k in s[ks]:
+            tmp.extend(ll[k])
+        s[ks] = list(set(tmp))
+    return s, v
         
 def generate_mesh(
         geo_object = None,
