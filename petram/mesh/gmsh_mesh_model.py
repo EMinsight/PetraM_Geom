@@ -35,20 +35,30 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         return v
 
     def panel1_param(self):
-        return self.vt.panel_param(self)
+        from wx import BU_EXACTFIT
+        b1 = {"label": "S", "func": self.onBuildBefore,
+              "noexpand": True, "style": BU_EXACTFIT}
+        b2 = {"label": "R", "func": self.onBuildAfter,
+              "noexpand": True, "style": BU_EXACTFIT}
+        
+        ll = [[None, None, 241, {'buttons':[b1,b2],
+                                 'alignright':True,
+                                 'noexpand': True},],]
+        ll.extend(self.vt.panel_param(self))
+        return ll        
         
     def get_panel1_value(self):
-        return self.vt.get_panel_value(self)
-
+        return [None] + list(self.vt.get_panel_value(self))
+    
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        return self.vt.import_panel_value(self, v)
+        return self.vt.import_panel_value(self, v[1:])
 
     def panel1_tip(self):
-        return self.vt.panel_tip()
+        return [None] + self.vt.panel_tip()
 
     def build_mesh(self, lines):
         raise NotImplementedError(
@@ -61,10 +71,35 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         '''
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
-    
-class GmshMesh(Mesh):
+
+    def _onBuildThis(self, evt, **kwargs):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        engine = viewer.engine
+        
+    def onBuildBefore(self, evt):
+        self._onBuildThis(evt, stop1 = self)
+        evt.Skip()
+        
+    def onBuildAfter(self, evt):        
+        self._onBuildThis(evt, stop2 = self)
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.select_next_enabled()
+        evt.Skip()
+
+data = (('clmax', VtableElement('clmax', type='float',
+                                guilabel = 'CLength-Max(def)',
+                                default = 1.0, 
+                                tip = "CharacteristicLengthMax" )),
+        ('clmin', VtableElement('clmin', type='float',
+                                guilabel = 'CLength-Min(def)',
+                                default = 1.0, 
+                                tip = "CharacteristicLengthMin" )),)
+                
+class GmshMesh(Mesh, Vtable_mixin):
     has_2nd_panel = False
-    isMeshGroup = True        
+    isMeshGroup = True
+    vt = Vtable(data)    
     def __init__(self, *args, **kwargs):
         super(GmshMesh, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
@@ -72,20 +107,32 @@ class GmshMesh(Mesh):
     def attribute_set(self, v):
         v['geom_group'] = ''
         super(GmshMesh, self).attribute_set(v)
+        self.vt.attribute_set(v)
         return v
     
     def panel1_param(self):    
-        return  [["Geometry", self.geom_group,  0, {},],
-                 [None, None, 141, {"label": "Export...",
-                                   "func": self.onExportMesh,
-                                   "noexpand": True}],]
+        ll =   [["Geometry", self.geom_group,  0, {},],]
+        
+        #        [None, None, 141, {"label": "Export...",
+        #                           "func": self.onExportMesh,
+        #                           "noexpand": True}],]
+        ll.extend(self.vt.panel_param(self))
+        return ll
     
     def get_panel1_value(self):
-        return (self.geom_group, None)
+        return [self.geom_group,] + list(self.vt.get_panel_value(self))
+    
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
     
     def import_panel1_value(self, v):
         self.geom_group = str(v[0])        
-    
+        self.vt.import_panel_value(self, v[1:])
+        
+    def panel1_tip(self):
+        return [None] + self.vt.panel_tip()
+        
     def get_possible_child(self):
         from .gmsh_mesh_actions import TransfiniteLine
         return [TransfiniteLine]
