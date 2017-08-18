@@ -5,6 +5,7 @@ import os
 import subprocess
 import tempfile
 import meshio
+import weakref
 import numpy as np
 import voropy
 
@@ -55,7 +56,8 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         return
 
     def import_panel1_value(self, v):
-        return self.vt.import_panel_value(self, v[1:])
+        self.vt.import_panel_value(self, v[1:])
+        return True
 
     def panel1_tip(self):
         return [None] + self.vt.panel_tip()
@@ -64,14 +66,6 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         raise NotImplementedError(
              "you must specify this method in subclass")
     
-    def onItemSelChanged(self, evt):
-        '''
-        GUI response when model object is selected in
-        the dlg_edit_model
-        '''
-        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
-        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
-
     def _onBuildThis(self, evt, **kwargs):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -86,6 +80,33 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
+
+    def get_element_selection(self):
+        return {'volume':[],
+                'face':[],
+                'edge':[],
+                'point':[],}, None
+                
+    def onItemSelChanged(self, evt):
+        super(GmshMeshActionBase, self).onItemSelChanged(evt)
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        self.update_viewer_selection(dlg)
+        
+    def update_after_ELChanged(self, dlg):
+        self.update_viewer_selection(dlg)
+        
+    def update_viewer_selection(self, dlg):
+        viewer = dlg.GetParent()                
+        sel, mode = self.get_element_selection()
+        figobj = viewer.highlight_element(sel)
+
+        viewer.set_sel_mode(mode)
+        viewer.set_sel_mode() # update buttons        
+        if figobj is not None:
+            import ifigure.events
+            sel = [weakref.ref(figobj._artists[0])]
+            ifigure.events.SendSelectionEvent(figobj, dlg, sel)                
+            
 
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel = 'CLength-Max(def)',
@@ -168,14 +189,6 @@ class GmshMesh(Mesh, Vtable_mixin):
         self.build_mesh(geom_root)
         dlg.OnRefreshTree()
         evt.Skip()
-        
-    def onItemSelChanged(self, evt):
-        '''
-        GUI response when model object is selected in
-        the dlg_edit_model
-        '''
-        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
-        viewer.canvas.use_navibar_palette('petram_geom', mode = '3D')
         
     def build_mesh(self, geom_root, stop1=None, stop2=None):
         lines = [x.strip() for x in geom_root._txt_unrolled]

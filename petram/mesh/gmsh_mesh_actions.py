@@ -53,20 +53,20 @@ class MeshData(object):
     def __init__(self, lines, num_entities):
         self.lines = lines
         
-        self.done = {"Point":[],
-                     "Line": [],
-                     "Surface": [],
-                     "Volume": []}
-        self.num_entities = {"Point": num_entities[0],
-                             "Line": num_entities[1],
-                             "Surface": num_entities[2],
-                             "Volume": num_entities[3],}
+        self.done = {"point":[],     #0D element
+                     "edge": [],     #1D element
+                     "face": [],     #2D element
+                     "volume": []}   #3D element
+        self.num_entities = {"point": num_entities[0],
+                             "edge": num_entities[1],
+                             "face": num_entities[2],
+                             "volume": num_entities[3],}
         
         
     def append(self, c):
         self.lines.append(c)
 
-    def show_hide_gid(self, gid, mode = "Line"):
+    def show_hide_gid(self, gid, mode = "edge"):
         if gid.strip() == "":
             return "" # dont do anything
         elif gid == "*":
@@ -92,7 +92,7 @@ class MeshData(object):
                     self.done[mode].append(x)
         return gid
                     
-    def get_remaining_txt(self, mode = "Line"):
+    def get_remaining_txt(self, mode = "edge"):
         if self.done[mode] == "*": return ''
         ll = [x+1 for x in range(self.num_entities[mode])]
         for x in self.done[mode]:ll.remove(x)
@@ -127,9 +127,18 @@ class TransfiniteLine(GmshMeshActionBase):
     vt = Vtable(data)    
     def build_mesh(self, lines):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
-        gid = lines.show_hide_gid(gid, mode="Line")
+        gid = lines.show_hide_gid(gid, mode="edge")
         if gid == "": return
         transfinite(lines, gid, mode = 'Line', nseg=nseg,
                     progression = p,  bump = b)
         mesh(lines, dim = 1)            
 
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = super(TransfiniteLine, self).get_element_selection()
+        try:
+            ret['edge'] = [int(x) for x in self.geom_id.split(',')]
+        except:
+            pass
+        return ret, 'edge'

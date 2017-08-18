@@ -44,7 +44,7 @@ def plot_geometry(viewer,  ret):
                     vert[:,2], 'ob',
                     array_idx = cell_data['vertex']['geometrical'],
                     linewidth = 0)
-        obj.rename('points')
+        obj.rename('point')
         obj._artists[0].set_gl_hl_use_array_idx(True)
  
     if 'line' in cells:
@@ -55,7 +55,7 @@ def plot_geometry(viewer,  ret):
                            array_idx = array_idx,
                            linewidth = 1.5)
 
-        obj.rename('edges')
+        obj.rename('edge')
         obj._artists[0].set_gl_hl_use_array_idx(True)
 
     if 'triangle' in cells:
@@ -66,10 +66,10 @@ def plot_geometry(viewer,  ret):
         #print verts.shape, elem_idx.shape, array_idx.shape
         obj = viewer.solid(verts, elem_idx,
                            array_idx = array_idx,
-                           facecolor = 'cyan',
+                           facecolor = (0.7, 0.7, 0.7, 1.0),
                            linewidth = 0)
 
-        obj.rename('faces')
+        obj.rename('face')
         obj._artists[0].set_gl_hl_use_array_idx(True)
 
     viewer.set_sel_mode(viewer.get_sel_mode())
