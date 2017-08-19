@@ -1,3 +1,5 @@
+import numpy as np
+
 from petram.utils import get_pkg_datafile
 import petram.geom
 
@@ -28,13 +30,13 @@ def show_all(evt):
 
     ax = viewer.get_axes()
     if mode == 'volume':
-        ax.faces.hide_component([])
+        ax.face.hide_component([])
     elif mode == 'face':
-        ax.faces.hide_component([])        
+        ax.face.hide_component([])        
     elif mode == 'edge':
-        ax.edges.hide_component([])                
+        ax.edge.hide_component([])                
     elif mode == 'point':
-        ax.points.hide_component([])                        
+        ax.point.hide_component([])                        
     else:
         pass
     viewer.draw_all()    
@@ -45,19 +47,28 @@ def hide_elem(evt):
 
     ax = viewer.get_axes()
     if mode == 'volume':
-        idx = ax.faces.getSelectedIndex()
-        idx = list(set(ax.faces.hidden_component+idx))
-        #### I should select faces which only belongs to
-        #### a particular volume !!!
-        ax.faces.hide_component(idx)        
+        facesa = []
+        facesb = []        
+        s, v = viewer._s_v_loop
+        for key in v.keys():
+            if key in viewer._selected_volume:
+                facesa.extend(v[key])
+            else:
+                facesb.extend(v[key])
+        facesa = np.unique(np.array(facesa))
+        facesb = np.unique(np.array(facesb))
+        new_hide = list(np.setdiff1d(facesa, facesb, True))
+        idx = ax.face.hidden_component
+        idx = list(set(idx+new_hide))
+        ax.face.hide_component(idx)        
     elif mode == 'face':
-        idx = ax.faces.getSelectedIndex()
-        idx = list(set(ax.faces.hidden_component+idx))        
-        ax.faces.hide_component(idx)        
+        idx = ax.face.getSelectedIndex()
+        idx = list(set(ax.face.hidden_component+idx))        
+        ax.face.hide_component(idx)        
     elif mode == 'edge':
-        idx = ax.edges.getSelectedIndex()
-        idx = list(set(ax.edges.hidden_component+idx))        
-        ax.edges.hide_component([])                
+        idx = ax.edge.getSelectedIndex()
+        idx = list(set(ax.edge.hidden_component+idx))        
+        ax.edge.hide_component([])                
     elif mode == 'point':
         pass
     else:

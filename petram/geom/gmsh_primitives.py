@@ -222,7 +222,36 @@ class Revolve(GeomPB):
                                
         self._objkeys = objs.keys()
         self._newobjs = newkeys
+
+
+
+class GeomPB_Bool(GeomPB):
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["delete_input"] = True
+        return v
+    
+    def panel1_param(self):
+        ll = self.vt.panel_param(self)
+        ll.append(["Delete",
+                    self.delete_input,  3, {"text":""}])
+        return ll
         
+    def get_panel1_value(self):
+        return list(self.vt.get_panel_value(self)) + [self.delete_input]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        self.vt.import_panel_value(self, v[:-1])
+        self.delete_input = v[-1]
+
+    def panel1_tip(self):
+        return list(self.vt.panel_tip()) + ['delete input objects']
+
 
 ddata =  (('objplus', VtableElement('objplus', type='string',
                                       guilabel = '+',
@@ -233,7 +262,7 @@ ddata =  (('objplus', VtableElement('objplus', type='string',
                                       default = "",
                                       tip = "objects to be subtracted")),)
                 
-class Difference(GeomPB):    
+class Difference(GeomPB_Bool):    
     vt = Vtable(ddata)
     def build_geom(self, geom, objs):
         tp, tm  = self.vt.make_value_or_expression(self)
@@ -242,11 +271,81 @@ class Difference(GeomPB):
 
         input_entity = [objs[x] for x in tp]
         tool_entity  = [objs[x] for x in tm]
-        geom.set_factory('OpenCASCADE')          
         ret = geom.boolean_difference(
                           input_entity,
                           tool_entity,
-                          delete = True)
+                          delete = self.delete_input)
+        newkeys = []
+        newkeys.append(objs.addobj(ret[0], 'diff'))
+        if len(ret) > 1:
+            for o in ret[1:]:
+                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+            
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+udata =  (('objplus', VtableElement('obj1', type='string',
+                                      guilabel = 'input',
+                                      default = "",
+                                      tip = "objects")),)
+
+class Union(GeomPB_Bool):    
+    vt = Vtable(udata)
+    def build_geom(self, geom, objs):
+        tp  = self.vt.make_value_or_expression(self)
+        tp = [x.strip() for x in tp.split(',')]
+        if len(tp) < 2: return
+
+        input_entity = [objs[x] for x in tp[:1]]
+        tool_entity  = [objs[x] for x in tp[1:]]
+        ret = geom.boolean_union(
+                          input_entity,
+                          tool_entity,
+                          delete = self.delete_input)
+        newkeys = []
+        newkeys.append(objs.addobj(ret[0], 'diff'))
+        if len(ret) > 1:
+            for o in ret[1:]:
+                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+            
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+class Intersection(GeomPB_Bool):    
+    vt = Vtable(udata)
+    def build_geom(self, geom, objs):
+        tp  = self.vt.make_value_or_expression(self)
+        tp = [x.strip() for x in tp.split(',')]
+        if len(tp) < 2: return
+
+        input_entity = [objs[x] for x in tp[:1]]
+        tool_entity  = [objs[x] for x in tp[1:]]
+        ret = geom.boolean_intersection(
+                          input_entity,
+                          tool_entity,
+                          delete = self.delete_input)
+        newkeys = []
+        newkeys.append(objs.addobj(ret[0], 'diff'))
+        if len(ret) > 1:
+            for o in ret[1:]:
+                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+            
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
+class Fragments(GeomPB_Bool):    
+    vt = Vtable(ddata)
+    def build_geom(self, geom, objs):
+        tp  = self.vt.make_value_or_expression(self)
+        tp = [x.strip() for x in tp.split(',')]
+        if len(tp) < 2: return
+
+        input_entity = [objs[x] for x in tp[:1]]
+        tool_entity  = [objs[x] for x in tp[1:]]
+        ret = geom.boolean_fragments(
+                          input_entity,
+                          tool_entity,
+                          delete = self.delete_input)
         newkeys = []
         newkeys.append(objs.addobj(ret[0], 'diff'))
         if len(ret) > 1:

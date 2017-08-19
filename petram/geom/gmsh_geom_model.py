@@ -148,8 +148,8 @@ class GmshGeom(GeomBase):
         NS_mixin.__init__(self, *args, **kwargs)
         
     def get_possible_child(self):
-        from .gmsh_primitives import Circle, Rect, Polygon, Extrude, Revolve, Difference
-        return [Circle, Rect, Polygon, Extrude, Revolve, Difference]
+        from .gmsh_primitives import Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments
+        return [Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments]
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll)]
@@ -161,7 +161,7 @@ class GmshGeom(GeomBase):
         engine.build_ns()
 
         try:
-            self.build_geom()
+            self.build_geom(finalize = True)
         except:
             import ifigure.widgets.dialog as dialog               
             dialog.showtraceback(parent = dlg,
@@ -192,7 +192,11 @@ class GmshGeom(GeomBase):
         plot_geometry(viewer, ret)
         viewer._s_v_loop = read_loops(self._txt_unrolled)
         
-    def build_geom(self, stop1=None, stop2=None):
+    def build_geom(self, stop1=None, stop2=None, filename = None,
+                   finalize = False):
+        '''
+        filename : export geometry to a real file (for debug)
+        '''
         children = [x for x in self.walk()]
         children = children[1:]
 
@@ -200,6 +204,8 @@ class GmshGeom(GeomBase):
         self._objs = objs        
         import pygmsh
         geom = pygmsh.Geometry()
+        geom.set_factory('OpenCASCADE')
+        
         for child in children:
             if not child.enabled: continue            
             child.vt.preprocess_params(child)
@@ -207,10 +213,32 @@ class GmshGeom(GeomBase):
             child.build_geom(geom, objs)
             if child is stop2: break            # for build after
 
-        txt_unrolled, num_entities = generate_mesh(geom, dim = 0)
-
-        self._txt_unrolled = [x.strip() for x in txt_unrolled]
+        txt_unrolled, num_entities = generate_mesh(geom, dim = 0,
+                                                   filename = filename)
+        txt_unrolled = [x.strip() for x in txt_unrolled]
+        s, v =  read_loops(txt_unrolled)
         
+        if finalize:
+            dim = check_dim(txt_unrolled)
+            extra = []
+            if ((dim == 2 and len(s.keys()) > 1) or
+                (dim == 3 and len(s.keys()) > 1 and len(v.keys()) == 1)):
+                print("splitting surface",  s.keys())
+                extra.append(BoolFramgents_extra('final_faces', 'Surface', s.keys()))
+                txt_unrolled, num_entities = generate_mesh(geom, dim = 0,
+                                                             filename = filename,
+                                                             extra = extra)
+                txt_unrolled = [x.strip() for x in txt_unrolled]
+                s, v =  read_loops(txt_unrolled)              
+            if dim == 3 and len(v.keys()) > 1:                
+                print("splitting volume",  v.keys())                
+                extra.append(BoolFramgents_extra('final_volumes', 'Volume', v.keys()))
+                txt_unrolled, num_entities = generate_mesh(geom, dim = 0,
+                                                           filename = filename,
+                                                           extra = extra)
+                txt_unrolled = [x.strip() for x in txt_unrolled]
+                s, v =  read_loops(txt_unrolled)                              
+        self._txt_unrolled = txt_unrolled
         self._num_entities = num_entities
 
 
@@ -244,7 +272,13 @@ class GmshGeom(GeomBase):
     def import_panel1_value(self, v):
         pass
     
-        
+def check_dim(unrolled):
+    for line in unrolled:
+        if line.startswith('Volume'): return 3
+    for line in unrolled:
+        if line.find('Surface'): return 2
+    return 1
+
 def read_loops(unrolled):
     ll = {}  # line loop
     sl = {}  # surface loop
@@ -288,7 +322,19 @@ def read_loops(unrolled):
             tmp.extend(ll[k])
         s[ks] = list(set(tmp))
     return s, v
-        
+
+def BoolFramgents_extra(name, shape_type,  inputs, delete = True):
+    txt = '{}[] = {}{{{} {{{}}}; {}}} {{{} {{{}}}; {}}};'.format(
+                name, 
+                'BooleanFragments',
+                shape_type,
+                ','.join(str(e) for e in inputs[:1]),
+                'Delete;' if delete else '',
+                shape_type,
+                ','.join(str(e) for e in inputs[1:]),
+                'Delete;' if delete else '')
+    return txt
+
 def generate_mesh(
         geo_object = None,
         optimize=True,
@@ -299,6 +345,7 @@ def generate_mesh(
         prune_vertices=True,
         filename = None,
         geo_text = None,
+        extra = None
         ):
     from pygmsh.helper import _get_gmsh_exe, _is_flat
 
@@ -308,14 +355,16 @@ def generate_mesh(
         geo_filename = filename + '.geo'
         handle = os.open(geo_filename,  os.O_WRONLY | os.O_CREAT |
                          os.O_TRUNC)
-        
+    extra = [] if extra is None else extra    
 
     if geo_object is not None:
-       os.write(handle, geo_object.get_code().encode())
+       os.write(handle, geo_object.get_code().encode() + '\n')
     elif geo_text is not None:
-       os.write(handle, '\n'.join(geo_text))
+       os.write(handle, '\n'.join(geo_text)+'\n')
 
     if dim == 0:
+        for l in extra:
+            os.write(handle, l + "\n")            
         os.write(handle, "Geometry.OldNewReg=0;\n")
         os.write(handle, 'Printf("Number of entitites, : %g, %g, %g, %g :", newp, newl, news, newv);\n')
     os.close(handle)
@@ -368,9 +417,9 @@ def generate_mesh(
         fid = open(geou_filename, 'r')
         lines = fid.readlines()
         fid.close()
-        if filename is None:            
-            os.remove(geo_filename)
-            os.remove(geou_filename)
+        #if filename is None:            
+        #    os.remove(geo_filename)
+        #    os.remove(geou_filename)
         return lines, num_entities
 
     X, cells, pt_data, cell_data, field_data = meshio.read(msh_filename)

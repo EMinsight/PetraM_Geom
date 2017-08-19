@@ -25,8 +25,8 @@ def expand_vertex_data(X, vertex_idx, element_id):
         k = k + len(iv)
         iarr.append(np.zeros(len(iv))+kk)
 
-    array_idx = np.hstack(iarr)
-    elem_idx = np.vstack(iele)
+    array_idx = np.hstack(iarr).astype(int)
+    elem_idx = np.vstack(iele).astype(int)
     verts = np.vstack(verts)
 
     return verts, elem_idx, array_idx

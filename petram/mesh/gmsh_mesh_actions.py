@@ -7,47 +7,6 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.mesh.gmsh_mesh_model import GmshMeshActionBase
 
 
-def show(lines, gid, mode = "Line"):    
-    if gid == "*":
-        lines.append('Show "*";')
-    elif gid == "": return
-    else:
-        gid = [str(x) for x in gid.split(',')]
-        txt = 'Recursive Show {{ {}; }}'.format(
-                mode + '{{{}}}'.format(','.join(gid)))
-        lines.append(txt)
-
-def hide(lines, gid, mode = "Line"):
-    if gid == "*":
-        lines.append('Hide "*";')
-    elif gid == "": return        
-    else:
-        gid = [str(x) for x in gid.split(',')]
-        if len(gid) == 0: return
-        txt = 'Recursive Hide {{ {}; }}'.format(
-                mode + '{{{}}}'.format(','.join(gid)))
-        lines.append(txt)
-        
-def mesh(lines, dim = 1):
-    lines.append('Mesh.MeshOnlyVisible=1;')
-    lines.append('Mesh ' + str(dim) + ';')
-
-def transfinite(lines, gid, mode = 'Line', nseg='',
-                progression = 0, bump = 0):
-    c = 'Transfinite '+mode
-    if gid == "*":
-        c += ' "*" = '
-        print(c)
-    else:
-        gid = [str(x) for x in gid.split(',')]
-        c += '{{ {} }}'.format(','.join(gid)) + ' = '
-    c += str(nseg)
-    if bump != 0:
-        c += " Using Bump " + str(bump)
-    if progression != 0:
-        c += " Using Progression " + str(bump)
-    
-    lines.append(c+';')
 
 class MeshData(object):
     def __init__(self, lines, num_entities):
