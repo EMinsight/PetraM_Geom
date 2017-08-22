@@ -9,6 +9,7 @@ import tempfile
 import os
 import subprocess
 import traceback
+import sys
 
 import numpy as np
 import warnings
@@ -116,7 +117,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
-
+        engine.build_ns()
         try:
             self.parent.build_geom(**kwargs)
         except:
@@ -428,12 +429,15 @@ def generate_mesh(
 
     # http://stackoverflow.com/a/803421/353337
     p = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-        )
-    stdoutdata = p.stdout.readlines()    
-    if verbose:
-        for x in stdoutdata:
-            print(x.decode('utf-8'), end='')
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        bufsize = 0)
+    
+    stdoutdata = []
+    for line in iter(p.stdout.readline, ''):
+        if verbose:
+            print(line.decode('utf-8'), end='')
+            sys.stdout.flush()
+        stdoutdata.append(line)
 
     p.communicate()
     assert p.returncode == 0,\

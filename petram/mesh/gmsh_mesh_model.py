@@ -66,6 +66,7 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
+        engine.build_ns()        
         geom_root = self.root()['Geometry'][self.parent.geom_group]
         try:
             self.parent.build_mesh(geom_root, **kwargs)
@@ -81,14 +82,12 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
-        print("build before", mm)
         self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
-        print("build after", mm)        
         self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
@@ -199,7 +198,7 @@ class GmshMesh(Mesh, Vtable_mixin):
         
         geo_text = self._txt_rolled[:]        
         ret =  generate_mesh(geo_object = None,
-                             dim = 2,
+                             dim = self._max_mdim,
                              num_quad_lloyd_steps=0,
                              num_lloyd_steps=0,                             
                              geo_text = geo_text)
@@ -252,13 +251,14 @@ class GmshMesh(Mesh, Vtable_mixin):
             child.add_meshcommand(mesher)
             if child is stop2: break            # for build after
             
-        lines = mesher.generate()
+        lines, max_mdim = mesher.generate()
         if debug:
             for l in lines:
                  print(l)
 
         lines = geom_root._txt_rolled + lines
         self._txt_rolled = lines
+        self._max_mdim = max_mdim
         
 
         

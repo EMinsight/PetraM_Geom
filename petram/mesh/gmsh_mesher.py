@@ -66,10 +66,12 @@ def characteristiclength(gid, cl = 1e20):
     c += '{{ {} }}'.format(','.join(gid)) + ' = ' +  str(cl) + ";"
     return [c,]
 
-def embed(gid, embed_s=None, embed_l=None, embed_p=None):
-    if ((embed_s is None) and (embed_l is None) and
-        (embed_p is None)): return []
-   
+def embed(gid, embed_s="", embed_l="", embed_p=""):
+    if ((embed_s is "") and (embed_l is "") and
+        (embed_p is "")): return []
+
+    print(embed_s, embed_l, embed_p)
+    
     gid = [str(x) for x in gid.split(',')]
     if len(gid) != 1:
         assert False, "embed destination should be one element"
@@ -132,8 +134,8 @@ class GmshMesher(object):
         self.record_finished(gid, mode = mode)
         return lines
 
-    def freemesh(self, gid,  mode='Line', clmax = -1, clmin = -1,
-                 meshdim = 1, embed_s = None, embed_l = None, embed_p=None):
+    def freemesh(self, gid,  mode='Line', clmax=-1, clmin=-1,
+                 meshdim=1, embed_s="", embed_l="", embed_p=""):
         '''
         freemesh  = unstructured volume/surface/line
         '''
@@ -142,21 +144,51 @@ class GmshMesher(object):
         
         lines = []
         if meshdim == 3 and mode == 'Volume':
-            pass
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+        elif meshdim == 2 and mode == 'Volume':
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+            if self.done['Surface']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
+                                 mode = 'Surface'))
+        elif meshdim == 1 and mode == 'Volume':
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+            if self.done['Line']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Line']]),
+                                 mode = 'Line'))
+            if self.done['Surface']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
+                                  mode = 'Surface', recursive = True))
         elif meshdim == 2 and mode == 'Surface':
-            pass
-        elif meshdim == 1 and mode == 'edge':
-            pass
-        else:
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+        elif meshdim == 1 and mode == 'Surface':
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+            if self.done['Line']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Line']]),
+                                 mode = 'Line'))
+        elif meshdim == 1 and mode == 'Line':
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+
+        elif meshdim == 0:
             lines = embed(gid, embed_s=embed_s, embed_l=embed_l,
                           embed_p=embed_p)
             return lines
+        else:
+            return []
 
-        x = self.show_hide_gid(gid, mode = mode)
-        if len(x) == 0: return lines
-        lines.extend(x)
         lines.extend(freemesh(gid, clmax=clmax, clmin=clmin))
-        self.record_finished(gid, mode = mode)        
+        self.record_finished(gid, mode = mode)                
         return lines
     
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):
@@ -177,6 +209,8 @@ class GmshMesher(object):
     def generate(self):
         lines = []
         thismodule = sys.modules[__name__]
+
+        max_mdim = 0
         for mdim in [0, 1, 2, 3]:
             for proc, gids, kwargs in self.sequence:
                 f = getattr(self, proc)
@@ -186,9 +220,10 @@ class GmshMesher(object):
                     lines.extend(x)
                     if mdim > 0:
                         lines.extend(mesh(dim = mdim))
+                        max_mdim = mdim
             self.reset_done()                    
         lines.extend(hide("*", mode = "Volume"))
-        return lines
+        return lines, max_mdim
 
     def show_hide_gid(self, gid, mode = "Line", recursive = True):
         lines = []
