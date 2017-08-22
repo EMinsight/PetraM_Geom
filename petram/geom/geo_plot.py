@@ -104,7 +104,7 @@ def oplot_meshed(viewer,  ret):
                     vert[:,1],
                     vert[:,2], 'ob',
                     array_idx = cell_data['line']['geometrical'],
-                         linewidth = 0)
+                    linewidth = 0)
 #                    view_offset = (0, 0, -0.005, 0))     
         obj.rename('edge_meshed')
         obj._artists[0].set_gl_hl_use_array_idx(True)
