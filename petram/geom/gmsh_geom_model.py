@@ -8,11 +8,9 @@ from __future__ import print_function
 import tempfile
 import os
 import subprocess
-import tempfile
-import meshio
-import numpy as np
-import voropy
 import traceback
+
+import numpy as np
 import warnings
 
 import petram.debug as debug
@@ -132,11 +130,15 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
         
     def onBuildBefore(self, evt):
-        self._onBuildThis(evt, stop1 = self)
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        mm = dlg.get_selected_mm()
+        self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
-    def onBuildAfter(self, evt):        
-        self._onBuildThis(evt, stop2 = self)
+    def onBuildAfter(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        mm = dlg.get_selected_mm()
+        self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
@@ -152,7 +154,24 @@ class GmshGeom(GeomBase):
         return [Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments]
     
     def get_special_menu(self):
-        return [('Build All', self.onBuildAll)]
+        return [('Build All', self.onBuildAll),
+                ('Export .geo', self.onExportGeom)]
+    
+    def panel1_param(self):
+        return [["", "Geometry model using GMSH", 2, None],
+                [None, None, 141, {"label": "Build All",
+                                   "func": self.onBuildAll,
+                                   "noexpand": True}],]
+#                [None, None, 141, {"label": "Export...",
+#                                   "func": self.onExportGeom,
+#                                   "noexpand": True}],]
+                
+    def get_panel1_value(self):
+        return [None, None]
+       
+    def import_panel1_value(self, v):
+        pass
+    
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -177,10 +196,11 @@ class GmshGeom(GeomBase):
         viewer = dlg.GetParent()
         
         geo_text = self._txt_unrolled[:]
-#        geo_text.extend(['Show "*";',
-#                         'Transfinite Line "*"  = 10;'])
+        xyz = guess_geom_size(geo_text)
+        clmax = np.min(np.max(xyz, 0) - np.min(xyz, 0))/3.
+        self._clmax_guess = clmax
         geo_text.extend(['Show "*";',
-                         'Mesh.CharacteristicLengthMax = 0.1;'])
+                         'Mesh.CharacteristicLengthMax = '+str(clmax) + ';'])
 
         ret =  generate_mesh(geo_object = None,
                              dim = 2,
@@ -213,33 +233,34 @@ class GmshGeom(GeomBase):
             child.build_geom(geom, objs)
             if child is stop2: break            # for build after
 
-        txt_unrolled, num_entities = generate_mesh(geom, dim = 0,
-                                                   filename = filename)
-        txt_unrolled = [x.strip() for x in txt_unrolled]
-        s, v =  read_loops(txt_unrolled)
+        unrolled, rolled, entities = generate_mesh(geom, dim = 0,
+                                                  filename = filename)
+        unrolled = [x.strip() for x in unrolled]
+        s, v =  read_loops(unrolled)
         
         if finalize:
-            dim = check_dim(txt_unrolled)
+            dim = check_dim(unrolled)
             extra = []
             if ((dim == 2 and len(s.keys()) > 1) or
                 (dim == 3 and len(s.keys()) > 1 and len(v.keys()) == 1)):
                 print("splitting surface",  s.keys())
                 extra.append(BoolFramgents_extra('final_faces', 'Surface', s.keys()))
-                txt_unrolled, num_entities = generate_mesh(geom, dim = 0,
+                unrolled, rolled, entities = generate_mesh(geom, dim = 0,
                                                              filename = filename,
                                                              extra = extra)
-                txt_unrolled = [x.strip() for x in txt_unrolled]
-                s, v =  read_loops(txt_unrolled)              
+                unrolled = [x.strip() for x in unrolled]
+                s, v =  read_loops(unrolled)              
             if dim == 3 and len(v.keys()) > 1:                
                 print("splitting volume",  v.keys())                
                 extra.append(BoolFramgents_extra('final_volumes', 'Volume', v.keys()))
-                txt_unrolled, num_entities = generate_mesh(geom, dim = 0,
+                unrolled, rolled, entities = generate_mesh(geom, dim = 0,
                                                            filename = filename,
                                                            extra = extra)
-                txt_unrolled = [x.strip() for x in txt_unrolled]
-                s, v =  read_loops(txt_unrolled)                              
-        self._txt_unrolled = txt_unrolled
-        self._num_entities = num_entities
+                unrolled = [x.strip() for x in unrolled]
+                s, v =  read_loops(unrolled)
+        self._txt_rolled = rolled                
+        self._txt_unrolled = unrolled
+        self._num_entities = entities
 
 
     def onExportGeom(self, evt):
@@ -257,20 +278,6 @@ class GmshGeom(GeomBase):
             fid.write('\n'.join(self._txt_unrolled))
             fid.close()
         
-    def panel1_param(self):
-        return [["", "Geometry model using GMSH", 2, None],
-                [None, None, 141, {"label": "Build All",
-                                   "func": self.onBuildAll,
-                                   "noexpand": True}],
-                [None, None, 141, {"label": "Export...",
-                                   "func": self.onExportGeom,
-                                   "noexpand": True}],]
-                
-    def get_panel1_value(self):
-        return [None, None, None]
-       
-    def import_panel1_value(self, v):
-        pass
     
 def check_dim(unrolled):
     for line in unrolled:
@@ -279,6 +286,20 @@ def check_dim(unrolled):
         if line.find('Surface'): return 2
     return 1
 
+def guess_geom_size(unrolled):
+    points = []
+    for line in unrolled:
+        if line.startswith("Point("):
+            try:
+                coords = line.split("=")[1]
+                coords = coords[coords.find("{")+1:coords.find("}")]
+                xyz = np.array([float(x) for x in coords.split(",")[:3]])
+                points.append(xyz)
+            except:
+                pass
+    points = np.vstack(points)
+    return points
+            
 def read_loops(unrolled):
     ll = {}  # line loop
     sl = {}  # surface loop
@@ -343,11 +364,13 @@ def generate_mesh(
         verbose=True,
         dim=3,
         prune_vertices=True,
-        filename = None,
-        geo_text = None,
-        extra = None
+        filename=None,
+        geo_text=None,
+        extra=None
         ):
     from pygmsh.helper import _get_gmsh_exe, _is_flat
+    import meshio
+    import voropy    
 
     if filename is None:
         handle, geo_filename = tempfile.mkstemp(suffix='.geo')
@@ -358,15 +381,15 @@ def generate_mesh(
     extra = [] if extra is None else extra    
 
     if geo_object is not None:
-       os.write(handle, geo_object.get_code().encode() + '\n')
+       rolled =  geo_object.get_code().encode().split("\n")
     elif geo_text is not None:
-       os.write(handle, '\n'.join(geo_text)+'\n')
+       rolled = geo_text
 
     if dim == 0:
-        for l in extra:
-            os.write(handle, l + "\n")            
-        os.write(handle, "Geometry.OldNewReg=0;\n")
-        os.write(handle, 'Printf("Number of entitites, : %g, %g, %g, %g :", newp, newl, news, newv);\n')
+        rolled.extend(extra)
+        rolled.append("Geometry.OldNewReg=0;\n")
+        rolled.append('Printf("Number of entitites, : %g, %g, %g, %g :", newp, newl, news, newv);\n')
+    os.write(handle, "\n".join(rolled))
     os.close(handle)
 
     gmsh_executable = _get_gmsh_exe()
@@ -383,7 +406,15 @@ def generate_mesh(
             ]
         if num_quad_lloyd_steps > 0:
             cmd += ['-optimize_lloyd', str(num_quad_lloyd_steps)]
-        
+    elif dim < 0:
+        if filename is None:
+            handle, msh_filename = tempfile.mkstemp(suffix='.msh')
+            os.close(handle)            
+        else:
+            msh_filename = filename + '.msh'
+        cmd = [
+            gmsh_executable, '-bin', geo_filename, '-o', msh_filename
+            ]
     else:
         if filename is None:
             handle, geou_filename = tempfile.mkstemp(suffix='.geo_unrolled')
@@ -420,7 +451,7 @@ def generate_mesh(
         #if filename is None:            
         #    os.remove(geo_filename)
         #    os.remove(geou_filename)
-        return lines, num_entities
+        return lines, rolled, num_entities
 
     X, cells, pt_data, cell_data, field_data = meshio.read(msh_filename)
 
@@ -437,6 +468,9 @@ def generate_mesh(
                 '(only works for flat triangular meshes).'
                 )
         return X, cells, pt_data, cell_data, field_data
+    if dim < 0:
+        return X, cells, pt_data, cell_data, field_data
+    
     if num_lloyd_steps == 0 and num_quad_lloyd_steps == 0:
         return X, cells, pt_data, cell_data, field_data
     

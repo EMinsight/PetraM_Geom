@@ -8,61 +8,6 @@ from petram.mesh.gmsh_mesh_model import GmshMeshActionBase
 
 
 
-class MeshData(object):
-    def __init__(self, lines, num_entities):
-        self.lines = lines
-        
-        self.done = {"point":[],     #0D element
-                     "edge": [],     #1D element
-                     "face": [],     #2D element
-                     "volume": []}   #3D element
-        self.num_entities = {"point": num_entities[0],
-                             "edge": num_entities[1],
-                             "face": num_entities[2],
-                             "volume": num_entities[3],}
-        
-        
-    def append(self, c):
-        self.lines.append(c)
-
-    def show_hide_gid(self, gid, mode = "edge"):
-        if gid.strip() == "":
-            return "" # dont do anything
-        elif gid == "*":
-            show(self, gid, mode = mode)            
-        elif gid == "remaining":
-            if self.done[mode] == "*": return "" # already all done
-            show(self, "*", mode = mode)
-            hide(self, ','.join([str(x) for x in self.done[mode]]),
-                 mode = mode)            
-        else:
-            hide(self, "*", mode = mode)
-            show(self, gid, mode = mode)
-            
-        if gid == "*":        
-            self.done[mode] = "*"
-        elif gid == "remaining":
-            gid = self.get_remaining_txt(mode)
-            self.done[mode] = "*"            
-        else:
-            gidnum = [int(x) for x in gid.split(',')]
-            for x in gidnum:
-                if not x in self.done[mode]:
-                    self.done[mode].append(x)
-        return gid
-                    
-    def get_remaining_txt(self, mode = "edge"):
-        if self.done[mode] == "*": return ''
-        ll = [x+1 for x in range(self.num_entities[mode])]
-        for x in self.done[mode]:ll.remove(x)
-        if len(ll) == 0:
-            self.done[mode] = "*"
-            return ''
-        else:
-            return ','.join([str(x) for x in ll])
-            
-        
-
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Line#',
                                    default = "remaining", 
@@ -84,20 +29,141 @@ data = (('geom_id', VtableElement('geom_id', type='string',
     
 class TransfiniteLine(GmshMeshActionBase):
     vt = Vtable(data)    
-    def build_mesh(self, lines):
+    def add_meshcommand(self, mesher):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
-        gid = lines.show_hide_gid(gid, mode="edge")
-        if gid == "": return
-        transfinite(lines, gid, mode = 'Line', nseg=nseg,
-                    progression = p,  bump = b)
-        mesh(lines, dim = 1)            
-
+        mesher.add('transfinite', gid, mode = 'Line', nseg=nseg,
+                   progression = p,  bump = b)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
-        ret, mode = super(TransfiniteLine, self).get_element_selection()
+        ret, mode = self.element_selection_empty()
         try:
             ret['edge'] = [int(x) for x in self.geom_id.split(',')]
         except:
             pass
         return ret, 'edge'
+    
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Point#',
+                                   default = "remaining", 
+                                   tip = "Point ID" )),
+        ('cl', VtableElement('cl', type='float',
+                                guilabel = 'Size)',
+                                default = 1.0, 
+                                tip = "CharacteristicLength" )))
+
+class CharacteristicLength(GmshMeshActionBase):
+    vt = Vtable(data)    
+    def add_meshcommand(self, mesher):
+        gid, cl= self.vt.make_value_or_expression(self)
+        mesher.add('characteristiclength', gid, cl = cl)
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            ret['point'] = [int(x) for x in self.geom_id.split(',')]
+        except:
+            pass
+        return ret, 'point'
+
+
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Element#',
+                                   default = "remaining", 
+                                   tip = "Element ID" )),
+        ('clmax', VtableElement('clmax', type='float',
+                                guilabel = 'Max size)',
+                                default = 1.0, 
+                                tip = "CharacteristicLengthMax" )),
+        ('clmin', VtableElement('clmin', type='float',
+                                guilabel = 'Min size',
+                                default = 1.0, 
+                                tip = "CharacteristicLengthMin" )),
+        ('embed_s', VtableElement('embed_s', type='string',
+                                   guilabel = 'Surface#',
+                                   default = "", 
+                                   tip = "Surface number" )),)
+
+
+class FreeVolume(GmshMeshActionBase):
+    vt = Vtable(data)    
+    def add_meshcommand(self, mesher):
+        gid, clmax, clmin, embed_s = self.vt.make_value_or_expression(self)
+        mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
+                   mode = 'Volume', embed_s = embed_s)
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            ret['volume'] = [int(x) for x in self.geom_id.split(',')]
+        except:
+            pass
+        return ret, 'volume'
+    
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Element#',
+                                   default = "remaining", 
+                                   tip = "Element ID" )),
+        ('clmax', VtableElement('clmax', type='float',
+                                guilabel = 'Max size)',
+                                default = 0.0, 
+                                tip = "CharacteristicLengthMax" )),
+        ('clmin', VtableElement('clmin', type='float',
+                                guilabel = 'Min size',
+                                default = 0.0, 
+                                tip = "CharacteristicLengthMin" )),
+        ('embed_l', VtableElement('embed_l', type='string',
+                                   guilabel = 'Line#',
+                                   default = "", 
+                                   tip = "Line number" )),
+        ('embed_p', VtableElement('embed_p', type='string',
+                                   guilabel = 'Point#',
+                                   default = "", 
+                                   tip = "Point number" )),)
+
+class FreeFace(GmshMeshActionBase):
+    vt = Vtable(data)    
+    def add_meshcommand(self, mesher):
+        gid, clmax, clmin, embed_l, embed_p= self.vt.make_value_or_expression(self)
+        mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
+                   mode = 'Surface', embed_l=embed_l, embed_p=embed_p)
+        
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            ret['face'] = [int(x) for x in self.geom_id.split(',')]
+        except:
+            pass
+        return ret, 'face'
+
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Line#',
+                                   default = "remaining", 
+                                   tip = "Line number" )),
+        ('clmax', VtableElement('clmax', type='float',
+                                guilabel = 'Max size)',
+                                default = 0.0, 
+                                tip = "CharacteristicLengthMax" )),
+        ('clmin', VtableElement('clmin', type='float',
+                                guilabel = 'Min size',
+                                default = 0.0, 
+                                tip = "CharacteristicLengthMin" )),)
+class FreeEdge(GmshMeshActionBase):
+    vt = Vtable(data)    
+    def add_meshcommand(self, mesher):
+        gid, clmax, clmin = self.vt.make_value_or_expression(self)
+        mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
+                   mode = 'Line')
+        
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            ret['edge'] = [int(x) for x in self.geom_id.split(',')]
+        except:
+            pass
+        return ret, 'edge'
+    

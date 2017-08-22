@@ -4,18 +4,14 @@ import tempfile
 import os
 import subprocess
 import tempfile
-import meshio
 import weakref
 import numpy as np
-import voropy
+import traceback
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 
-from petram.model import Model
-
 from petram.mesh.mesh_model import Mesh
-from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
@@ -26,9 +22,9 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
     has_2nd_panel = False
     isGmshMesh = True
     
-    def __init__(self, *args, **kwargs):
-        super(GmshMeshActionBase, self).__init__(*args, **kwargs)
-        NS_mixin.__init__(self, *args, **kwargs)
+#    def __init__(self, *args, **kwargs):
+#        super(GmshMeshActionBase, self).__init__(*args, **kwargs)
+#        NS_mixin.__init__(self, *args, **kwargs)
 
     def attribute_set(self, v):
         v = super(GmshMeshActionBase, self).attribute_set(v)
@@ -62,7 +58,7 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
     def panel1_tip(self):
         return [None] + self.vt.panel_tip()
 
-    def build_mesh(self, lines):
+    def add_meshcommand(self):
         raise NotImplementedError(
              "you must specify this method in subclass")
     
@@ -70,18 +66,35 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
+        geom_root = self.root()['Geometry'][self.parent.geom_group]
+        try:
+            self.parent.build_mesh(geom_root, **kwargs)
+        except:
+            import ifigure.widgets.dialog as dialog               
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to generate meshing script',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+        dlg.OnRefreshTree()
+        self.parent.onUpdateMeshView(evt)
         
     def onBuildBefore(self, evt):
-        self._onBuildThis(evt, stop1 = self)
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        mm = dlg.get_selected_mm()
+        print("build before", mm)
+        self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
-    def onBuildAfter(self, evt):        
-        self._onBuildThis(evt, stop2 = self)
+    def onBuildAfter(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        mm = dlg.get_selected_mm()
+        print("build after", mm)        
+        self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
 
-    def get_element_selection(self):
+    def element_selection_empty(self):
         return {'volume':[],
                 'face':[],
                 'edge':[],
@@ -109,11 +122,11 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
             
 
 data = (('clmax', VtableElement('clmax', type='float',
-                                guilabel = 'CLength-Max(def)',
+                                guilabel = 'Max size(def)',
                                 default = 1.0, 
                                 tip = "CharacteristicLengthMax" )),
         ('clmin', VtableElement('clmin', type='float',
-                                guilabel = 'CLength-Min(def)',
+                                guilabel = 'Min size(def)',
                                 default = 1.0, 
                                 tip = "CharacteristicLengthMin" )),)
                 
@@ -121,9 +134,9 @@ class GmshMesh(Mesh, Vtable_mixin):
     has_2nd_panel = False
     isMeshGroup = True
     vt = Vtable(data)    
-    def __init__(self, *args, **kwargs):
-        super(GmshMesh, self).__init__(*args, **kwargs)
-        NS_mixin.__init__(self, *args, **kwargs)
+#    def __init__(self, *args, **kwargs):
+#        super(GmshMesh, self).__init__(*args, **kwargs)
+#        NS_mixin.__init__(self, *args, **kwargs)
         
     def attribute_set(self, v):
         v['geom_group'] = ''
@@ -133,15 +146,15 @@ class GmshMesh(Mesh, Vtable_mixin):
     
     def panel1_param(self):    
         ll =   [["Geometry", self.geom_group,  0, {},],]
-        
-        #        [None, None, 141, {"label": "Export...",
-        #                           "func": self.onExportMesh,
-        #                           "noexpand": True}],]
-        ll.extend(self.vt.panel_param(self))
+        ll.extend(self.vt.panel_param(self))        
+        ll.append([None, None, 141, {"label": "Build All",
+                                  "func": self.onBuildAll,
+                                   "noexpand": True}])
+
         return ll
     
     def get_panel1_value(self):
-        return [self.geom_group,] + list(self.vt.get_panel_value(self))
+        return [self.geom_group,] + list(self.vt.get_panel_value(self)) + [None]
     
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
@@ -152,18 +165,19 @@ class GmshMesh(Mesh, Vtable_mixin):
         self.vt.import_panel_value(self, v[1:])
         
     def panel1_tip(self):
-        return [None] + self.vt.panel_tip()
+        return [None] + self.vt.panel_tip() + [None]
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine
-        return [TransfiniteLine]
+        from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, CharacteristicLength]
     
     def get_special_menu(self):
-        return [('Build all', self.onBuildAll)]
+        return [('Build All', self.onBuildAll),
+                ('Export .geo', self.onExportGeom)]
 
-    def onExportMesh(self, evt):
+    def onExportGeom(self, evt):
         print("export geom file")
-        if not hasattr(self, "_txt_unrolled"):
+        if not hasattr(self, "_txt_rolled"):
             evt.Skip()
             return
         from ifigure.widgets.dialog import write
@@ -173,11 +187,29 @@ class GmshMesh(Mesh, Vtable_mixin):
                      wildcard = '*.geo')
         if path != '':
             fid = open(path, 'w')
-            fid.write('\n'.join(self._txt_unrolled))
+            fid.write('\n'.join(self._txt_rolled))
             fid.close()
+            
+    def onUpdateMeshView(self, evt):
+        from petram.geom.gmsh_geom_model import read_loops, generate_mesh
+        from petram.geom.geo_plot import plot_geometry, oplot_meshed        
+        
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        
+        geo_text = self._txt_rolled[:]        
+        ret =  generate_mesh(geo_object = None,
+                             dim = 2,
+                             num_quad_lloyd_steps=0,
+                             num_lloyd_steps=0,                             
+                             geo_text = geo_text)
+
+        oplot_meshed(viewer, ret)        
+        geom_root = self.root()['Geometry'][self.geom_group]        
+        viewer._s_v_loop = read_loops(geom_root._txt_unrolled)
     
     def onBuildAll(self, evt):
-        dlg = evt.GetEventObject()
+        dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
         engine.build_ns()
@@ -185,9 +217,17 @@ class GmshMesh(Mesh, Vtable_mixin):
         geom_root = self.root()['Geometry'][self.geom_group]
         if not hasattr(geom_root, "_txt_unrolled"):
             geom_root.onBuildAll(evt)
-
-        self.build_mesh(geom_root)
+            
+        try:
+           self.build_mesh(geom_root)
+        except:
+            import ifigure.widgets.dialog as dialog               
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to generate mesh script',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
         dlg.OnRefreshTree()
+        self.onUpdateMeshView(evt)        
         evt.Skip()
         
     def build_mesh(self, geom_root, stop1=None, stop2=None):
@@ -197,22 +237,28 @@ class GmshMesh(Mesh, Vtable_mixin):
         children = [x for x in self.walk()]
         children = children[1:]
 
-        from .gmsh_mesh_actions import MeshData
-        meshdata = MeshData(lines, num_entities)
-        
+        clmax_root = geom_root._clmax_guess
+        clmin_root = clmax_root/100.
+        from .gmsh_mesher import GmshMesher
+        mesher = GmshMesher(num_entities,
+                            CharacteristicLengthMax = clmax_root,
+                            CharacteristicLengthMin = clmin_root)
+
+
         for child in children:
             if not child.enabled: continue            
             child.vt.preprocess_params(child)
             if child is stop1: break            # for build before
-            child.build_mesh(meshdata)
+            child.add_meshcommand(mesher)
             if child is stop2: break            # for build after
             
-        lines = meshdata.lines
+        lines = mesher.generate()
         if debug:
             for l in lines:
-                 print(l.strip())
+                 print(l)
 
-        self._txt_unrolled = lines
+        lines = geom_root._txt_rolled + lines
+        self._txt_rolled = lines
         
 
         
