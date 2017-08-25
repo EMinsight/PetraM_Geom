@@ -98,6 +98,9 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
                 'face':[],
                 'edge':[],
                 'point':[],}, None
+    
+    def get_element_selection(self):
+        return self.element_selection_empty()
                 
     def onItemSelChanged(self, evt):
         super(GmshMeshActionBase, self).onItemSelChanged(evt)
@@ -167,8 +170,8 @@ class GmshMesh(Mesh, Vtable_mixin):
         return [None] + self.vt.panel_tip() + [None]
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, CharacteristicLength]
+        from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, CharacteristicLength, Rotate, Translate]
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
@@ -232,7 +235,7 @@ class GmshMesh(Mesh, Vtable_mixin):
     def build_mesh(self, geom_root, stop1=None, stop2=None):
         lines = [x.strip() for x in geom_root._txt_unrolled]
         num_entities = geom_root._num_entities
-        
+        geom_coords = geom_root._geom_coords
         children = [x for x in self.walk()]
         children = children[1:]
 
@@ -240,6 +243,7 @@ class GmshMesh(Mesh, Vtable_mixin):
         clmin_root = clmax_root/100.
         from .gmsh_mesher import GmshMesher
         mesher = GmshMesher(num_entities,
+                            geom_coords = geom_coords,
                             CharacteristicLengthMax = clmax_root,
                             CharacteristicLengthMin = clmin_root)
 

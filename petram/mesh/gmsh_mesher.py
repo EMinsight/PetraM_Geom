@@ -1,4 +1,6 @@
+from __future__ import print_function
 import sys
+import numpy as np
 
 def show(gid, mode = "Line", recursive = False):
     lines= []
@@ -66,12 +68,15 @@ def characteristiclength(gid, cl = 1e20):
     c += '{{ {} }}'.format(','.join(gid)) + ' = ' +  str(cl) + ";"
     return [c,]
 
+def rotate(x, y, z):
+    pass
+def translate(x, y, z):
+    pass
+    
 def embed(gid, embed_s="", embed_l="", embed_p=""):
     if ((embed_s is "") and (embed_l is "") and
         (embed_p is "")): return []
 
-    print(embed_s, embed_l, embed_p)
-    
     gid = [str(x) for x in gid.split(',')]
     if len(gid) != 1:
         assert False, "embed destination should be one element"
@@ -84,7 +89,6 @@ def embed(gid, embed_s="", embed_l="", embed_p=""):
                       ' In Volume {{ {} }}'.format(','.join(gid))+ ';')
     if embed_l is not None:
         lid = [str(x) for x in embed_l.split(',') if x]
-        print(lid)
         if lid:        
             lines.append('Line {{ {} }}'.format(','.join(lid)) +
                       ' In Surface {{ {} }}'.format(','.join(gid))+ ';')
@@ -97,14 +101,16 @@ def embed(gid, embed_s="", embed_l="", embed_p=""):
 
 class GmshMesher(object):
     def __init__(self, num_entities,
+                       geom_coords,
                        CharacteristicLengthMax = 1e20,
                        CharacteristicLengthMin = 1):
-
-
+        
+        self.geom_coords = geom_coords
         self.clmax = CharacteristicLengthMax
         self.clmin = CharacteristicLengthMin
 
         self.sequence = []
+        self.transform = {}
         self.done = {"Vertex":[],     #0D element
                      "Line": [],     #1D element
                      "Surface": [],     #2D element
@@ -189,6 +195,61 @@ class GmshMesher(object):
 
         lines.extend(freemesh(gid, clmax=clmax, clmin=clmin))
         self.record_finished(gid, mode = mode)                
+        return lines
+
+    def rotate(self, gid, src="", meshdim=0, transformname=''):
+        if meshdim!=0: return [0]
+        gid = [int(x) for x in gid.split(',')]
+        src = [int(x) for x in src.split(',')]
+        if len(gid) != 1 or len(src) != 1:
+            assert False, "source and dentination array length should be one"
+        X, cells, pt_data, cell_data, field_data = self.geom_coords
+        
+        g = np.where(cell_data['triangle']['geometrical'] == gid[0])[0][0]
+        s = np.where(cell_data['triangle']['geometrical'] == src[0])[0][0]
+
+        print(g,s)
+        g1 = X[cells['triangle'][g]]
+        s1 = X[cells['triangle'][s]]
+
+        norms = np.cross(s1[1]-s1[0], s1[2]-s1[0])  # normal on src
+        normg = np.cross(g1[1]-g1[0], g1[2]-g1[0])  # normal on dst
+
+        def norm(x): return np.sqrt(np.sum(x**2))
+
+        norms = norms/norm(norms)
+        normg = normg/norm(normg)
+
+        angle = np.arcsin(np.sum(norms*normg))
+        axis = np.cross(norms, normg)
+        axis = axis/norm(axis)
+
+        m = np.vstack((norms, normg, axis))
+        b = np.array([np.sum(norms*s1[0]), np.sum(normg*g1[0]), 0])
+        x0 = np.dot(np.linalg.inv(m), b)
+        print('rotate', axis, x0, angle*180/np.pi)
+        self.transform[transformname] = (axis, x0, angle,)
+        return []
+        
+    def translate(self, gid, src="", meshdim=0, transformname=''):
+        if meshdim!=0: return [0]
+        
+        gid = [int(x) for x in gid.split(',')]
+        src = [int(x) for x in src.split(',')]
+        if len(gid) != 1 or len(src) != 1:
+            assert False, "source and dentination array length should be one"
+        X, cells, pt_data, cell_data, field_data = self.geom_coords
+        
+        g = np.where(cell_data['vertex']['geometrical'] == gid[0])[0]
+        s = np.where(cell_data['vertex']['geometrical'] == src[0])[0]        
+        a = X[cells['vertex'][g]]
+        b = X[cells['vertex'][s]]
+        self.transform[transformname] = (a-b)
+        print('translate', a - b)
+        return []
+        
+    def copymesh(self, gid, src="", meshdim=0):
+        lines = []
         return lines
     
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):

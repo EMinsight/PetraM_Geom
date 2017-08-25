@@ -211,6 +211,7 @@ class GmshGeom(GeomBase):
                              geo_text = geo_text)
         from .geo_plot import plot_geometry
         plot_geometry(viewer, ret)
+        self._geom_coords = ret
         viewer._s_v_loop = read_loops(self._txt_unrolled)
         
     def build_geom(self, stop1=None, stop2=None, filename = None,
