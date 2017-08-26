@@ -168,25 +168,25 @@ class FreeEdge(GmshMeshActionBase):
         return ret, 'edge'
     
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Surface# (From)',
+                                   guilabel = 'Surface# (To)',
                                    default = "", 
                                    tip = "Surface number" )),
         ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Source# (To)',
+                                  guilabel = 'Source# (From)',
                                   default = "", 
                                   tip = "Surface number" )),)
 class Rotate(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, src_id = self.vt.make_value_or_expression(self)
-        mesher.add('rotate', gid, src=src_id, transformname=self.name())
+        mesher.add('rotate', gid, src=src_id, transform=self.name())
         
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Point# (From)',
+                                   guilabel = 'Point# (To)',
                                    default = "", 
                                    tip = "Point number" )),
         ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Point# (To)',
+                                  guilabel = 'Point# (From)',
                                   default = "", 
                                   tip = "Point number" )),)
 
@@ -194,15 +194,15 @@ class Translate(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, src_id = self.vt.make_value_or_expression(self)
-        mesher.add('translate', gid, src=src_id, transformname=self.name())
+        mesher.add('translate', gid, src=src_id, transform=self.name())
         
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Surface#',
-                                   default = "remaining", 
+                                   guilabel = 'Surface# (To)',
+                                   default = "", 
                                    tip = "Surface number" )),
         ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Source #',
-                                  default = "remaining", 
+                                  guilabel = 'Source # (From)',
+                                  default = "", 
                                   tip = "Surface number" )),
         ('mapper', VtableElement('mapper', type='string',
                                   guilabel = 'Transform',
@@ -212,16 +212,19 @@ data = (('geom_id', VtableElement('geom_id', type='string',
 class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
-        gid, src_id = self.vt.make_value_or_expression(self)
-        mesher.add('copymesh', gid, src_id, mode = 'Surface')
+        gid, src_id, transform = self.vt.make_value_or_expression(self)
+        etg1 = mesher.new_etg()
+        etg2 = mesher.new_etg()
+        mesher.add('copymesh', gid, src_id, mode = 'Surface',
+                   transform = transform, etg = [etg1, etg2])
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
-        gid, src_id = self.element_selection_empty()
+        ret, mode = self.element_selection_empty()
         try:
             dest = [int(x) for x in self.geom_id.split(',')]
             src  = [int(x) for x in self.src_id.split(',')]
-            ret['edge'] = dest + src
+            ret['face'] = dest + src
         except:
             pass
-        return ret, 'edge'
+        return ret, 'face'

@@ -277,7 +277,7 @@ class GmshGeom(GeomBase):
                      wildcard = '*.geo')
         if path != '':
             fid = open(path, 'w')
-            fid.write('\n'.join(self._txt_unrolled))
+            fid.write('\n'.join(self._txt_rolled))
             fid.close()
         
     
@@ -458,6 +458,27 @@ def generate_mesh(
         #    os.remove(geou_filename)
         return lines, rolled, num_entities
 
+    # meshio does not read $Periodic....
+    fid = open(msh_filename, 'r')
+    lines = fid.readlines()
+    fid.close()
+    has_periodic = False
+    for n1, l in enumerate(lines):
+        if l.strip() == '$Periodic':
+            has_periodic = True
+            ps = n1
+            break
+    if has_periodic:
+        for n2, l in enumerate(lines):
+            if l.strip() == '$EndPeriodic':
+                pe = n2
+                break
+        print(n1, n2)
+        lines = lines[:ps]+lines[pe+1:]
+        fid = open(msh_filename, 'w')
+        fid.write(''.join(lines))
+        fid.close()
+        
     X, cells, pt_data, cell_data, field_data = meshio.read(msh_filename)
 
     # clean up

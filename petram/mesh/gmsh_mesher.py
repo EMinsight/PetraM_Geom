@@ -52,12 +52,12 @@ def transfinite(gid, mode = 'Line', nseg='',
     lines.append(c+';')
     return lines
 
-def freemesh(gid, clmax = None, clmin = None):
+def freemesh(gid, clmax=None, clmin=None):
     lines = []
     if clmax > 0:
-        lines.append('Mesh.CharacteristicLengthMax = '+str(clmax) + ';')
+        lines.append('Mesh.CharacteristicLengthMax = ' + str(clmax) + ';')
     if clmin > 0:
-        lines.append('Mesh.CharacteristicLengthMin = '+str(clmin) + ';')
+        lines.append('Mesh.CharacteristicLengthMin = ' + str(clmin) + ';')
     if len(lines) > 0:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;')
     return lines
@@ -68,11 +68,36 @@ def characteristiclength(gid, cl = 1e20):
     c += '{{ {} }}'.format(','.join(gid)) + ' = ' +  str(cl) + ";"
     return [c,]
 
-def rotate(x, y, z):
-    pass
-def translate(x, y, z):
-    pass
+def rotate(axis, x0, angle):
+    taxis = [str(x) for x in axis]
+    tx0 = [str(x) for x in x0]    
+    return ('Rotate'+'{' + '{{ {} }}'.format(','.join(taxis)) + ','  
+                         + '{{ {} }}'.format(','.join(tx0))  + ',' 
+                         + str(angle) + '}')
+
+
+def translate(dx, dy, dz):
+    dd = [str(dx), str(dy), str(dz)]
+    return 'Translate'+'{{ {} }}'.format(','.join(dd))    
+
+def periodic(mode, gid, sid, transform):
+    txt = 'Periodic '+ mode + ' '
+    lines = []
+    gid = [str(x) for x in gid.split(',')]
+    sid = [str(x) for x in sid.split(',')]
     
+    txt  += '{{ {} }}'.format(','.join(gid)) + ' = '
+    txt  += '{{ {} }}'.format(','.join(sid))    
+    txt  += ' ' + transform + ';'
+    lines.append(txt)
+    return lines
+
+def boundary(mode, etg, gid):
+    txt =  etg + "() = Unique(Abs(Boundary{" + mode
+    txt +=  "{" + gid + "}"
+    txt +=  ";}));"
+    return [txt]
+
 def embed(gid, embed_s="", embed_l="", embed_p=""):
     if ((embed_s is "") and (embed_l is "") and
         (embed_p is "")): return []
@@ -119,7 +144,12 @@ class GmshMesher(object):
                              "Line": num_entities[1],
                              "Surface": num_entities[2],
                              "Volume": num_entities[3],}
-        
+        self.ietg = 0
+    
+    def new_etg(self):
+        self.ietg = self.ietg + 1
+        return 'etg'+str(self.ietg)
+    
     def transfinite(self, gid, mode = 'Line', nseg='',
                     progression = 0, bump = 0, meshdim = 1, **kwargs):
         lines = []
@@ -197,8 +227,8 @@ class GmshMesher(object):
         self.record_finished(gid, mode = mode)                
         return lines
 
-    def rotate(self, gid, src="", meshdim=0, transformname=''):
-        if meshdim!=0: return [0]
+    def rotate(self, gid, src="", meshdim=0, transform=''):
+        if meshdim!=0: return []
         gid = [int(x) for x in gid.split(',')]
         src = [int(x) for x in src.split(',')]
         if len(gid) != 1 or len(src) != 1:
@@ -223,16 +253,32 @@ class GmshMesher(object):
         angle = np.arcsin(np.sum(norms*normg))
         axis = np.cross(norms, normg)
         axis = axis/norm(axis)
-
+        
         m = np.vstack((norms, normg, axis))
         b = np.array([np.sum(norms*s1[0]), np.sum(normg*g1[0]), 0])
         x0 = np.dot(np.linalg.inv(m), b)
+
+        d = sorted([(norm(np.cross(s1[k]-x0, axis)), s1[k] - x0)
+                     for k in range(3)])
+        p1 = d[-1][1]
+        d = sorted([( norm(np.cross(g1[k]-x0, axis)), g1[k] - x0)
+                     for k in range(3)])
+        p2 = d[-1][1]
+        
+        p1 = p1 - np.sum(p1*axis)*axis
+        p2 = p2 - np.sum(p2*axis)*axis
+        p1 = p1/norm(p1)
+        p2 = p2/norm(p2)
+
+        angle = np.arcsin(norm(np.cross(p1,p2)))
+        if np.sum(p1*p2)<0: angle = np.pi - angle
+        
         print('rotate', axis, x0, angle*180/np.pi)
-        self.transform[transformname] = (axis, x0, angle,)
+        self.transform[transform] = ('rotate', axis, x0, angle,)
         return []
         
-    def translate(self, gid, src="", meshdim=0, transformname=''):
-        if meshdim!=0: return [0]
+    def translate(self, gid, src="", meshdim=0, transform=''):
+        if meshdim!=0: return []
         
         gid = [int(x) for x in gid.split(',')]
         src = [int(x) for x in src.split(',')]
@@ -244,12 +290,42 @@ class GmshMesher(object):
         s = np.where(cell_data['vertex']['geometrical'] == src[0])[0]        
         a = X[cells['vertex'][g]]
         b = X[cells['vertex'][s]]
-        self.transform[transformname] = (a-b)
+        self.transform[transform] = ('translate', a-b)
         print('translate', a - b)
         return []
         
-    def copymesh(self, gid, src="", meshdim=0):
+    def copymesh(self, gid, src="", meshdim=0, transform='', mode='',
+                       etg = None):
+        etg1, etg2 = etg
+        trans = self.transform[transform]
+        f = getattr(sys.modules[__name__], trans[0])
+        trans_txt = f(*trans[1:])
+        
+        x1 = self.show_hide_gid(gid, mode = mode)
+        if not x1: return []
+        x2 = self.show_hide_gid(src, mode = mode)
+        if not x2: return []
+        xx = self.show_hide_gid(','.join([gid, src]), mode = mode)        
         lines = []
+        if meshdim == 0:
+            lines.extend(boundary(mode, etg1, gid))
+            lines.extend(boundary(mode, etg2, src))
+            mode2 = 'Line' if mode == 'Surface' else 'Point'
+            lines.extend(periodic(mode2, etg1+"()", etg2+"()", trans_txt))                
+            lines.extend(periodic(mode,  gid, src, trans_txt))
+        elif meshdim == 2 and mode == 'Surface':
+            lines.extend(xx)
+            self.record_finished(gid, mode = mode)
+            self.record_finished(src, mode = mode)                        
+        elif meshdim == 1 and mode == 'Surface':
+            lines.extend(self.show_hide_gid(','.join([etg1+"()", etg2+"()"]),
+                                            mode = 'Line'))
+            self.record_finished(etg1+"()", mode = 'Line')
+            self.record_finished(etg2+"()", mode = 'Line')
+        elif meshdim == 1 and mode == 'Line':
+            lines.extend(xx)
+            self.record_finished(gid, mode = mode)
+            self.record_finished(src, mode = mode)                        
         return lines
     
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):
@@ -309,7 +385,11 @@ class GmshMesher(object):
             gid = self.get_remaining_txt(mode)
             self.done[mode] = "*"            
         else:
-            gidnum = [int(x) for x in gid.split(',')]
+            try:
+               gidnum = [int(x) for x in gid.split(',')]
+            except:
+               self.done[mode].append(gid)
+               return
             for x in gidnum:
                 if not x in self.done[mode]:
                     self.done[mode].append(x)

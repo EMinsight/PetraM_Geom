@@ -170,8 +170,8 @@ class GmshMesh(Mesh, Vtable_mixin):
         return [None] + self.vt.panel_tip() + [None]
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, CharacteristicLength, Rotate, Translate]
+        from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, CharacteristicLength, Rotate, Translate, CopyFace]
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
