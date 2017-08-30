@@ -22,10 +22,6 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
     has_2nd_panel = False
     isGmshMesh = True
     
-#    def __init__(self, *args, **kwargs):
-#        super(GmshMeshActionBase, self).__init__(*args, **kwargs)
-#        NS_mixin.__init__(self, *args, **kwargs)
-
     def attribute_set(self, v):
         v = super(GmshMeshActionBase, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -131,6 +127,7 @@ data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel = 'Min size(def)',
                                 default = 1.0, 
                                 tip = "CharacteristicLengthMin" )),)
+        
                 
 class GmshMesh(Mesh, Vtable_mixin):
     has_2nd_panel = False
@@ -142,21 +139,38 @@ class GmshMesh(Mesh, Vtable_mixin):
         
     def attribute_set(self, v):
         v['geom_group'] = ''
+        v['algorithm'] = 'default'
+        v['algorithm3d'] = 'default'                
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v
     
     def panel1_param(self):    
         ll =   [["Geometry", self.geom_group,  0, {},],]
-        ll.extend(self.vt.panel_param(self))        
+        ll.extend(self.vt.panel_param(self))
+
+        from .gmsh_mesher import MeshAlgorithm, MeshAlgorithm3D
+
+        c1 = MeshAlgorithm.keys()
+        c2 = MeshAlgorithm3D.keys()
+
+        from wx import CB_READONLY
+        setting1 = {"style":CB_READONLY, "choices": c1}
+        setting2  ={"style":CB_READONLY, "choices": c2}
+        
+        ll.append(["2D Algorithm", c1[-1], 4, setting1])
+        ll.append(["3D Algorithm", c2[-1], 4, setting2])
+        ll.append([None, None, 141, {"label": "Use default size",
+                                  "func": self.onSetDefSize,
+                                   "noexpand": True}])
         ll.append([None, None, 141, {"label": "Build All",
                                   "func": self.onBuildAll,
                                    "noexpand": True}])
-
         return ll
     
     def get_panel1_value(self):
-        return [self.geom_group,] + list(self.vt.get_panel_value(self)) + [None]
+        return ([self.geom_group,] + list(self.vt.get_panel_value(self)) +
+                [self.algorithm, self.algorithm3d, None, None])
     
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
@@ -164,10 +178,15 @@ class GmshMesh(Mesh, Vtable_mixin):
     
     def import_panel1_value(self, v):
         self.geom_group = str(v[0])        
-        self.vt.import_panel_value(self, v[1:])
+        self.vt.import_panel_value(self, v[1:-4])
+
+        from .gmsh_mesher import MeshAlgorithm, MeshAlgorithm3D
+        print(v)
+        self.algorithm = str(v[-4])
+        self.algorithm3d = str(v[-3])
         
     def panel1_tip(self):
-        return [None] + self.vt.panel_tip() + [None]
+        return [None] + self.vt.panel_tip() + [None]*4
         
     def get_possible_child(self):
         from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace
@@ -176,7 +195,15 @@ class GmshMesh(Mesh, Vtable_mixin):
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
                 ('Export .geo', self.onExportGeom)]
-
+    
+    def onSetDefSize(self, evt):
+        geom_root = self.root()['Geometry'][self.geom_group]                
+        clmax_root, clmin_root = geom_root._clmax_guess
+        self.clmax_txt = str(clmax_root)
+        self.clmin_txt = str(clmin_root)        
+        dlg = evt.GetEventObject().GetTopLevelParent()        
+        dlg.OnItemSelChanged()
+        
     def onExportGeom(self, evt):
         print("export geom file")
         if not hasattr(self, "_txt_rolled"):
@@ -233,19 +260,22 @@ class GmshMesh(Mesh, Vtable_mixin):
         evt.Skip()
         
     def build_mesh(self, geom_root, stop1=None, stop2=None):
+        self.vt.preprocess_params(self)
+        
         lines = [x.strip() for x in geom_root._txt_unrolled]
         num_entities = geom_root._num_entities
         geom_coords = geom_root._geom_coords
         children = [x for x in self.walk()]
         children = children[1:]
 
-        clmax_root = geom_root._clmax_guess
-        clmin_root = clmax_root/100.
+        print(self.clmax, self.clmin)
         from .gmsh_mesher import GmshMesher
         mesher = GmshMesher(num_entities,
                             geom_coords = geom_coords,
-                            CharacteristicLengthMax = clmax_root,
-                            CharacteristicLengthMin = clmin_root)
+                            CharacteristicLengthMax = self.clmax,
+                            CharacteristicLengthMin = self.clmin,
+                            MeshAlgorithm = self.algorithm,
+                            MeshAlgorithm3D = self.algorithm3d)                
 
 
         for child in children:

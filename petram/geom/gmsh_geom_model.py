@@ -198,8 +198,9 @@ class GmshGeom(GeomBase):
         
         geo_text = self._txt_unrolled[:]
         xyz = guess_geom_size(geo_text)
-        clmax = np.min(np.max(xyz, 0) - np.min(xyz, 0))/3.
-        self._clmax_guess = clmax
+        clmax = np.max(np.max(xyz, 0) - np.min(xyz, 0))/3.
+        clmin = np.min(np.max(xyz, 0) - np.min(xyz, 0))/3.        
+        self._clmax_guess = (clmax, clmin)
         geo_text.extend(['Show "*";',
                          'Mesh.CharacteristicLengthMax = '+str(clmax) + ';'])
 

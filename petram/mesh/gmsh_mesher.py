@@ -1,7 +1,19 @@
 from __future__ import print_function
 import sys
 import numpy as np
+from collections import OrderedDict
 
+MeshAlgorithm= OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 3),
+                ("Frontal", 6), ("BAMG", 7), ("DelQuad", 8),
+                ("default", 2)))
+
+MeshAlgorithm3D= OrderedDict((("Delaunay",1), ("New Delaunay",2),
+                              ("Frontal", 4), 
+                              ("Frontal Hex", 6), ("MMG3D", 7),
+                              ("R-tree", 9), ("default", 1)))
+## note : 
+##   Frontal Delaunay (3D) : deplicated.
+        
 def show(gid, mode = "Line", recursive = False):
     lines= []
     if gid == "*":
@@ -128,11 +140,15 @@ class GmshMesher(object):
     def __init__(self, num_entities,
                        geom_coords,
                        CharacteristicLengthMax = 1e20,
-                       CharacteristicLengthMin = 1):
+                       CharacteristicLengthMin = 1,
+                       MeshAlgorithm = "Automatic",
+                       MeshAlgorithm3D = "Delaunay"):
         
         self.geom_coords = geom_coords
         self.clmax = CharacteristicLengthMax
         self.clmin = CharacteristicLengthMin
+        self.algorithm = MeshAlgorithm
+        self.algorithm3d = MeshAlgorithm3D
 
         self.sequence = []
         self.transform = {}
@@ -145,7 +161,7 @@ class GmshMesher(object):
                              "Surface": num_entities[2],
                              "Volume": num_entities[3],}
         self.ietg = 0
-    
+        
     def new_etg(self):
         self.ietg = self.ietg + 1
         return 'etg'+str(self.ietg)
@@ -346,7 +362,17 @@ class GmshMesher(object):
     def generate(self):
         lines = []
         thismodule = sys.modules[__name__]
-
+        lines.append("Mesh.Algorithm = " +
+                     str(MeshAlgorithm[self.algorithm])+';')
+        lines.append("Mesh.Algorithm3D = " +
+                     str(MeshAlgorithm3D[self.algorithm3d])+';')
+        if self.clmax > 0:        
+            lines.append('Mesh.CharacteristicLengthMax = ' +
+                         str(self.clmax) + ';')
+        if self.clmin > 0:                
+            lines.append('Mesh.CharacteristicLengthMin = ' +
+                         str(self.clmin) + ';')
+        
         max_mdim = 0
         for mdim in [0, 1, 2, 3]:
             for proc, gids, kwargs in self.sequence:
