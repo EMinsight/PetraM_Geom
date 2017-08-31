@@ -240,14 +240,13 @@ class GmshGeom(GeomBase):
                                                   filename = filename)
         unrolled = [x.strip() for x in unrolled]
         s, v =  read_loops(unrolled)
-        
         if finalize:
             dim = check_dim(unrolled)
             extra = []
             if ((dim == 2 and len(s.keys()) > 1) or
                 (dim == 3 and len(s.keys()) > 1 and len(v.keys()) == 1)):
                 print("splitting surface",  s.keys())
-                extra.append(BoolFramgents_extra('final_faces', 'Surface', s.keys()))
+                extra.append(BoolFramgents_extra('final_s', 'Surface', s.keys()))
                 unrolled, rolled, entities = generate_mesh(geom, dim = 0,
                                                              filename = filename,
                                                              extra = extra)
@@ -255,7 +254,7 @@ class GmshGeom(GeomBase):
                 s, v =  read_loops(unrolled)              
             if dim == 3 and len(v.keys()) > 1:                
                 print("splitting volume",  v.keys())                
-                extra.append(BoolFramgents_extra('final_volumes', 'Volume', v.keys()))
+                extra.append(BoolFramgents_extra('final_v', 'Volume', v.keys()))
                 unrolled, rolled, entities = generate_mesh(geom, dim = 0,
                                                            filename = filename,
                                                            extra = extra)
@@ -369,7 +368,8 @@ def generate_mesh(
         prune_vertices=True,
         filename=None,
         geo_text=None,
-        extra=None
+        extra=None,
+        bin = '-bin'
         ):
     from pygmsh.helper import _get_gmsh_exe, _is_flat
     import meshio
@@ -405,7 +405,7 @@ def generate_mesh(
             msh_filename = filename + '.msh'
         cmd = [
             gmsh_executable,
-            '-{}'.format(dim), '-bin', geo_filename, '-o', msh_filename
+            '-{}'.format(dim), bin, geo_filename, '-o', msh_filename
             ]
         if num_quad_lloyd_steps > 0:
             cmd += ['-optimize_lloyd', str(num_quad_lloyd_steps)]
@@ -416,7 +416,7 @@ def generate_mesh(
         else:
             msh_filename = filename + '.msh'
         cmd = [
-            gmsh_executable, '-bin', geo_filename, '-o', msh_filename
+            gmsh_executable, bin, geo_filename, '-o', msh_filename
             ]
     else:
         if filename is None:
@@ -428,7 +428,7 @@ def generate_mesh(
             gmsh_executable,
             '-{}'.format(dim), geo_filename, '-o', geou_filename
             ]
-
+    cmd = [x for x in cmd if x != '']
     # http://stackoverflow.com/a/803421/353337
     p = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,

@@ -14,8 +14,7 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 from petram.mesh.mesh_model import Mesh
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
-debug = True
-
+debug = False
         
 class GmshMeshActionBase(Mesh, Vtable_mixin):
     hide_ns_menu = True
@@ -181,7 +180,7 @@ class GmshMesh(Mesh, Vtable_mixin):
         self.vt.import_panel_value(self, v[1:-4])
 
         from .gmsh_mesher import MeshAlgorithm, MeshAlgorithm3D
-        print(v)
+
         self.algorithm = str(v[-4])
         self.algorithm3d = str(v[-3])
         
@@ -194,7 +193,8 @@ class GmshMesh(Mesh, Vtable_mixin):
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
-                ('Export .geo', self.onExportGeom)]
+                ('Export .geo', self.onExportGeom),
+                ('Export .msh', self.onExportMsh)]    
     
     def onSetDefSize(self, evt):
         geom_root = self.root()['Geometry'][self.geom_group]                
@@ -214,29 +214,56 @@ class GmshMesh(Mesh, Vtable_mixin):
         path = write(parent,
                      message = 'Enter .geo file name',
                      wildcard = '*.geo')
+        geo_text = self.assign_physical(self._txt_rolled[:])
         if path != '':
             fid = open(path, 'w')
-            fid.write('\n'.join(self._txt_rolled))
+            fid.write('\n'.join(geo_text))
             fid.close()
             
-    def onUpdateMeshView(self, evt):
+    def onExportMsh(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        
+        src = os.path.join(viewer.model.owndir(), self.name())+'.msh'
+
+        from ifigure.widgets.dialog import write
+        parent = evt.GetEventObject()        
+        dst = write(parent,
+                     message = 'Enter .msh file name',
+                     wildcard = '*.msh')
+        if dst == '': return
+        try:
+            import shutil
+            shutil.copyfile(src, dst)
+        except:
+            import ifigure.widgets.dialog as dialog               
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to export msh file',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+        
+            
+    def onUpdateMeshView(self, evt, filename=None, bin='-bin', geo_text = None):
         from petram.geom.gmsh_geom_model import read_loops, generate_mesh
         from petram.geom.geo_plot import plot_geometry, oplot_meshed        
         
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
-        geo_text = self._txt_rolled[:]        
+        geo_text = self._txt_rolled[:] if geo_text is None else geo_text
+        
         ret =  generate_mesh(geo_object = None,
                              dim = self._max_mdim,
                              num_quad_lloyd_steps=0,
                              num_lloyd_steps=0,                             
-                             geo_text = geo_text)
+                             geo_text = geo_text,
+                             filename=filename, bin=bin)
 
         oplot_meshed(viewer, ret)        
         geom_root = self.root()['Geometry'][self.geom_group]        
         viewer._s_v_loop = read_loops(geom_root._txt_unrolled)
-    
+
+        
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -256,10 +283,71 @@ class GmshMesh(Mesh, Vtable_mixin):
                                  title='Error',
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
-        self.onUpdateMeshView(evt)        
-        evt.Skip()
         
-    def build_mesh(self, geom_root, stop1=None, stop2=None):
+        filename = os.path.join(viewer.model.owndir(), self.name())
+        geo_text = self.assign_physical(self._txt_rolled[:])        
+        self.onUpdateMeshView(evt, filename = filename, bin='',
+                              geo_text = geo_text)
+
+        evt.Skip()
+
+    def assign_physical(self, geo_text):
+        from petram.geom.gmsh_geom_model import read_loops
+        geom_root = self.root()['Geometry'][self.geom_group]        
+        s, v = read_loops(geom_root._txt_unrolled)
+        
+
+        has_finalv = False
+        has_finals = False
+        has_finall = False
+        for line in geo_text:
+            if line.startswith('final_v[]'): has_finalv = True
+            if line.startswith('final_s[]'): has_finals = True
+            if line.startswith('final_l[]'): has_finall = True
+
+        t1 = 'final_s() = Unique(Abs(Boundary{ Volume{final_v()}; }));'
+        t2 = 'final_l() = Unique(Abs(Boundary{ Surface{final_s()}; }));'
+        t3 = 'final_p() = Unique(Abs(Boundary{ Line{final_l()}; }));'
+        
+        tt1= ['ipv = 0;',
+              'For ii In {0 : #final_v[]-1}',
+              '   ipv = ipv+1;',
+              '   Physical Volume (StrCat("volume", Sprintf("%g", final_v[ii])),ipv) = {final_v[ii]};',
+              'EndFor',]
+        tt2 = ['ips = 0;',
+               'For ii In {0 : #final_s[]-1}',
+               '   ips = ips+1;',
+               '   Physical Surface (StrCat("surface", Sprintf("%g", final_s[ii])),ips) = {final_s[ii]};',
+               'EndFor']
+        tt3 = ['ipl = 0;',
+               'For ii In {0 : #final_l[]-1}',
+               '   ipl = ipl+1;',
+               '   Physical Line (StrCat("line", Sprintf("%g", final_l[ii])),ipl) = {final_l[ii]};',
+              'EndFor',]
+
+        ## if volume (surface loop) exitsts but there is only one volume,
+        ## set it to final_v
+        if len(v.keys()) == 1:
+            ipv = str(v.keys()[0])
+            geo_text.append('final_v[] = {'+ipv+'};')
+            has_finalv = True
+            has_finals = False
+        ## if surface (line loop)  exitsts but there is only one volume,
+        ## set it to final_s
+        if len(s.keys()) == 1:
+            ips = str(s.keys()[0])
+            geo_text.append('final_s[] = {'+ips+'};')
+            has_finals = True
+        if has_finalv:
+            geo_text.extend([t1, t2, t3]+ tt1 + tt2 + tt3)
+        if has_finals:
+            geo_text.extend([t2, t3] + tt2 + tt3)
+        if has_finall:
+            geo_text.extend([t3] + tt3)
+        return geo_text
+            
+            
+    def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None):
         self.vt.preprocess_params(self)
         
         lines = [x.strip() for x in geom_root._txt_unrolled]
@@ -268,7 +356,6 @@ class GmshMesh(Mesh, Vtable_mixin):
         children = [x for x in self.walk()]
         children = children[1:]
 
-        print(self.clmax, self.clmin)
         from .gmsh_mesher import GmshMesher
         mesher = GmshMesher(num_entities,
                             geom_coords = geom_coords,

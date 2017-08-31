@@ -254,7 +254,6 @@ class GmshMesher(object):
         g = np.where(cell_data['triangle']['geometrical'] == gid[0])[0][0]
         s = np.where(cell_data['triangle']['geometrical'] == src[0])[0][0]
 
-        print(g,s)
         g1 = X[cells['triangle'][g]]
         s1 = X[cells['triangle'][s]]
 

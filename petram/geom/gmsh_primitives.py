@@ -233,24 +233,26 @@ class GeomPB_Bool(GeomPB):
         return v
     
     def panel1_param(self):
-        ll = self.vt.panel_param(self)
+        ll = GeomPB.panel1_param(self)
         ll.append(["Delete",
                     self.delete_input,  3, {"text":""}])
         return ll
         
     def get_panel1_value(self):
-        return list(self.vt.get_panel_value(self)) + [self.delete_input]
+        v = GeomPB.get_panel1_value(self)
+        return v + [self.delete_input]
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        self.vt.import_panel_value(self, v[:-1])
+        GeomPB.import_panel1_value(self, v[:-1])        
         self.delete_input = v[-1]
 
     def panel1_tip(self):
-        return list(self.vt.panel_tip()) + ['delete input objects']
+        tip = GeomPB.panel1_tip(self)
+        return tip + ['delete input objects']
 
 
 ddata =  (('objplus', VtableElement('objplus', type='string',
