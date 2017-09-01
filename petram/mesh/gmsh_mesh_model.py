@@ -284,12 +284,27 @@ class GmshMesh(Mesh, Vtable_mixin):
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
         
-        filename = os.path.join(viewer.model.owndir(), self.name())
-        geo_text = self.assign_physical(self._txt_rolled[:])        
-        self.onUpdateMeshView(evt, filename = filename, bin='',
-                              geo_text = geo_text)
-
+        self.onUpdateMeshView(evt, bin='', geo_text = self._txt_rolled[:])
+        self.onGenerateMsh(evt)
         evt.Skip()
+        
+    def onGenerateMsh(self, evt):
+        from petram.geom.gmsh_geom_model import read_loops, generate_mesh
+        
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        engine = viewer.engine
+        
+        filename = os.path.join(viewer.model.owndir(), self.name())
+        geo_text = self.assign_physical(self._txt_rolled[:])
+
+        print("Generating msh with physcal index")
+        ret =  generate_mesh(geo_object = None,
+                             dim = self._max_mdim,
+                             num_quad_lloyd_steps=0,
+                             num_lloyd_steps=0,                             
+                             geo_text = geo_text,
+                             filename=filename, bin='', verbosity='3')
 
     def assign_physical(self, geo_text):
         from petram.geom.gmsh_geom_model import read_loops

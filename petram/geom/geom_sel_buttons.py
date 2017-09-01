@@ -68,18 +68,19 @@ def hide_elem(evt):
     elif mode == 'edge':
         idx = ax.edge.getSelectedIndex()
         idx = list(set(ax.edge.hidden_component+idx))        
-        ax.edge.hide_component([])                
+        ax.edge.hide_component(idx)                
     elif mode == 'point':
         pass
     else:
         pass
+    viewer.canvas.unselect_all()
     viewer.draw_all()
-            
-btask = [('dot',    fdot,  2, 'select dot', select_dot),
-         ('edge',   fedge, 2, 'select edge', select_edge),
-         ('face',   fface, 2, 'select face', select_face),
-         ('domain', fdom,  2, 'select domain', select_volume),
+    
+btask = [('gdot',    fdot,  2, 'select dot', select_dot),
+         ('gedge',   fedge, 2, 'select edge', select_edge),
+         ('gface',   fface, 2, 'select face', select_face),
+         ('gdomain', fdom,  2, 'select domain', select_volume),
          ('---', None, None, None),
-         ('show',   show,  0, 'show all', show_all),
-         ('hide',   hide,  0, 'hide selection', hide_elem),]         
+         ('gshow',   show,  0, 'show all', show_all),
+         ('ghide',   hide,  0, 'hide selection', hide_elem),]         
             

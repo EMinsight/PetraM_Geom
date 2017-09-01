@@ -370,7 +370,8 @@ def generate_mesh(
         filename=None,
         geo_text=None,
         extra=None,
-        bin = '-bin'
+        bin = '-bin',
+        verbosity = '4'
         ):
     from pygmsh.helper import _get_gmsh_exe, _is_flat
     import meshio
@@ -405,7 +406,7 @@ def generate_mesh(
         else:
             msh_filename = filename + '.msh'
         cmd = [
-            gmsh_executable,
+            gmsh_executable, '-v', verbosity, 
             '-{}'.format(dim), bin, geo_filename, '-o', msh_filename
             ]
         if num_quad_lloyd_steps > 0:
