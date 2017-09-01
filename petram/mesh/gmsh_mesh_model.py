@@ -350,7 +350,6 @@ class GmshMesh(Mesh, Vtable_mixin):
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None):
         self.vt.preprocess_params(self)
         
-        lines = [x.strip() for x in geom_root._txt_unrolled]
         num_entities = geom_root._num_entities
         geom_coords = geom_root._geom_coords
         children = [x for x in self.walk()]

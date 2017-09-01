@@ -28,7 +28,7 @@ def show(gid, mode = "Line", recursive = False):
     return lines
 
 def hide(gid, mode = "Line", recursive = False):
-    lines = []    
+    lines = []
     if gid == "*":
         lines.append('Hide "*";')
     elif gid == "": return []    
@@ -72,6 +72,8 @@ def freemesh(gid, clmax=None, clmin=None):
         lines.append('Mesh.CharacteristicLengthMin = ' + str(clmin) + ';')
     if len(lines) > 0:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;')
+    else:
+        lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 1;')
     return lines
 
 def characteristiclength(gid, cl = 1e20):
@@ -265,7 +267,7 @@ class GmshMesher(object):
         norms = norms/norm(norms)
         normg = normg/norm(normg)
 
-        angle = np.arcsin(np.sum(norms*normg))
+        #angle = np.arcsin(np.sum(norms*normg))
         axis = np.cross(norms, normg)
         axis = axis/norm(axis)
         
@@ -285,8 +287,11 @@ class GmshMesher(object):
         p1 = p1/norm(p1)
         p2 = p2/norm(p2)
 
+        pos_p2 = np.cross(axis, p1)
+        sign_angle = np.sum(pos_p2*p2)
         angle = np.arcsin(norm(np.cross(p1,p2)))
         if np.sum(p1*p2)<0: angle = np.pi - angle
+        if sign_angle < 0: angle = - angle
         
         print('rotate', axis, x0, angle*180/np.pi)
         self.transform[transform] = ('rotate', axis, x0, angle,)

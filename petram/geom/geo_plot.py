@@ -81,7 +81,10 @@ def oplot_meshed(viewer,  ret):
         ax.face_meshed.destroy()
     if ax.has_child('edge_meshed'):
         ax.edge_meshed.destroy()
-    X, cells, pt_data, cell_data, field_data = ret
+    try:
+        X, cells, pt_data, cell_data, field_data = ret
+    except ValueError:
+        return
     if 'triangle' in cells:
         verts, elem_idx, array_idx = expand_vertex_data(X, cells['triangle'],
                                        cell_data['triangle']['geometrical'])

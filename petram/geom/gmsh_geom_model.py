@@ -196,8 +196,9 @@ class GmshGeom(GeomBase):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
-        geo_text = self._txt_unrolled[:]
-        xyz = guess_geom_size(geo_text)
+        geo_text = self._txt_rolled[:]
+        xyz = guess_geom_size(self._txt_unrolled)
+        print(np.max(xyz, 0) - np.min(xyz, 0))
         clmax = np.max(np.max(xyz, 0) - np.min(xyz, 0))/3.
         clmin = np.min(np.max(xyz, 0) - np.min(xyz, 0))/3.        
         self._clmax_guess = (clmax, clmin)
