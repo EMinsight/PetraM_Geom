@@ -74,7 +74,7 @@ rdata =  (('corner', VtableElement('corner', type='float',
                              tip = "Edge of rectangle" )),
           ('lcar', VtableElement('lcar', type='float',
                                    guilabel = 'lcar',
-                                   default = 0.1, 
+                                   default = 0.0, 
                               tip = "characteristc length from point" )),)
 
 class Rect(GeomPB):
@@ -113,7 +113,7 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
                               tip = "Z" )),
           ('lcar', VtableElement('lcar', type='float',
                                    guilabel = 'lcar',
-                                   default = 0.1, 
+                                   default = 0.0, 
                               tip = "characteristc length from point" )),)
 class Polygon(GeomPB):
     vt = Vtable(pdata)

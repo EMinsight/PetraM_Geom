@@ -90,8 +90,8 @@ def rotate(axis, x0, angle):
                          + str(angle) + '}')
 
 
-def translate(dx, dy, dz):
-    dd = [str(dx), str(dy), str(dz)]
+def translate(delta):
+    dd = [str(d) for d in delta]
     return 'Translate'+'{{ {} }}'.format(','.join(dd))    
 
 def periodic(mode, gid, sid, transform):
@@ -310,8 +310,8 @@ class GmshMesher(object):
         s = np.where(cell_data['vertex']['geometrical'] == src[0])[0]        
         a = X[cells['vertex'][g]]
         b = X[cells['vertex'][s]]
-        self.transform[transform] = ('translate', a-b)
-        print('translate', a - b)
+        self.transform[transform] = ('translate', (a-b).flatten())
+        print('translate', (a - b).flatten())
         return []
         
     def copymesh(self, gid, src="", meshdim=0, transform='', mode='',
