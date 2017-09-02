@@ -245,7 +245,7 @@ class GmshMesh(Mesh, Vtable_mixin):
             
     def onUpdateMeshView(self, evt, filename=None, bin='-bin', geo_text = None):
         from petram.geom.gmsh_geom_model import read_loops, generate_mesh
-        from petram.geom.geo_plot import plot_geometry, oplot_meshed        
+
         
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -258,11 +258,13 @@ class GmshMesh(Mesh, Vtable_mixin):
                              num_lloyd_steps=0,                             
                              geo_text = geo_text,
                              filename=filename, bin=bin)
+        
+        viewer.set_figure_data('mesh', self.name(), ret)
+        viewer.update_figure('mesh', self.figure_data_name())
 
-        oplot_meshed(viewer, ret)        
         geom_root = self.root()['Geometry'][self.geom_group]        
-        viewer._s_v_loop = read_loops(geom_root._txt_unrolled)
-
+        viewer._s_v_loop['mesh'] = read_loops(geom_root._txt_unrolled)
+        viewer._s_v_loop['geom'] = viewer._s_v_loop['mesh']
         
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -283,8 +285,11 @@ class GmshMesh(Mesh, Vtable_mixin):
                                  title='Error',
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
-        
-        self.onUpdateMeshView(evt, bin='', geo_text = self._txt_rolled[:])
+
+        filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'        
+        self.onUpdateMeshView(evt, bin='',
+                              geo_text = self._txt_rolled[:],
+                              filename = filename)
         self.onGenerateMsh(evt)
         evt.Skip()
         
@@ -395,5 +400,18 @@ class GmshMesh(Mesh, Vtable_mixin):
         self._txt_rolled = lines
         self._max_mdim = max_mdim
         
-
+    def load_gui_figure_data(self, viewer):
+        import meshio
         
+        filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'
+        msh_filename = filename + '.msh'
+        ret = meshio.read(msh_filename)
+
+        return 'mesh', self.name(), ret
+
+    def is_viewmode_grouphead(self):
+        return True
+    
+    def figure_data_name(self):
+        return self.name(), self.geom_group.strip()
+    

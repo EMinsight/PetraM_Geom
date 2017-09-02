@@ -16,9 +16,9 @@ class GeomBase(Model, NS_mixin):
         GUI response when model object is selected in
         the dlg_edit_model
         '''
+
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
-        viewer.use_toolbar_palette('petram_geom', mode = '3D')
-        viewer._view_mode = 'geom'
+        viewer.set_view_mode('geom', self)        
     
 class MFEM_GeomRoot(GeomBase):
     can_delete = False

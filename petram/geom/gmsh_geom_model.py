@@ -189,10 +189,15 @@ class GmshGeom(GeomBase):
                                  title='Error',
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
-        self.onUpdateGeoView(evt)
+
+        filename = os.path.join(viewer.model.owndir(), self.name())
+        self.onUpdateGeoView(evt, filename = filename)
+        fid = open(filename + '.geo_unrolled', 'w')
+        fid.write('\n'.join(self._txt_unrolled))
+        fid.close()
         evt.Skip()
         
-    def onUpdateGeoView(self, evt):
+    def onUpdateGeoView(self, evt, filename = None):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
@@ -207,14 +212,16 @@ class GmshGeom(GeomBase):
 
         ret =  generate_mesh(geo_object = None,
                              dim = 2,
-#                             filename = "/Users/shiraiwa/test",
+                             filename = filename,
                              num_quad_lloyd_steps=0,
                              num_lloyd_steps=0,                             
                              geo_text = geo_text)
-        from .geo_plot import plot_geometry
-        plot_geometry(viewer, ret)
+        viewer.set_figure_data('geom', self.name(), ret)
+        viewer.update_figure('geom', self.name())
+
         self._geom_coords = ret
-        viewer._s_v_loop = read_loops(self._txt_unrolled)
+        viewer._s_v_loop['geom'] = read_loops(self._txt_unrolled)
+        viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
         
     def build_geom(self, stop1=None, stop2=None, filename = None,
                    finalize = False):
@@ -280,8 +287,28 @@ class GmshGeom(GeomBase):
             fid = open(path, 'w')
             fid.write('\n'.join(self._txt_rolled))
             fid.close()
-        
+         
+    def load_gui_figure_data(self, viewer):
+        import meshio
+        filename = os.path.join(viewer.model.owndir(), self.name())
+        msh_filename = filename + '.msh'
+        ret = meshio.read(msh_filename)
+
+        filename = os.path.join(viewer.model.owndir(), self.name())
+        filename = filename + '.geo_unrolled'
+        if os.path.exists(filename):
+            fid = open(filename, 'r')
+            unrolled = [l.strip() for l in fid.readlines()]
+            fid.close()
+            viewer._s_v_loop['geom'] = read_loops(unrolled)        
+            viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
+
+        return 'geom', self.name(), ret
     
+    def is_viewmode_grouphead(self):
+        return True
+    
+   
 def check_dim(unrolled):
     for line in unrolled:
         if line.startswith('Volume'): return 3

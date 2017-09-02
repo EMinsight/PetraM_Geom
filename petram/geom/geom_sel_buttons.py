@@ -49,7 +49,7 @@ def hide_elem(evt):
     if mode == 'volume':
         facesa = []
         facesb = []        
-        s, v = viewer._s_v_loop
+        s, v = viewer._s_v_loop['geom']
         for key in v.keys():
             if key in viewer._selected_volume:
                 facesa.extend(v[key])
