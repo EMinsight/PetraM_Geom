@@ -151,8 +151,8 @@ class GmshGeom(GeomBase):
         NS_mixin.__init__(self, *args, **kwargs)
         
     def get_possible_child(self):
-        from .gmsh_primitives import Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments
-        return [Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments]
+        from .gmsh_primitives import Point, Line, Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments
+        return [Point, Line, Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments]
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
@@ -203,7 +203,7 @@ class GmshGeom(GeomBase):
         
         geo_text = self._txt_rolled[:]
         xyz = guess_geom_size(self._txt_unrolled)
-        print(np.max(xyz, 0) - np.min(xyz, 0))
+
         clmax = np.max(np.max(xyz, 0) - np.min(xyz, 0))/3.
         clmin = np.min(np.max(xyz, 0) - np.min(xyz, 0))/3.        
         self._clmax_guess = (clmax, clmin)

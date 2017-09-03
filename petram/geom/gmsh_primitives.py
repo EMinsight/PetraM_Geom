@@ -7,6 +7,62 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 
+pdata = (('xarr', VtableElement('xarr', type='array',
+                              guilabel = 'X',
+                              default = '0.0',
+                              tip = "X" )),
+          ('yarr', VtableElement('yarr', type='array',
+                              guilabel = 'Y',
+                              default = '0.0',
+                              tip = "Y" )),
+          ('zarr', VtableElement('zarr', type='array',
+                              guilabel = 'Z',
+                              default = '0.0',
+                              tip = "Z" )),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                              tip = "characteristc length from point" )),)
+class Point(GeomPB):
+    vt = Vtable(pdata)
+    def build_geom(self, geom, objs):
+        xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
+        try:
+           pos = np.vstack((xarr, yarr, zarr)).transpose()
+        except:
+           print("can not make proper input array")
+           return
+        PTs = [geom.add_point(p, lcar=lcar) for p in pos]
+        # apparently I should use this object (poly.surface)...?
+        self._newobjs = []        
+        for p in PTs:
+           newkey = objs.addobj(p, 'pt')
+           self._newobjs.append(newkey)
+        self._objkeys = objs.keys()
+
+ldata =  (('points', VtableElement('pts', type='string',
+                                    guilabel = 'Points',
+                                    default = "",
+                                    tip = "points to be connected")), )       
+class Line(GeomPB):
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]        
+
+        pts0 = pts[:-1]
+        pts1 = pts[1:]
+        self._newobjs = []
+        
+        for p0, p1 in zip(pts0, pts1):
+             if not p0 in objs:
+                 assert False, p0 + " does not exist"
+             if not p1 in objs:
+                 assert False, p1 + " does not exist"
+             line = geom.add_line(objs[p0], objs[p1])
+             self._newobjs.append(objs.addobj(line, 'ln'))
+
+        self._objkeys = objs.keys()
 
 cdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
@@ -120,7 +176,6 @@ class Polygon(GeomPB):
     def build_geom(self, geom, objs):
         xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
         if len(xarr) < 2: return
-        print type(xarr)
         try:
            pos = np.vstack((xarr, yarr, zarr)).transpose()
         except:

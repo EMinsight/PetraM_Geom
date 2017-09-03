@@ -414,4 +414,18 @@ class GmshMesh(Mesh, Vtable_mixin):
     
     def figure_data_name(self):
         return self.name(), self.geom_group.strip()
+
+    def get_meshfile_path(self):
+        '''
+        '''
+        path = os.path.abspath(self.name()+ '.msh')
+        if os.path.exists(path): return path
+
+        path = os.path.join(self.root().get_root_path(), self.name() + '.msh')
+        if os.path.exists(path): return path
+
+        assert False, "Mesh file does not exist : " + path
+
+        
+    
     
