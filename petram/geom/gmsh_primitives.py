@@ -7,6 +7,36 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 
+
+'''
+object created from givn coordinates
+   Point
+   Circle
+   Rect
+   Line
+   Polygon
+
+object created from given entities
+   Spline -> Points to Spline
+   CreateLine -> Points to multiple Lines
+
+   LineLoop -> Lines to LineLoop
+   CreateSurface -> Lines to PlaneSurface
+
+   SurfaceLoop -> Surfacess to SurfaceLoop
+   CreateVolume ->  Surfacess to Volume
+
+object manipulation
+   Extrude
+   Revolve
+
+boolean operation
+   Union
+   Intersection
+   Difference
+   Fragments
+
+'''
 pdata = (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
                               default = '0.0',
@@ -38,30 +68,6 @@ class Point(GeomPB):
         for p in PTs:
            newkey = objs.addobj(p, 'pt')
            self._newobjs.append(newkey)
-        self._objkeys = objs.keys()
-
-ldata =  (('points', VtableElement('pts', type='string',
-                                    guilabel = 'Points',
-                                    default = "",
-                                    tip = "points to be connected")), )       
-class Line(GeomPB):
-    vt = Vtable(ldata)
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]        
-
-        pts0 = pts[:-1]
-        pts1 = pts[1:]
-        self._newobjs = []
-        
-        for p0, p1 in zip(pts0, pts1):
-             if not p0 in objs:
-                 assert False, p0 + " does not exist"
-             if not p1 in objs:
-                 assert False, p1 + " does not exist"
-             line = geom.add_line(objs[p0], objs[p1])
-             self._newobjs.append(objs.addobj(line, 'ln'))
-
         self._objkeys = objs.keys()
 
 cdata =  (('center', VtableElement('center', type='float',
@@ -171,6 +177,32 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
                                    guilabel = 'lcar',
                                    default = 0.0, 
                               tip = "characteristc length from point" )),)
+class Line(GeomPB):
+    vt = Vtable(pdata)
+    def build_geom(self, geom, objs):
+        xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
+        if len(xarr) < 2: return
+        try:
+           pos = np.vstack((xarr, yarr, zarr)).transpose()
+        except:
+           print("can not make proper input array")
+           return
+
+        pts = []
+        for p in pos:
+            pt = geom.add_point(p)
+
+        pts1 = pts[:-1]
+        pts2 = pts[1:]
+
+        newkeys = []
+        for p1, p2 in zip(pts1, pts2):
+            ln = geom.add_line(p1, p2)
+            newkeys.append(objs.addobj(ln, 'ln'))
+       
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
 class Polygon(GeomPB):
     vt = Vtable(pdata)
     def build_geom(self, geom, objs):
@@ -190,6 +222,115 @@ class Polygon(GeomPB):
         newkey = objs.addobj(poly.surface, 'pol')
         self._objkeys = objs.keys()
         self._newobjs = [newkey]
+
+'''
+object created from given entities
+'''
+ldata =  (('points', VtableElement('pts', type='string',
+                                    guilabel = 'Points',
+                                    default = "",
+                                    tip = "points to be connected")), )
+class Spline(GeomPB):
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]
+        
+        pts = [objs[x] for x in pts]
+        
+        spline = geom.add_spline(pts)
+        newobj = objs.addobj(spline, 'sp')
+        
+        self._newobjs = [newobj]
+        self._objkeys = objs.keys()
+                           
+class CreateLine(GeomPB):
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]        
+
+        pts0 = pts[:-1]
+        pts1 = pts[1:]
+        self._newobjs = []
+        
+        for p0, p1 in zip(pts0, pts1):
+             if not p0 in objs:
+                 assert False, p0 + " does not exist"
+             if not p1 in objs:
+                 assert False, p1 + " does not exist"
+             line = geom.add_line(objs[p0], objs[p1])
+             self._newobjs.append(objs.addobj(line, 'ln'))
+
+        self._objkeys = objs.keys()
+        
+ldata =  (('lines', VtableElement('lines', type='string',
+                                    guilabel = 'Lines',
+                                    default = "",
+                                    tip = "lines to be connected")), )
+
+class LineLoop(GeomPB):
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]
+        
+        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        
+        spline = geom.add_line_loop(pts)
+        newobj = objs.addobj(spline, 'll')
+        
+        self._newobjs = [newobj]
+        self._objkeys = objs.keys()
+
+                           
+class CreateSurface(GeomPB):        
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]
+        
+        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        
+        ll = geom.add_line_loop(pts)
+        newobj1 = objs.addobj(ll, 'll')
+        surface = geom.add_plane_surface(ll)
+        newobj2 = objs.addobj(surface, 'ps')
+        
+        self._newobjs = [newobj1, newobj2]
+        self._objkeys = objs.keys()
+
+ldata =  (('surfs', VtableElement('surfs', type='string',
+                                    guilabel = 'Surfaces',
+                                    default = "",
+                                    tip = "surfacess to be connected")), )       
+class SurfaceLoop(GeomPB):
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]
+        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        
+        sl = geom.add_surface_loop(pts)
+        newobj = objs.addobj(sl, 'sl')
+        
+        self._newobjs = [newobj]
+        self._objkeys = objs.keys()
+                           
+class CreateVolume(GeomPB):        
+    vt = Vtable(ldata)
+    def build_geom(self, geom, objs):
+        pts = self.vt.make_value_or_expression(self)
+        pts = [x.strip() for x in pts[0].split(',')]
+        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        
+        sl = geom.add_surface_loop(pts)
+        newobj1 = objs.addobj(sl, 'sl')
+        vol = geom.add_volume(sl)
+        newobj2 = objs.addobj(vol, 'vol')
+        
+        self._newobjs = [newobj1, newobj2]
+        self._objkeys = objs.keys()
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Target',
@@ -360,7 +501,7 @@ class Union(GeomPB_Bool):
                           tool_entity,
                           delete = self.delete_input)
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'diff'))
+        newkeys.append(objs.addobj(ret[0], 'uni'))
         if len(ret) > 1:
             for o in ret[1:]:
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
@@ -382,7 +523,7 @@ class Intersection(GeomPB_Bool):
                           tool_entity,
                           delete = self.delete_input)
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'diff'))
+        newkeys.append(objs.addobj(ret[0], 'its'))
         if len(ret) > 1:
             for o in ret[1:]:
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
@@ -404,10 +545,10 @@ class Fragments(GeomPB_Bool):
                           tool_entity,
                           delete = self.delete_input)
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'diff'))
+        newkeys.append(objs.addobj(ret[0], 'frag'))
         if len(ret) > 1:
             for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+                newkeys.append(objs.addobj(o, get_geom_key(o)))
             
         self._objkeys = objs.keys()
         self._newobjs = newkeys

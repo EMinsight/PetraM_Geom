@@ -159,17 +159,17 @@ class GmshMesh(Mesh, Vtable_mixin):
         
         ll.append(["2D Algorithm", c1[-1], 4, setting1])
         ll.append(["3D Algorithm", c2[-1], 4, setting2])
-        ll.append([None, None, 141, {"label": "Use default size",
-                                  "func": self.onSetDefSize,
+        ll.append([None, None, 341, {"label": "Use default size",
+                                  "func": 'onSetDefSize',
                                    "noexpand": True}])
-        ll.append([None, None, 141, {"label": "Build All",
-                                  "func": self.onBuildAll,
+        ll.append([None, None, 341, {"label": "Build All",
+                                  "func": 'onBuildAll',
                                    "noexpand": True}])
         return ll
     
     def get_panel1_value(self):
         return ([self.geom_group,] + list(self.vt.get_panel_value(self)) +
-                [self.algorithm, self.algorithm3d, None, None])
+                [self.algorithm, self.algorithm3d, self, self])
     
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)

@@ -26,7 +26,10 @@ from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 debug = True
 
 geom_key_dict = {'SurfaceBase': 'sb',
-                 'Point': 'pt'}
+                 'PlaneSurface' : 'sp',
+                 'Point': 'pt',
+                 'Line': 'ln',
+                 'Spline': 'sp'}
 
 def get_geom_key(obj):
     if obj.__class__ in geom_key_dict:
@@ -151,8 +154,8 @@ class GmshGeom(GeomBase):
         NS_mixin.__init__(self, *args, **kwargs)
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments
-        return [Point, Line, Circle, Rect, Polygon, Extrude, Revolve, Union, Intersection, Difference, Fragments]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments
+        return [Point, Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments]
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
@@ -160,15 +163,12 @@ class GmshGeom(GeomBase):
     
     def panel1_param(self):
         return [["", "Geometry model using GMSH", 2, None],
-                [None, None, 141, {"label": "Build All",
-                                   "func": self.onBuildAll,
+                [None, None, 341, {"label": "Build All",
+                                   "func": 'onBuildAll',
                                    "noexpand": True}],]
-#                [None, None, 141, {"label": "Export...",
-#                                   "func": self.onExportGeom,
-#                                   "noexpand": True}],]
                 
     def get_panel1_value(self):
-        return [None, None]
+        return [None, self]
        
     def import_panel1_value(self, v):
         pass

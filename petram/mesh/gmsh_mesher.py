@@ -380,6 +380,7 @@ class GmshMesher(object):
         max_mdim = 0
         for mdim in [0, 1, 2, 3]:
             for proc, gids, kwargs in self.sequence:
+                print(proc, gids, kwargs)
                 f = getattr(self, proc)
                 kwargs['meshdim'] = mdim
                 x = f(*gids, **kwargs)
