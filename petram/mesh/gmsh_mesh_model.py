@@ -63,6 +63,10 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         engine = viewer.engine
         engine.build_ns()        
         geom_root = self.root()['Geometry'][self.parent.geom_group]
+
+        if not geom_root.is_finalized:
+            geom_root.onBuildAll(evt)
+            
         try:
             self.parent.build_mesh(geom_root, **kwargs)
         except:
@@ -273,7 +277,7 @@ class GmshMesh(Mesh, Vtable_mixin):
         engine.build_ns()
         
         geom_root = self.root()['Geometry'][self.geom_group]
-        if not hasattr(geom_root, "_txt_unrolled"):
+        if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
             
         try:

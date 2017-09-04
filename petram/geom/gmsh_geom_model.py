@@ -18,6 +18,16 @@ import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
 
 from petram.model import Model
+import time
+
+import thread
+from threading import Thread
+try:
+    from Queue import Queue, Empty
+except ImportError:
+    from queue import Queue, Empty  # python 3.x
+
+
 
 from petram.geom.geom_model import GeomBase
 from petram.namespace_mixin import NS_mixin
@@ -30,6 +40,42 @@ geom_key_dict = {'SurfaceBase': 'sb',
                  'Point': 'pt',
                  'Line': 'ln',
                  'Spline': 'sp'}
+def enqueue_output(p, queue):
+    while True:
+        line = p.stdout.readline()
+        
+        queue.put(line.strip())
+        if p.poll() is not None: 
+            queue.put("End of Thread")
+            return
+        print(line.strip())
+    queue.put("End of Thread")    
+    
+def collect_std_out(p,  verbose=True):
+    q = Queue()
+    t = Thread(target=enqueue_output, args=(p, q))
+    t.daemon = True # thread dies with the program
+    t.start()
+    
+    lines = []
+    alive = True
+    while True:
+
+        time.sleep(0.01)
+        
+        try:  line = q.get_nowait() # or q.get(timeout=.1)
+        except Empty:
+            if p.poll() is not None:
+                print('proces exited')
+                break
+            else:
+                continue
+        ec = p.poll()
+        if ec is not None and ec < 0:
+            print("RETURNIng due to this?")
+            break  # on unix, this means process killed by a signal
+        lines.append(line)
+    return lines, p.poll()
 
 def get_geom_key(obj):
     if obj.__class__ in geom_key_dict:
@@ -152,7 +198,12 @@ class GmshGeom(GeomBase):
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
-        
+        self._finalized = False
+    @property
+    def is_finalized(self):
+        if not hasattr(self, '_finalized'): return False
+        return self._finalized
+    
     def get_possible_child(self):
         from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments
         return [Point, Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments]
@@ -195,6 +246,7 @@ class GmshGeom(GeomBase):
         fid = open(filename + '.geo_unrolled', 'w')
         fid.write('\n'.join(self._txt_unrolled))
         fid.close()
+        self._finalized = True
         evt.Skip()
         
     def onUpdateGeoView(self, evt, filename = None):
@@ -268,6 +320,8 @@ class GmshGeom(GeomBase):
                                                            extra = extra)
                 unrolled = [x.strip() for x in unrolled]
                 s, v =  read_loops(unrolled)
+        else:
+            self._finalized = False
         self._txt_rolled = rolled                
         self._txt_unrolled = unrolled
         self._num_entities = entities
@@ -463,15 +517,17 @@ def generate_mesh(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         bufsize = 0)
     
-    stdoutdata = []
-    for line in iter(p.stdout.readline, ''):
-        if verbose:
-            print(line.decode('utf-8'), end='')
-            sys.stdout.flush()
-        stdoutdata.append(line)
+    stdout = collect_std_out(p, True)
+    stdoutdata = stdout[0]
+    print("exit code", stdout[1])
+    
+#    for line in stdout[0]:
+#        if verbose:
+#            print(line.decode('utf-8'), end='')
+#            sys.stdout.flush()
+#        stdoutdata.append(line)
 
-    p.communicate()
-    assert p.returncode == 0,\
+    assert stdout[1] == 0,\
         'Gmsh exited with error (return code {}).'.format(p.returncode)
     
     if dim == 0:
