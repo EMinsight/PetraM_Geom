@@ -10,6 +10,7 @@ import os
 import subprocess
 import traceback
 import sys
+import re
 
 import numpy as np
 import warnings
@@ -320,6 +321,16 @@ class GmshGeom(GeomBase):
                                                            extra = extra)
                 unrolled = [x.strip() for x in unrolled]
                 s, v =  read_loops(unrolled)
+
+            from petram.mesh.gmsh_mesher import write_entities_relations
+            ipv = v.keys()[0] if len(v.keys()) == 1 else -1
+            ips = s.keys()[0] if len(s.keys()) == 1 else -1
+            rolled = write_entities_relations(rolled, writev = ipv,
+                                              writes = ips)
+            unrolled, rolled, entities = generate_mesh(dim = 0,
+                                                       filename = filename,
+                                                       geo_text = rolled)
+            
         else:
             self._finalized = False
         self._txt_rolled = rolled                
@@ -529,20 +540,37 @@ def generate_mesh(
 
     assert stdout[1] == 0,\
         'Gmsh exited with error (return code {}).'.format(p.returncode)
-    
+
+    ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
+
     if dim == 0:
+        entity_relations = {'Volume':{}, 'Surface':{}, 'Line':{}}
         for x in stdoutdata:
-            if x.find("Number of entitites,")!= -1:
+            x = ansi_escape.sub('', x)                
+            if x.startswith("Number of entitites,"):
                 txt = x[x.find("Number of entitites,"):].split(":")
                 num_entities = [int(x)-1 for x in txt[1].split(',')]
-                
+            if x.startswith("Boundary(Volume{"):
+                id = int(x[x.find("{")+1:x.find("}")])
+                nums = [int(o) for o in x.split("=")[-1].split(" ") if len(o) > 0]
+                entity_relations['Volume'][id] = nums
+            if x.startswith("Boundary(Surface{"):                
+                id = int(x[x.find("{")+1:x.find("}")])
+                nums = [int(o) for o in x.split("=")[-1].split(" ") if len(o) > 0]
+                entity_relations['Surface'][id] = nums                           
+            if x.startswith("PointsOf(Line{"):                                
+                id = int(x[x.find("{")+1:x.find("}")])
+                nums = [int(o) for o in x.split("=")[-1].split(" ") if len(o) > 0 ]
+                entity_relations['Line'][id] = nums
+                           
         fid = open(geou_filename, 'r')
         lines = fid.readlines()
         fid.close()
         #if filename is None:            
         #    os.remove(geo_filename)
         #    os.remove(geou_filename)
-        return lines, rolled, num_entities
+        print(entity_relations)
+        return lines, rolled, (num_entities, entity_relations)
 
     # meshio does not read $Periodic....
     fid = open(msh_filename, 'r')

@@ -12,7 +12,7 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Line#',
                                    default = "remaining", 
                                    tip = "Line ID" )),
-        ('num_seg', VtableElement('radius', type='float',
+        ('num_seg', VtableElement('num_seg', type='int',
                                    guilabel = 'Number of segments',
                                    default = 5, 
                                    tip = "Number of segments" )),
@@ -31,7 +31,7 @@ class TransfiniteLine(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
-        mesher.add('transfinite', gid, mode = 'Line', nseg=nseg,
+        mesher.add('transfinite_line', gid, nseg=nseg,
                    progression = p,  bump = b)
 
     def get_element_selection(self):
@@ -42,6 +42,41 @@ class TransfiniteLine(GmshMeshActionBase):
         except:
             pass
         return ret, 'edge'
+    
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Surface#',
+                                   default = "", 
+                                   tip = "Surface ID" )),
+        ('edge1', VtableElement('edge1', type='string',
+                                 guilabel = '1st edge',
+                                 default = "", 
+                                 tip = "1st Edge" )),
+        ('edge2', VtableElement('edge2', type='string',
+                                 guilabel = '2nd edge',
+                                 default = "", 
+                                 tip = "2ndp Edge" )),
+        ('edge3', VtableElement('edge3', type='string',
+                                 guilabel = '3rd edge',
+                                 default = "", 
+                                 tip = "3rd Edge" )),
+        ('edge4', VtableElement('edge4', type='string',
+                                 guilabel = '4th edge',
+                                 default = "", 
+                                 tip = "4th Edge" )),)
+class TransfiniteSurface(GmshMeshActionBase):
+    vt = Vtable(data)    
+    def add_meshcommand(self, mesher):
+        gid, e1, e2, e3, e4 = self.vt.make_value_or_expression(self)
+        mesher.add('transfinite_surface', gid, edges = (e1,e2,e3,e4))
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            ret['face'] = [int(x) for x in self.geom_id.split(',')]
+        except:
+            pass
+        return ret, 'face'
     
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Point#',

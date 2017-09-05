@@ -47,9 +47,9 @@ def mesh(dim = 1):
     lines.append('Mesh ' + str(dim) + ';')
     return lines
 
-def transfinite(gid, mode = 'Line', nseg='',
-                progression = 0, bump = 0, meshdim = 1):
+def transfiniteL(gid, nseg='', progression = 0, bump = 0, meshdim = 1):
     lines = []
+    mode = 'Line'
     c = 'Transfinite '+mode
     if gid == "*":
         c += ' "*" = '
@@ -61,6 +61,21 @@ def transfinite(gid, mode = 'Line', nseg='',
         c += " Using Bump " + str(bump)
     if progression != 0:
         c += " Using Progression " + str(bump)    
+    lines.append(c+';')
+    return lines
+
+def transfiniteS(gid, points = None):
+    if points is None: points = []
+    lines = []
+    mode = 'Surface'
+    c = 'Transfinite '+mode
+    if gid == "*":
+        c += ' "*" = '
+    else:
+        gid = [str(x) for x in gid.split(',')]
+        c += '{{ {} }}'.format(','.join(gid))
+    if len(points) != 0:
+        c += " = {"+','.join([str(x) for x in points])+"}"
     lines.append(c+';')
     return lines
 
@@ -139,7 +154,7 @@ def embed(gid, embed_s="", embed_l="", embed_p=""):
     return lines           
 
 class GmshMesher(object):
-    def __init__(self, num_entities,
+    def __init__(self, entities,
                        geom_coords,
                        CharacteristicLengthMax = 1e20,
                        CharacteristicLengthMin = 1,
@@ -158,23 +173,26 @@ class GmshMesher(object):
                      "Line": [],     #1D element
                      "Surface": [],     #2D element
                      "Volume": []}   #3D element
+        num_entities = entities[0]
         self.num_entities = {"Vertex": num_entities[0],
                              "Line": num_entities[1],
                              "Surface": num_entities[2],
                              "Volume": num_entities[3],}
+        self.entity_relations = entities[1]        
         self.ietg = 0
         
     def new_etg(self):
         self.ietg = self.ietg + 1
         return 'etg'+str(self.ietg)
     
-    def transfinite(self, gid, mode = 'Line', nseg='',
+    def transfinite_line(self, gid,  nseg='',
                     progression = 0, bump = 0, meshdim = 1, **kwargs):
+        mode = "Line"
         lines = []
         if meshdim == 0:
             if gid == 'remaining':
                 gid = self.get_remaining_txt(mode = 'Line')
-            lines.extend(transfinite(gid, mode = mode,
+            lines.extend(transfiniteL(gid,
                          nseg = nseg,
                          progression = progression,
                                     bump = bump))
@@ -187,6 +205,58 @@ class GmshMesher(object):
             lines.extend(x)
         self.record_finished(gid, mode = mode)
         return lines
+    
+    def transfinite_surface(self, gid, edges = None, meshdim=1, **kwargs):
+        mode = 'Surface'
+        lines = []
+        if meshdim == 0:
+            if gid == 'remaining':
+                gid = self.get_remaining_txt(mode = 'Surface')
+            # translate from edges to points
+            rel = self.entity_relations
+            if edges is not None:
+                sid = int(gid)
+                lids = rel['Surface'][sid]
+                points = []
+                print(edges)
+                for e in edges:
+                    if e.strip() == "": continue
+                    eids = [int(x) for  x in e.split(',')]
+                    print(e, eids)
+                    for eid in eids:
+                        assert (eid in lids), "edge is not part of surface: " + str(eid)
+                    pts = list(np.hstack([rel['Line'][eid] for eid in eids]))
+                    print(e, pts)                    
+                    cc = []
+                    for pt in pts:
+                        if pts.count(pt) == 1: cc.append(pt)
+                    if len(points) == 0:
+                        points = cc
+                    else:
+                        if points[0] == cc[0]:
+                            points = [cc[1]] + points
+                        elif points[0] == cc[1]:
+                            points = [cc[0]] + points
+                        elif points[-1] == cc[0]:
+                            points = points + [cc[1]]
+                        elif points[-1] == cc[1]:
+                            points = points + [cc[0]]
+                        else:
+                            pass
+                print('points', points)                         
+            else:
+                points = None
+            lines.extend(transfiniteS(gid, points = points))
+        else:
+            if mode == 'Line' and meshdim != 1: return []
+            if mode == 'Surface' and meshdim != 2: return []
+        
+            x = self.show_hide_gid(gid, mode = mode)
+            if len(x) == 0: return lines
+            lines.extend(x)
+        self.record_finished(gid, mode = mode)
+        return lines
+    
 
     def freemesh(self, gid,  mode='Line', clmax=-1, clmin=-1,
                  meshdim=1, embed_s="", embed_l="", embed_p=""):
@@ -380,7 +450,6 @@ class GmshMesher(object):
         max_mdim = 0
         for mdim in [0, 1, 2, 3]:
             for proc, gids, kwargs in self.sequence:
-                print(proc, gids, kwargs)
                 f = getattr(self, proc)
                 kwargs['meshdim'] = mdim
                 x = f(*gids, **kwargs)
@@ -435,5 +504,105 @@ class GmshMesher(object):
         else:
             return ','.join([str(x) for x in ll])
     
-            
-            
+def write_entities_relations(geo_text, writev = -1, writes = -1):
+    #from petram.geom.gmsh_geom_model import read_loops
+    #geom_root = self.root()['Geometry'][self.geom_group]        
+    #s, v = read_loops(geom_root._txt_unrolled)
+
+    has_finalv = False
+    has_finals = False
+    has_finall = False
+    for line in geo_text:
+        if line.startswith('final_v[]'): has_finalv = True
+        if line.startswith('final_s[]'): has_finals = True
+        if line.startswith('final_l[]'): has_finall = True
+
+    t1 = 'final_s() = Unique(Abs(Boundary{ Volume{final_v()}; }));'
+    t2 = 'final_l() = Unique(Abs(Boundary{ Surface{final_s()}; }));'
+    t3 = 'final_p() = Unique(Abs(Boundary{ Line{final_l()}; }));'
+
+    tt1 = ['txt = "";',
+           'For ii In {0 : #final_v[]-1}',
+           '   pts() = Unique(Abs(Boundary{Volume{final_v[ii]}; }));',
+           '   txt = StrCat("Boundary(Volume{", Sprintf("%g", final_v[ii]), "})=");',
+           '   For iii In {0 : #pts[]-1}',
+           '       txt=StrCat(txt, " ", Sprintf("%g", pts[iii]));',
+           '   EndFor',
+           '   Printf(txt);',
+           'EndFor']
+    tt2 = ['txt = "";',
+           'For ii In {0 : #final_s[]-1}', 
+           '   pts() = Unique(Abs(Boundary{Surface{final_s[ii]}; }));',
+           '   txt = StrCat("Boundary(Surface{", Sprintf("%g", final_s[ii]), "})=");',
+           '   For iii In {0 : #pts[]-1}',
+           '       txt=StrCat(txt, " ", Sprintf("%g", pts[iii]));',
+           '   EndFor',
+           '   Printf(txt);',
+           'EndFor']
+    tt3 = ['txt = "";',
+           'For ii In {0 : #final_l[]-1}',
+           '   pts() = Unique(PointsOf{ Line{final_l[ii]}; });',
+           '   txt = StrCat("PointsOf(Line{", Sprintf("%g", final_l[ii]), "})=");',
+           '   For iii In {0 : #pts[]-1}',
+           '       txt=StrCat(txt, " ", Sprintf("%g", pts[iii]));',
+           '   EndFor',
+           '   Printf(txt);',
+           'EndFor',]
+
+
+    ## if volume (surface loop) exitsts but there is only one volume,
+    ## set it to final_v
+    #len(v.keys()) == 1:
+    #        ipv = str(v.keys()[0])
+    if writev != -1:
+        ipv = str(writev)
+        geo_text.append('final_v[] = {'+ipv+'};')
+        has_finalv = True
+        has_finals = False
+    ## if surface (line loop)  exitsts but there is only one volume,
+    ## set it to final_s
+    if writes != -1:    
+    #if len(s.keys()) == 1:
+        ips = str(writes)
+        geo_text.append('final_s[] = {'+ips+'};')
+        has_finals = True
+    if has_finalv:
+        geo_text.extend([t1, t2, t3]+ tt1 + tt2 + tt3)
+    if has_finals:
+        geo_text.extend([t2, t3] + tt2 + tt3)
+    if has_finall:
+        geo_text.extend([t3] + tt3)
+    return geo_text
+
+def write_physical(geo_text):
+    has_finalv = False
+    has_finals = False
+    has_finall = False
+    for line in geo_text:
+        if line.startswith('final_v[]'): has_finalv = True
+        if line.startswith('final_s[]'): has_finals = True
+        if line.startswith('final_l[]'): has_finall = True
+
+    tt1= ['ipv = 0;',
+          'For ii In {0 : #final_v[]-1}',
+          '   ipv = ipv+1;',
+          '   Physical Volume (StrCat("volume", Sprintf("%g", final_v[ii])),ipv) = {final_v[ii]};',
+          'EndFor',]
+    tt2 = ['ips = 0;',
+           'For ii In {0 : #final_s[]-1}',
+           '   ips = ips+1;',
+           '   Physical Surface (StrCat("surface", Sprintf("%g", final_s[ii])),ips) = {final_s[ii]};',
+           'EndFor']
+    tt3 = ['ipl = 0;',
+           'For ii In {0 : #final_l[]-1}',
+           '   ipl = ipl+1;',
+           '   Physical Line (StrCat("line", Sprintf("%g", final_l[ii])),ipl) = {final_l[ii]};',
+          'EndFor',]
+
+    if has_finalv:
+        geo_text.extend(tt1 + tt2 + tt3)
+    if has_finals:
+        geo_text.extend(tt2 + tt3)
+    if has_finall:
+        geo_text.extend(tt3)
+    return geo_text

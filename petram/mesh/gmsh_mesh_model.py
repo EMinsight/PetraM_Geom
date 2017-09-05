@@ -14,7 +14,7 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 from petram.mesh.mesh_model import Mesh
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
-debug = False
+debug = True
         
 class GmshMeshActionBase(Mesh, Vtable_mixin):
     hide_ns_menu = True
@@ -192,8 +192,8 @@ class GmshMesh(Mesh, Vtable_mixin):
         return [None] + self.vt.panel_tip() + [None]*4
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, CharacteristicLength, Rotate, Translate, CopyFace]
+        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace]
     
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
@@ -218,7 +218,9 @@ class GmshMesh(Mesh, Vtable_mixin):
         path = write(parent,
                      message = 'Enter .geo file name',
                      wildcard = '*.geo')
-        geo_text = self.assign_physical(self._txt_rolled[:])
+        
+        from petram.mesh.gmsh_mesher import write_physical
+        geo_text = write_physical(self._txt_rolled[:])
         if path != '':
             fid = open(path, 'w')
             fid.write('\n'.join(geo_text))
@@ -305,7 +307,9 @@ class GmshMesh(Mesh, Vtable_mixin):
         engine = viewer.engine
         
         filename = os.path.join(viewer.model.owndir(), self.name())
-        geo_text = self.assign_physical(self._txt_rolled[:])
+        
+        from petram.mesh.gmsh_mesher import write_physical
+        geo_text = write_physical(self._txt_rolled[:])
 
         print("Generating msh with physcal index")
         ret =  generate_mesh(geo_object = None,
@@ -315,62 +319,7 @@ class GmshMesh(Mesh, Vtable_mixin):
                              geo_text = geo_text,
                              filename=filename, bin='', verbosity='3')
 
-    def assign_physical(self, geo_text):
-        from petram.geom.gmsh_geom_model import read_loops
-        geom_root = self.root()['Geometry'][self.geom_group]        
-        s, v = read_loops(geom_root._txt_unrolled)
-        
 
-        has_finalv = False
-        has_finals = False
-        has_finall = False
-        for line in geo_text:
-            if line.startswith('final_v[]'): has_finalv = True
-            if line.startswith('final_s[]'): has_finals = True
-            if line.startswith('final_l[]'): has_finall = True
-
-        t1 = 'final_s() = Unique(Abs(Boundary{ Volume{final_v()}; }));'
-        t2 = 'final_l() = Unique(Abs(Boundary{ Surface{final_s()}; }));'
-        t3 = 'final_p() = Unique(Abs(Boundary{ Line{final_l()}; }));'
-        
-        tt1= ['ipv = 0;',
-              'For ii In {0 : #final_v[]-1}',
-              '   ipv = ipv+1;',
-              '   Physical Volume (StrCat("volume", Sprintf("%g", final_v[ii])),ipv) = {final_v[ii]};',
-              'EndFor',]
-        tt2 = ['ips = 0;',
-               'For ii In {0 : #final_s[]-1}',
-               '   ips = ips+1;',
-               '   Physical Surface (StrCat("surface", Sprintf("%g", final_s[ii])),ips) = {final_s[ii]};',
-               'EndFor']
-        tt3 = ['ipl = 0;',
-               'For ii In {0 : #final_l[]-1}',
-               '   ipl = ipl+1;',
-               '   Physical Line (StrCat("line", Sprintf("%g", final_l[ii])),ipl) = {final_l[ii]};',
-              'EndFor',]
-
-        ## if volume (surface loop) exitsts but there is only one volume,
-        ## set it to final_v
-        if len(v.keys()) == 1:
-            ipv = str(v.keys()[0])
-            geo_text.append('final_v[] = {'+ipv+'};')
-            has_finalv = True
-            has_finals = False
-        ## if surface (line loop)  exitsts but there is only one volume,
-        ## set it to final_s
-        if len(s.keys()) == 1:
-            ips = str(s.keys()[0])
-            geo_text.append('final_s[] = {'+ips+'};')
-            has_finals = True
-        if has_finalv:
-            geo_text.extend([t1, t2, t3]+ tt1 + tt2 + tt3)
-        if has_finals:
-            geo_text.extend([t2, t3] + tt2 + tt3)
-        if has_finall:
-            geo_text.extend([t3] + tt3)
-        return geo_text
-            
-            
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None):
         self.vt.preprocess_params(self)
         
