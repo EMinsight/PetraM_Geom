@@ -358,10 +358,12 @@ class GmshMesh(Mesh, Vtable_mixin):
         
         filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'
         msh_filename = filename + '.msh'
-        ret = meshio.read(msh_filename)
-
-        return 'mesh', self.name(), ret
-
+        if os.path.exists(msh_filename):
+            ret = meshio.read(msh_filename)
+            return 'mesh', self.name(), ret
+        else:
+            return 'mesh', self.name(), None
+        
     def is_viewmode_grouphead(self):
         return True
     

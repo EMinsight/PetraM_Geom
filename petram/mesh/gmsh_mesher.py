@@ -60,7 +60,7 @@ def transfiniteL(gid, nseg='', progression = 0, bump = 0, meshdim = 1):
     if bump != 0:
         c += " Using Bump " + str(bump)
     if progression != 0:
-        c += " Using Progression " + str(bump)    
+        c += " Using Progression " + str(progression)    
     lines.append(c+';')
     return lines
 

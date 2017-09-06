@@ -357,6 +357,8 @@ class GmshGeom(GeomBase):
         import meshio
         filename = os.path.join(viewer.model.owndir(), self.name())
         msh_filename = filename + '.msh'
+        if not os.path.exists(msh_filename):
+            return 'geom', self.name(), None
         ret = meshio.read(msh_filename)
 
         filename = os.path.join(viewer.model.owndir(), self.name())

@@ -7,6 +7,7 @@ fdot = get_pkg_datafile(petram.pi, 'icon',  'dot.png')
 fedge = get_pkg_datafile(petram.pi, 'icon', 'line.png')
 fface = get_pkg_datafile(petram.pi, 'icon', 'face.png')
 fdom = get_pkg_datafile(petram.pi, 'icon', 'domain.png')
+fshowall = get_pkg_datafile(petram.pi, 'icon', 'showall.png')
 show = get_pkg_datafile(petram.pi, 'icon', 'show.png')
 hide = get_pkg_datafile(petram.pi, 'icon', 'hide.png')
 
@@ -82,6 +83,6 @@ btask = [('gdot',    fdot,  2, 'select dot', select_dot),
          ('gface',   fface, 2, 'select face', select_face),
          ('gdomain', fdom,  2, 'select domain', select_volume),
          ('---', None, None, None),
-         ('gshow',   show,  0, 'show all', show_all),
+         ('gshow',   fshowall,  0, 'show all', show_all),
          ('ghide',   hide,  0, 'hide selection', hide_elem),]         
             
