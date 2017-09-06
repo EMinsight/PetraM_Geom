@@ -346,10 +346,12 @@ class GmshMesher(object):
         x0 = np.dot(np.linalg.inv(m), b)
 
         d = sorted([(norm(np.cross(s1[k]-x0, axis)), s1[k] - x0)
-                     for k in range(3)])
+                     for k in range(3)],
+                     key=lambda xxxx: xxxx[0])
         p1 = d[-1][1]
         d = sorted([( norm(np.cross(g1[k]-x0, axis)), g1[k] - x0)
-                     for k in range(3)])
+                     for k in range(3)],
+                     key=lambda xxxx: xxxx[0])        
         p2 = d[-1][1]
         
         p1 = p1 - np.sum(p1*axis)*axis
