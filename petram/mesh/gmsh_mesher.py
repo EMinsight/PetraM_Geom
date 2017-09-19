@@ -346,10 +346,12 @@ class GmshMesher(object):
         x0 = np.dot(np.linalg.inv(m), b)
 
         d = sorted([(norm(np.cross(s1[k]-x0, axis)), s1[k] - x0)
-                     for k in range(3)])
+                     for k in range(3)],
+                     key=lambda xxxx: xxxx[0])
         p1 = d[-1][1]
         d = sorted([( norm(np.cross(g1[k]-x0, axis)), g1[k] - x0)
-                     for k in range(3)])
+                     for k in range(3)],
+                     key=lambda xxxx: xxxx[0])        
         p2 = d[-1][1]
         
         p1 = p1 - np.sum(p1*axis)*axis
@@ -579,9 +581,14 @@ def write_physical(geo_text):
     has_finals = False
     has_finall = False
     for line in geo_text:
-        if line.startswith('final_v[]'): has_finalv = True
+        if line.startswith('final_v[]'):has_finalv = True
         if line.startswith('final_s[]'): has_finals = True
         if line.startswith('final_l[]'): has_finall = True
+    if has_finalv:
+        has_finals = False
+        has_finall = False        
+    if has_finals:
+        has_finall = False        
 
     tt1= ['ipv = 0;',
           'For ii In {0 : #final_v[]-1}',
