@@ -581,9 +581,14 @@ def write_physical(geo_text):
     has_finals = False
     has_finall = False
     for line in geo_text:
-        if line.startswith('final_v[]'): has_finalv = True
+        if line.startswith('final_v[]'):has_finalv = True
         if line.startswith('final_s[]'): has_finals = True
         if line.startswith('final_l[]'): has_finall = True
+    if has_finalv:
+        has_finals = False
+        has_finall = False        
+    if has_finals:
+        has_finall = False        
 
     tt1= ['ipv = 0;',
           'For ii In {0 : #final_v[]-1}',
