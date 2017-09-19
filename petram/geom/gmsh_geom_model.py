@@ -540,9 +540,6 @@ def generate_mesh(
 #            sys.stdout.flush()
 #        stdoutdata.append(line)
 
-    assert stdout[1] == 0,\
-        'Gmsh exited with error (return code {}).'.format(p.returncode)
-
     ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
 
     if dim == 0:
@@ -574,6 +571,9 @@ def generate_mesh(
         print(entity_relations)
         return lines, rolled, (num_entities, entity_relations)
 
+    assert stdout[1] == 0,\
+        'Gmsh exited with error (return code {}).'.format(p.returncode)
+
     # meshio does not read $Periodic....
     fid = open(msh_filename, 'r')
     lines = fid.readlines()
@@ -599,8 +599,9 @@ def generate_mesh(
 
     # clean up
     if filename is None:    
-        os.remove(geo_filename)
-        os.remove(msh_filename)
+        #os.remove(geo_filename)
+        #os.remove(msh_filename)
+        pass
 
     # Lloyd smoothing
     if not _is_flat(X) or 'triangle' not in cells:
