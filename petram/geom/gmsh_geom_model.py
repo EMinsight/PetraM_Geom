@@ -286,8 +286,8 @@ class GmshGeom(GeomBase):
 
         objs = GeomObjs()
         self._objs = objs        
-        import pygmsh
-        geom = pygmsh.Geometry()
+        from .gmsh_primitives import Geometry
+        geom = Geometry()
         geom.set_factory('OpenCASCADE')
         
         for child in children:

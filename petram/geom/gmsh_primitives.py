@@ -7,7 +7,21 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 
+import pygmsh
 
+class Geometry(pygmsh.Geometry):
+    def __init__(self, *args, **kwargs):
+        self._point_loc = {}
+        super(Geometry, self).__init__(*args, **kwargs)
+
+    def add_point(self, *args, **kwargs):
+        pt = tuple(args[0])
+        if not pt in self._point_loc:
+            obj = super(Geometry, self).add_point(*args, **kwargs)
+            self._point_loc[pt] = obj
+        else:
+            obj = self._point_loc[pt]
+        return obj
 '''
 object created from givn coordinates
    Point
@@ -179,6 +193,34 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
                               tip = "characteristc length from point" )),)
 class Line(GeomPB):
     vt = Vtable(pdata)
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["make_spline"] = False
+        return v
+    
+    def panel1_param(self):
+        ll = GeomPB.panel1_param(self)
+        ll.append(["Spline",
+                    self.make_spline,  3, {"text":""}])
+        return ll
+        
+    def get_panel1_value(self):
+        v = GeomPB.get_panel1_value(self)
+        return v + [self.make_spline]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        GeomPB.import_panel1_value(self, v[:-1])        
+        self.make_spline = v[-1]
+
+    def panel1_tip(self):
+        tip = GeomPB.panel1_tip(self)
+        return tip + ['make spline curve']
+
     def build_geom(self, geom, objs):
         xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
         if len(xarr) < 2: return
@@ -190,18 +232,24 @@ class Line(GeomPB):
 
         pts = []
         for p in pos:
-            pt = geom.add_point(p)
+            pt = geom.add_point(p, lcar)
+            pts.append(pt)
 
-        pts1 = pts[:-1]
-        pts2 = pts[1:]
+        if not self.make_spline:
+            pts1 = pts[:-1]
+            pts2 = pts[1:]
 
-        newkeys = []
-        for p1, p2 in zip(pts1, pts2):
-            ln = geom.add_line(p1, p2)
-            newkeys.append(objs.addobj(ln, 'ln'))
-       
+            newkeys = []
+            for p1, p2 in zip(pts1, pts2):
+                ln = geom.add_line(p1, p2)
+                newkeys.append(objs.addobj(ln, 'ln'))
+            self._newobjs = newkeys
+        else:     
+            spline = geom.add_spline(pts)
+            newobj = objs.addobj(spline, 'sp')
+            self._newobjs = [newobj]
+
         self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 class Polygon(GeomPB):
     vt = Vtable(pdata)
@@ -232,6 +280,7 @@ ldata =  (('points', VtableElement('pts', type='string',
                                     tip = "points to be connected")), )
 class Spline(GeomPB):
     vt = Vtable(ldata)
+
     def build_geom(self, geom, objs):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
