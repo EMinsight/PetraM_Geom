@@ -7,9 +7,9 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 
-import pygmsh
-
-class Geometry(pygmsh.Geometry):
+try:
+ import pygmsh
+ class Geometry(pygmsh.Geometry):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
         super(Geometry, self).__init__(*args, **kwargs)
@@ -22,6 +22,11 @@ class Geometry(pygmsh.Geometry):
         else:
             obj = self._point_loc[pt]
         return obj
+
+  has_gmsh = True
+except:
+  has_gmsh = False
+
 '''
 object created from givn coordinates
    Point
