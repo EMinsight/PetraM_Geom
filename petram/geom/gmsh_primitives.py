@@ -8,8 +8,8 @@ from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 
 try:
- import pygmsh
- class Geometry(pygmsh.Geometry):
+  import pygmsh
+  class Geometry(pygmsh.Geometry):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
         super(Geometry, self).__init__(*args, **kwargs)
