@@ -263,3 +263,22 @@ class CopyFace(GmshMeshActionBase):
         except:
             pass
         return ret, 'face'
+
+
+rsdata =  (('geom_id', VtableElement('geom_id', type='string',
+                                    guilabel = 'Surfaces',
+                                    default = "",
+                                    tip = "surfacess to be recombined")), 
+           ('max_angle', VtableElement('max_angle', type='float',
+                                guilabel = 'Max size)',
+                                default = 45, 
+                                tip = "Maximum differend of angle" )),)
+
+class RecombineSurface(GmshMeshActionBase):
+    vt = Vtable(rsdata)
+    def add_meshcommand(self, mesher):
+        gid, max_angle  = self.vt.make_value_or_expression(self)
+        mesher.add('recombine_surface', gid, max_angle=max_angle)
+    
+    
+    

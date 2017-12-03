@@ -48,6 +48,7 @@ object created from given entities
 object manipulation
    Extrude
    Revolve
+   Recombine Surface
 
 boolean operation
    Union
@@ -353,7 +354,7 @@ class CreateSurface(GeomPB):
         
         self._newobjs = [newobj1, newobj2]
         self._objkeys = objs.keys()
-
+        
 ldata =  (('surfs', VtableElement('surfs', type='string',
                                     guilabel = 'Surfaces',
                                     default = "",

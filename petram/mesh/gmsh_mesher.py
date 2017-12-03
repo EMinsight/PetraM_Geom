@@ -127,6 +127,12 @@ def boundary(mode, etg, gid):
     txt +=  ";}));"
     return [txt]
 
+def recombine_surface(gid, max_angle):
+    txt = "Recombine Surface"
+    txt +=  "{" + gid + "}"
+    txt +=  " = " + str(max_angle) + ";"    
+    return [txt]
+
 def embed(gid, embed_s="", embed_l="", embed_p=""):
     if ((embed_s is "") and (embed_l is "") and
         (embed_p is "")): return []
@@ -423,6 +429,11 @@ class GmshMesher(object):
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):
         if meshdim == 0:
             return characteristiclength(gid, cl = cl)
+        else:
+            return []
+    def recombine_surface(self, gid, max_angle=45, meshdim=0):
+        if meshdim == 1:
+            return recombine_surface(gid, max_angle)
         else:
             return []
         
