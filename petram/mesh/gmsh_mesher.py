@@ -47,6 +47,10 @@ def mesh(dim = 1):
     lines.append('Mesh ' + str(dim) + ';')
     return lines
 
+def reset_cl(line):
+    line.extend(['Mesh.CharacteristicLengthMax = 10^300;', 
+                 'Mesh.CharacteristicLengthMin = 0.0'])
+
 def transfiniteL(gid, nseg='', progression = 0, bump = 0, meshdim = 1):
     lines = []
     mode = 'Line'
@@ -81,11 +85,19 @@ def transfiniteS(gid, points = None):
 
 def freemesh(gid, clmax=None, clmin=None):
     lines = []
+    ll = 0
     if clmax > 0:
         lines.append('Mesh.CharacteristicLengthMax = ' + str(clmax) + ';')
+        ll = ll+1
+    else:
+        lines.append('Mesh.CharacteristicLengthMax = 10e+302;')
     if clmin > 0:
         lines.append('Mesh.CharacteristicLengthMin = ' + str(clmin) + ';')
-    if len(lines) > 0:
+        ll = ll+1        
+    else:
+        lines.append('Mesh.CharacteristicLengthMin = 0.0;')        
+
+    if ll > 0:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;')
     else:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 1;')
