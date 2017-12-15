@@ -30,14 +30,12 @@ def show_all(evt):
     mode = viewer._sel_mode
 
     ax = viewer.get_axes()
-    if mode == 'volume':
-        ax.face.hide_component([])
-    elif mode == 'face':
-        ax.face.hide_component([])        
-    elif mode == 'edge':
-        ax.edge.hide_component([])                
-    elif mode == 'point':
-        ax.point.hide_component([])                        
+    
+    namestart = mode if mode != 'volume' else 'face'
+    objs = [child for name, child in ax.get_children() if name.startswith(namestart)]
+    
+    for o in objs:
+        o.hide_component([])
     else:
         pass
     viewer.draw_all()    
@@ -47,6 +45,10 @@ def hide_elem(evt):
     mode = viewer._sel_mode
 
     ax = viewer.get_axes()
+    
+    namestart = mode if mode != 'volume' else 'face'
+    objs = [child for name, child in ax.get_children() if name.startswith(namestart)]
+    
     if mode == 'volume':
         facesa = []
         facesb = []        
@@ -60,17 +62,15 @@ def hide_elem(evt):
         facesa = np.unique(np.array(facesa))
         facesb = np.unique(np.array(facesb))
         new_hide = list(np.setdiff1d(facesa, facesb, True))
-        idx = ax.face.hidden_component
-        idx = list(set(idx+new_hide))
-        ax.face.hide_component(idx)        
-    elif mode == 'face':
-        idx = ax.face.getSelectedIndex()
-        idx = list(set(ax.face.hidden_component+idx))        
-        ax.face.hide_component(idx)        
-    elif mode == 'edge':
-        idx = ax.edge.getSelectedIndex()
-        idx = list(set(ax.edge.hidden_component+idx))        
-        ax.edge.hide_component(idx)                
+        for o in objs:        
+            idx = o.hidden_component
+            idx = list(set(idx+new_hide))
+            o.hide_component(idx)        
+    elif mode == 'face' or mode == 'edge':
+        for o in objs:
+             idx = o.getSelectedIndex()
+             idx = list(set(o.hidden_component+idx))        
+             o.hide_component(idx)        
     elif mode == 'point':
         pass
     else:
