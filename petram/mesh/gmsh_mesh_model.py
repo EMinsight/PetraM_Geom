@@ -61,7 +61,7 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         engine = viewer.engine
-        engine.build_ns()        
+        engine.build_ns()
         geom_root = self.root()['Geometry'][self.parent.geom_group]
 
         if not geom_root.is_finalized:
@@ -373,11 +373,15 @@ class GmshMesh(Mesh, Vtable_mixin):
     def get_meshfile_path(self):
         '''
         '''
-        path = os.path.abspath(self.name()+ '.msh')
-        if os.path.exists(path): return path
-
         path = os.path.join(self.root().get_root_path(), self.name() + '.msh')
-        if os.path.exists(path): return path
+        if os.path.exists(path):
+            dprint1("gmsh file path", path)
+            return path
+        
+        path = os.path.abspath(self.name()+ '.msh')
+        if os.path.exists(path):
+            dprint1("gmsh file path", path)            
+            return path
 
         assert False, "Mesh file does not exist : " + path
 
