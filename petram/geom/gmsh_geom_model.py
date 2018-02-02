@@ -604,7 +604,7 @@ def generate_mesh(
         pass
 
     # Lloyd smoothing
-    if not _is_flat(X) or 'triangle' not in cells:
+    if ('triangle' not in cells) or (not _is_flat(X)):
         if verbose:
             print(
                 'Not performing Lloyd smoothing '
