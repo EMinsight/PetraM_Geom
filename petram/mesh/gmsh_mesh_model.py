@@ -7,6 +7,7 @@ import tempfile
 import weakref
 import numpy as np
 import traceback
+import time
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
@@ -15,8 +16,23 @@ from petram.mesh.mesh_model import Mesh
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
-        
-class GmshMeshActionBase(Mesh, Vtable_mixin):
+class GMesh(Mesh):
+    def onItemSelChanged(self, evt):
+        '''
+        GUI response when model object is selected in
+        the dlg_edit_model
+        '''
+        geom_root = self.geom_root
+        if geom_root.is_finalized:
+            if geom_root.geom_timestamp != self.geom_timestamp:
+                self.onClearMesh(evt)
+                self.geom_timestamp = geom_root.geom_timestamp
+                evt.Skip()
+                return
+        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
+        viewer.set_view_mode('mesh', self)
+    
+class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
     has_2nd_panel = False
     isGmshMesh = True
@@ -26,6 +42,13 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         self.vt.attribute_set(v)
         return v
 
+    @property
+    def geom_root(self):
+        return self.root()['Geometry'][self.parent.geom_group]
+    @property
+    def geom_timestamp(self):
+        return self.parent.geom_timestamp
+    
     def panel1_param(self):
         from wx import BU_EXACTFIT
         b1 = {"label": "S", "func": self.onBuildBefore,
@@ -91,7 +114,10 @@ class GmshMeshActionBase(Mesh, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
-
+        
+    def onClearMesh(self, evt):
+        self.parent.onClearMesh(evt)
+        
     def element_selection_empty(self):
         return {'volume':[],
                 'face':[],
@@ -132,18 +158,22 @@ data = (('clmax', VtableElement('clmax', type='float',
                                 tip = "CharacteristicLengthMin" )),)
         
                 
-class GmshMesh(Mesh, Vtable_mixin):
+class GmshMesh(GMesh, Vtable_mixin):
     has_2nd_panel = False
     isMeshGroup = True
     vt = Vtable(data)    
 #    def __init__(self, *args, **kwargs):
 #        super(GmshMesh, self).__init__(*args, **kwargs)
 #        NS_mixin.__init__(self, *args, **kwargs)
+    @property
+    def geom_root(self):
+        return self.root()['Geometry'][self.geom_group]
         
     def attribute_set(self, v):
         v['geom_group'] = ''
         v['algorithm'] = 'default'
-        v['algorithm3d'] = 'default'                
+        v['algorithm3d'] = 'default'
+        v['geom_timestamp'] = -1
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v
@@ -166,7 +196,7 @@ class GmshMesh(Mesh, Vtable_mixin):
         ll.append([None, None, 341, {"label": "Use default size",
                                   "func": 'onSetDefSize',
                                    "noexpand": True}])
-        ll.append([None, None, 341, {"label": "Build All",
+        ll.append([None, None, 341, {"label": "Finalize Mesh",
                                   "func": 'onBuildAll',
                                    "noexpand": True}])
         return ll
@@ -194,14 +224,15 @@ class GmshMesh(Mesh, Vtable_mixin):
     def get_possible_child(self):
         from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface
         return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface]
-    
+
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
                 ('Export .geo', self.onExportGeom),
-                ('Export .msh', self.onExportMsh)]    
+                ('Export .msh', self.onExportMsh),
+                ('Clear Mesh', self.onClearMesh)]        
     
     def onSetDefSize(self, evt):
-        geom_root = self.root()['Geometry'][self.geom_group]                
+        geom_root = self.geom_root
         clmax_root, clmin_root = geom_root._clmax_guess
         self.clmax_txt = str(clmax_root)
         self.clmin_txt = str(clmin_root)        
@@ -266,11 +297,34 @@ class GmshMesh(Mesh, Vtable_mixin):
                              filename=filename, bin=bin)
         
         viewer.set_figure_data('mesh', self.name(), ret)
-        viewer.update_figure('mesh', self.figure_data_name())
-
-        geom_root = self.root()['Geometry'][self.geom_group]        
+        viewer.update_figure('mesh', self.figure_data_name())        
+        geom_root = self.geom_root
         viewer._s_v_loop['mesh'] = read_loops(geom_root._txt_unrolled)
         viewer._s_v_loop['geom'] = viewer._s_v_loop['mesh']
+
+        
+    def onClearMesh(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        engine = viewer.engine
+        engine.build_ns()
+        geom_root = self.geom_root
+
+        if not geom_root.is_finalized:
+            geom_root.onBuildAll(evt)
+            
+        try:
+            self.build_mesh(geom_root, nochild =True)
+        except:
+            import ifigure.widgets.dialog as dialog               
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to generate meshing script',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+        dlg.OnRefreshTree()
+        self.onUpdateMeshView(evt)
+        viewer._view_mode_group = ''
+        viewer.set_view_mode('mesh', self)        
         
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -278,7 +332,7 @@ class GmshMesh(Mesh, Vtable_mixin):
         engine = viewer.engine
         engine.build_ns()
         
-        geom_root = self.root()['Geometry'][self.geom_group]
+        geom_root = self.geom_root
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
             
@@ -320,7 +374,8 @@ class GmshMesh(Mesh, Vtable_mixin):
                              filename=filename, bin='', verbosity='3')
 
 
-    def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None):
+    def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None,
+                         nochild = False):
         self.vt.preprocess_params(self)
         
         num_entities = geom_root._num_entities
@@ -336,13 +391,13 @@ class GmshMesh(Mesh, Vtable_mixin):
                             MeshAlgorithm = self.algorithm,
                             MeshAlgorithm3D = self.algorithm3d)                
 
-
-        for child in children:
-            if not child.enabled: continue            
-            child.vt.preprocess_params(child)
-            if child is stop1: break            # for build before
-            child.add_meshcommand(mesher)
-            if child is stop2: break            # for build after
+        if not nochild:
+            for child in children:
+                if not child.enabled: continue            
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before
+                child.add_meshcommand(mesher)
+                if child is stop2: break            # for build after
             
         lines, max_mdim = mesher.generate()
         if debug:
@@ -368,7 +423,15 @@ class GmshMesh(Mesh, Vtable_mixin):
         return True
     
     def figure_data_name(self):
-        return self.name(), self.geom_group.strip()
+        try:
+            geom_root = self.geom_root
+        except:
+            return
+        if geom_root.is_finalized:
+            return self.name(), self.geom_group.strip()
+        else:
+            print("Geometry not finalized")
+            return '', self.geom_group.strip()
 
     def get_meshfile_path(self):
         '''

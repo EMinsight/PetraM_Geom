@@ -11,6 +11,7 @@ import subprocess
 import traceback
 import sys
 import re
+import time
 
 import numpy as np
 import warnings
@@ -199,11 +200,10 @@ class GmshGeom(GeomBase):
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
-        self._finalized = False
+        
     @property
     def is_finalized(self):
-        if not hasattr(self, '_finalized'): return False
-        return self._finalized
+        return self.geom_finalized
     
     def get_possible_child(self):
         from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments
@@ -215,7 +215,7 @@ class GmshGeom(GeomBase):
     
     def panel1_param(self):
         return [["", "Geometry model using GMSH", 2, None],
-                [None, None, 341, {"label": "Build All",
+                [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
                 
@@ -247,7 +247,8 @@ class GmshGeom(GeomBase):
         fid = open(filename + '.geo_unrolled', 'w')
         fid.write('\n'.join(self._txt_unrolled))
         fid.close()
-        self._finalized = True
+        self.geom_finalized = True
+        self.geom_timestamp = time.ctime()
         evt.Skip()
         
     def onUpdateGeoView(self, evt, filename = None):
@@ -332,7 +333,7 @@ class GmshGeom(GeomBase):
                                                        geo_text = rolled)
             
         else:
-            self._finalized = False
+            self.geom_finalized = False
         self._txt_rolled = rolled                
         self._txt_unrolled = unrolled
         self._num_entities = entities

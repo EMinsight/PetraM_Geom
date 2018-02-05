@@ -10,7 +10,13 @@ class GeomBase(Model, NS_mixin):
     def __init__(self, *args, **kwargs):
         super(GeomBase, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
-    
+        
+    def attribute_set(self, v):
+        v = super(GeomBase, self).attribute_set(v)
+        v['geom_finalized'] = False
+        v['geom_timestamp'] = 0
+        return v
+        
     def onItemSelChanged(self, evt):
         '''
         GUI response when model object is selected in
