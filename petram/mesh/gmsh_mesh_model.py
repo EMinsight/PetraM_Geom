@@ -17,6 +17,11 @@ from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
 class GMesh(Mesh):
+    def attribute_set(self, v):
+        v = super(GMesh, self).attribute_set(v)
+        v['geom_timestamp'] = -1        
+        return v
+    
     def onItemSelChanged(self, evt):
         '''
         GUI response when model object is selected in
@@ -173,7 +178,6 @@ class GmshMesh(GMesh, Vtable_mixin):
         v['geom_group'] = ''
         v['algorithm'] = 'default'
         v['algorithm3d'] = 'default'
-        v['geom_timestamp'] = -1
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v

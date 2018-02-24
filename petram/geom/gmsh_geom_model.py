@@ -31,7 +31,7 @@ except ImportError:
 
 
 
-from petram.geom.geom_model import GeomBase
+from petram.geom.geom_model import GeomBase, GeomTopBase
 from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
@@ -195,7 +195,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         dlg.select_next_enabled()
         evt.Skip()
         
-class GmshGeom(GeomBase):
+class GmshGeom(GeomTopBase):
     has_2nd_panel = False
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
@@ -205,6 +205,12 @@ class GmshGeom(GeomBase):
     def is_finalized(self):
         return self.geom_finalized
     
+    def attribute_set(self, v):
+        v = super(GmshGeom, self).attribute_set(v)
+        v['geom_finalized'] = False
+        v['geom_timestamp'] = 0
+        return v
+        
     def get_possible_child(self):
         from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments
         return [Point, Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments]

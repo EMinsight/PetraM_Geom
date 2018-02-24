@@ -546,7 +546,7 @@ class Union(GeomPB_Bool):
     vt = Vtable(udata)
     def build_geom(self, geom, objs):
         tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp.split(',')]
+        tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
         input_entity = [objs[x] for x in tp[:1]]
@@ -568,7 +568,7 @@ class Intersection(GeomPB_Bool):
     vt = Vtable(udata)
     def build_geom(self, geom, objs):
         tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp.split(',')]
+        tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
         input_entity = [objs[x] for x in tp[:1]]
@@ -590,7 +590,7 @@ class Fragments(GeomPB_Bool):
     vt = Vtable(ddata)
     def build_geom(self, geom, objs):
         tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp.split(',')]
+        tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
         input_entity = [objs[x] for x in tp[:1]]
