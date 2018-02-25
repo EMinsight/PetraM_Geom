@@ -17,11 +17,6 @@ from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
 class GMesh(Mesh):
-    def attribute_set(self, v):
-        v = super(GMesh, self).attribute_set(v)
-        v['geom_timestamp'] = -1        
-        return v
-    
     def onItemSelChanged(self, evt):
         '''
         GUI response when model object is selected in
@@ -36,6 +31,21 @@ class GMesh(Mesh):
                 return
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('mesh', self)
+        
+    @property
+    def geom_timestamp(self):
+        return self.parent.geom_timestamp
+    
+    @geom_timestamp.setter
+    def geom_timestamp(self, value):    
+        self.parent.geom_timestamp = value
+        
+        
+class GMeshTop(Mesh):
+    def attribute_set(self, v):
+        v = super(GMeshTop, self).attribute_set(v)
+        v['geom_timestamp'] = -1        
+        return v
     
 class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
@@ -50,10 +60,6 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     @property
     def geom_root(self):
         return self.root()['Geometry'][self.parent.geom_group]
-    @property
-    def geom_timestamp(self):
-        return self.parent.geom_timestamp
-    
     def panel1_param(self):
         from wx import BU_EXACTFIT
         b1 = {"label": "S", "func": self.onBuildBefore,
@@ -150,7 +156,10 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         if figobj is not None:
             import ifigure.events
             sel = [weakref.ref(figobj._artists[0])]
-            ifigure.events.SendSelectionEvent(figobj, dlg, sel)                
+            ifigure.events.SendSelectionEvent(figobj, dlg, sel)
+            
+    def get_embed(self):
+        return [], [], []
             
 
 data = (('clmax', VtableElement('clmax', type='float',
@@ -163,7 +172,7 @@ data = (('clmax', VtableElement('clmax', type='float',
                                 tip = "CharacteristicLengthMin" )),)
         
                 
-class GmshMesh(GMesh, Vtable_mixin):
+class GmshMesh(GMeshTop, Vtable_mixin):
     has_2nd_panel = False
     isMeshGroup = True
     vt = Vtable(data)    
@@ -254,8 +263,12 @@ class GmshMesh(GMesh, Vtable_mixin):
                      message = 'Enter .geo file name',
                      wildcard = '*.geo')
         
-        from petram.mesh.gmsh_mesher import write_physical
-        geo_text = write_physical(self._txt_rolled[:])
+        from petram.mesh.gmsh_mesher import write_physical, write_embed
+        embed = self.gather_embed()
+        geo_text = write_embed(self._txt_rolled[:], embed)        
+        geo_text = write_physical(geo_text)
+        geo_text.append('Show "*";')
+        
         if path != '':
             fid = open(path, 'w')
             fid.write('\n'.join(geo_text))
@@ -366,8 +379,10 @@ class GmshMesh(GMesh, Vtable_mixin):
         
         filename = os.path.join(viewer.model.owndir(), self.name())
         
-        from petram.mesh.gmsh_mesher import write_physical
-        geo_text = write_physical(self._txt_rolled[:])
+        from petram.mesh.gmsh_mesher import write_physical, write_embed
+        embed = self.gather_embed()
+        geo_text = write_embed(self._txt_rolled[:], embed)        
+        geo_text = write_physical(geo_text)
 
         print("Generating msh with physcal index")
         ret =  generate_mesh(geo_object = None,
@@ -378,6 +393,19 @@ class GmshMesh(GMesh, Vtable_mixin):
                              filename=filename, bin='', verbosity='3')
 
 
+    def gather_embed(self):
+        children = [x for x in self.walk()]
+        children = children[1:]
+
+        embed = [[], [], []]
+        for child in children:
+            s, l, p = child.get_embed()
+            embed[0].extend(s)
+            embed[1].extend(l)
+            embed[2].extend(p)
+        print("embed", embed)
+        return embed
+        
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None,
                          nochild = False):
         self.vt.preprocess_params(self)

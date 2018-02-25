@@ -485,6 +485,7 @@ class GmshMesher(object):
                         max_mdim = mdim
             self.reset_done()                    
         lines.extend(hide("*", mode = "Volume"))
+
         return lines, max_mdim
 
     def show_hide_gid(self, gid, mode = "Line", recursive = True):
@@ -533,7 +534,8 @@ def write_entities_relations(geo_text, writev = -1, writes = -1):
     #from petram.geom.gmsh_geom_model import read_loops
     #geom_root = self.root()['Geometry'][self.geom_group]        
     #s, v = read_loops(geom_root._txt_unrolled)
-
+    
+    
     has_finalv = False
     has_finals = False
     has_finall = False
@@ -542,9 +544,9 @@ def write_entities_relations(geo_text, writev = -1, writes = -1):
         if line.startswith('final_s[]'): has_finals = True
         if line.startswith('final_l[]'): has_finall = True
 
-    t1 = 'final_s() = Unique(Abs(Boundary{ Volume{final_v()}; }));'
-    t2 = 'final_l() = Unique(Abs(Boundary{ Surface{final_s()}; }));'
-    t3 = 'final_p() = Unique(Abs(Boundary{ Line{final_l()}; }));'
+    t1 = ['final_s() = Unique(Abs(Boundary{ Volume{final_v()}; }));']
+    t2 = ['final_l() = Unique(Abs(Boundary{ Surface{final_s()}; }));']
+    t3 = ['final_p() = Unique(Abs(Boundary{ Line{final_l()}; }));']
 
     tt1 = ['txt = "";',
            'For ii In {0 : #final_v[]-1}',
@@ -592,12 +594,32 @@ def write_entities_relations(geo_text, writev = -1, writes = -1):
         geo_text.append('final_s[] = {'+ips+'};')
         has_finals = True
     if has_finalv:
-        geo_text.extend([t1, t2, t3]+ tt1 + tt2 + tt3)
+        geo_text.extend(t1+ t2 + t3 + tt1 + tt2 + tt3)
     if has_finals:
-        geo_text.extend([t2, t3] + tt2 + tt3)
+        geo_text.extend(t2 + t3 + tt2 + tt3)
     if has_finall:
-        geo_text.extend([t3] + tt3)
+        geo_text.extend(t3 + tt3)
     return geo_text
+
+def write_embed(get_text, embed = None):
+    if embed is None: embed = ([], [], [])
+    embed_s, embed_l, embed_p = embed
+
+    new_text = []
+    if len(embed_s) > 0:
+       ttt1 = ["final_s  += {"+str(k)+"};" for k in embed_s]
+       new_text.extend(ttt1)
+       new_text.append('final_l() = Unique(Abs(Boundary{ Surface{final_s()}; }));')
+    if len(embed_l) > 0:
+       ttt2 = ["final_l  += {"+str(k)+"};" for k in embed_l]
+       new_text.extend(ttt2)
+       new_text.append('final_p() = Unique(Abs(Boundary{ Line{final_l()}; }));')
+    if len(embed_p) > 0:
+       ttt3 = ["final_p  += {"+str(k)+"};" for k in embed_p]
+       new_text.extend(ttt3)       
+    get_text.extend(new_text)
+    print(new_text)
+    return get_text
 
 def write_physical(geo_text):
     has_finalv = False
@@ -628,11 +650,16 @@ def write_physical(geo_text):
            '   ipl = ipl+1;',
            '   Physical Line (StrCat("line", Sprintf("%g", final_l[ii])),ipl) = {final_l[ii]};',
           'EndFor',]
+    tt4 = ['ipp = 0;',
+           'For ii In {0 : #final_p[]-1}',
+           '   ipp = ipp+1;',
+           '   Physical Point (StrCat("point", Sprintf("%g", final_p[ii])),ipp) = {final_p[ii]};',
+          'EndFor',]
 
     if has_finalv:
-        geo_text.extend(tt1 + tt2 + tt3)
+        geo_text.extend(tt1 + tt2 + tt3 + tt4)
     if has_finals:
-        geo_text.extend(tt2 + tt3)
+        geo_text.extend(tt2 + tt3 + tt4)
     if has_finall:
-        geo_text.extend(tt3)
+        geo_text.extend(tt3 + tt4)
     return geo_text

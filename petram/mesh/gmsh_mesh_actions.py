@@ -177,6 +177,13 @@ class FreeFace(GmshMeshActionBase):
         except:
             pass
         return ret, 'face'
+    
+    def get_embed(self):
+        gid, clmax, clmin, embed_l, embed_p= self.vt.make_value_or_expression(self)
+        ll = [str(x) for x in embed_l.split(',')]
+        pp = [str(x) for x in embed_p.split(',')]                
+        return [], ll, pp
+            
 
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Line#',
