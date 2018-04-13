@@ -184,7 +184,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return self.root()['Geometry'][self.geom_group]
         
     def attribute_set(self, v):
-        v['geom_group'] = ''
+        v['geom_group'] = 'GmshGeom1'
         v['algorithm'] = 'default'
         v['algorithm3d'] = 'default'
         super(GmshMesh, self).attribute_set(v)

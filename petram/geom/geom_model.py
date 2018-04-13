@@ -3,7 +3,17 @@ import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 
 from petram.model import Model
-from petram.mfem_model import MFEM_GeomRoot # this is needed for backward compatibility
+
+try:
+    # this is needed for backward compatibility    
+    from petram.mfem_model import MFEM_GeomRoot 
+except:    
+    class MFEM_GeomRoot(GeomBase):
+        can_delete = False
+        has_2nd_panel = False
+        def get_possible_child(self):
+            from .gmsh_geom_model import GmshGeom
+            return [GmshGeom]
 
 from petram.namespace_mixin import NS_mixin
 
