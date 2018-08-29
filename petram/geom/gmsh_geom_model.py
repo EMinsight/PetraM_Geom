@@ -42,6 +42,8 @@ geom_key_dict = {'SurfaceBase': 'sb',
                  'Point': 'pt',
                  'Line': 'ln',
                  'Spline': 'sp'}
+gmsh_Major=2
+
 def enqueue_output(p, queue):
     while True:
         line = p.stdout.readline()
@@ -295,6 +297,8 @@ class GmshGeom(GeomTopBase):
         self._objs = objs        
         from .gmsh_primitives import Geometry
         geom = Geometry()
+        globals()['gmsh_Major']=geom._GMSH_MAJOR
+        
         geom.set_factory('OpenCASCADE')
         
         for child in children:
@@ -531,6 +535,10 @@ def generate_mesh(
             gmsh_executable,
             '-{}'.format(dim), geo_filename, '-o', geou_filename
             ]
+
+    if globals()['gmsh_Major']==4:
+        cmd.extend(['-format', 'msh2'])
+    print("calling gmsh", cmd)
     cmd = [x for x in cmd if x != '']
     # http://stackoverflow.com/a/803421/353337
     p = subprocess.Popen(
@@ -601,7 +609,7 @@ def generate_mesh(
         fid = open(msh_filename, 'w')
         fid.write(''.join(lines))
         fid.close()
-        
+
     X, cells, pt_data, cell_data, field_data = meshio.read(msh_filename)
 
     # clean up
