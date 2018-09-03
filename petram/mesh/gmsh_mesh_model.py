@@ -352,7 +352,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         geom_root = self.geom_root
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
-            
         try:
            self.build_mesh(geom_root)
         except:
@@ -408,15 +407,27 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None,
                          nochild = False):
-        self.vt.preprocess_params(self)
         
-        num_entities = geom_root._num_entities
-        geom_coords = geom_root._geom_coords
-        children = [x for x in self.walk()]
-        children = children[1:]
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+        
+        self.vt.preprocess_params(self)
 
-        from .gmsh_mesher import GmshMesher
-        mesher = GmshMesher(num_entities,
+        if use_gmsh_api:
+            from .gmsh_mesh_wrapper import GmshMesher
+            mesher = GmshMesher(geom_root,
+                            CharacteristicLengthMax = self.clmax,
+                            CharacteristicLengthMin = self.clmin,
+                            MeshAlgorithm = self.algorithm,
+                            MeshAlgorithm3D = self.algorithm3d)                
+
+        else:
+            num_entities = geom_root._num_entities
+            geom_coords = geom_root._geom_coords
+            children = [x for x in self.walk()]
+            children = children[1:]
+
+            from .gmsh_mesher import GmshMesher
+            mesher = GmshMesher(num_entities,
                             geom_coords = geom_coords,
                             CharacteristicLengthMax = self.clmax,
                             CharacteristicLengthMin = self.clmin,

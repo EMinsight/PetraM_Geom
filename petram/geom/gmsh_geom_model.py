@@ -36,13 +36,34 @@ from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
-
 geom_key_dict = {'SurfaceBase': 'sb',
                  'PlaneSurface' : 'sp',
                  'Point': 'pt',
                  'Line': 'ln',
                  'Spline': 'sp'}
-gmsh_Major=2
+
+
+def get_gmsh_exe():
+    macos_gmsh_location = '/Applications/Gmsh.app/Contents/MacOS/gmsh'
+    if os.path.isfile(macos_gmsh_location):
+        gmsh_executable = macos_gmsh_location
+    else:
+        gmsh_executable = 'gmsh'
+    return gmsh_executable
+
+
+def get_gmsh_major_version():
+    gmsh_exe = get_gmsh_exe()
+    out = subprocess.check_output(
+            [gmsh_exe, '--version'],
+            stderr=subprocess.STDOUT
+            ).strip().decode('utf8')
+    ex = out.split('.')
+    return int(ex[0])
+
+use_gmsh_api = True
+gmsh_Major=get_gmsh_major_version()
+if gmsh_Major <= 3: use_gmsh_api = False
 
 def enqueue_output(p, queue):
     while True:
@@ -252,14 +273,16 @@ class GmshGeom(GeomTopBase):
 
         filename = os.path.join(viewer.model.owndir(), self.name())
         self.onUpdateGeoView(evt, filename = filename)
-        fid = open(filename + '.geo_unrolled', 'w')
-        fid.write('\n'.join(self._txt_unrolled))
-        fid.close()
+        
+        if not use_gmsh_api:
+            fid = open(filename + '.geo_unrolled', 'w')
+            fid.write('\n'.join(self._txt_unrolled))
+            fid.close()
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
         evt.Skip()
         
-    def onUpdateGeoView(self, evt, filename = None):
+    def onUpdateGeoView3(self, evt, filename = None):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
@@ -284,8 +307,76 @@ class GmshGeom(GeomTopBase):
         self._geom_coords = ret
         viewer._s_v_loop['geom'] = read_loops(self._txt_unrolled)
         viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
+
+    def onUpdateGeoView4(self, evt, filename = None):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
+        ret = ptx, cells, {}, cell_data, {}
         
-    def build_geom(self, stop1=None, stop2=None, filename = None,
+        self._geom_coords = ret
+        viewer.set_figure_data('geom', self.name(), ret)
+        viewer.update_figure('geom', self.name())
+        
+        viewer._s_v_loop['geom'] = s, v
+        viewer._s_v_loop['mesh'] = s, v
+        #geom.finalize()
+        #self._gmsh4_data = None
+        
+    def onUpdateGeoView(self, evt, filename = None):       
+        if globals()['gmsh_Major']==4 and use_gmsh_api:
+            return self.onUpdateGeoView4(evt, filename = filename)
+        else:
+            return self.onUpdateGeoView3(evt, filename = filename)
+
+
+    def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
+        children = [x for x in self.walk()]
+        children = children[1:]
+    
+        for child in children:
+            if not child.enabled: continue            
+            child.vt.preprocess_params(child)
+            if child is stop1: break            # for build before
+            child.build_geom(geom, objs)
+            if child is stop2: break            # for build after
+    
+    def build_geom4(self, stop1=None, stop2=None, filename = None,
+                   finalize = False):        
+        '''
+        filename : export geometry to a real file (for debug)
+        '''
+        if not hasattr(self, "_gmsh4_data"):
+            self._gmsh4_data = None
+        if self._gmsh4_data is not  None:
+            self._gmsh4_data[-1].finalize()
+            
+        objs = GeomObjs()
+        self._objs = objs
+
+        from .gmsh_geom_wrapper import Geometry
+        geom = Geometry()
+        
+        geom.set_factory('OpenCASCADE')
+        
+        self.walk_over_geom_chidlren(geom, objs,
+                                     stop1=stop1, stop2=stop2)
+        
+        geom.apply_fragment()
+        geom.factory.synchronize()
+
+        # here we ask for 2D mesh for plotting.
+        # we may need a smart size constraist here
+        geom.model.mesh.generate(2)        
+
+        from petram.geom.read_gmsh import read_pts_groups, read_loops
+        ptx, cells, cell_data = read_pts_groups(geom)
+        v, s, l = read_loops(geom)
+        self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)
+
+        geom.write(self.name() +  '.msh')
+
+    def build_geom3(self, stop1=None, stop2=None, filename = None,
                    finalize = False):
         '''
         filename : export geometry to a real file (for debug)
@@ -294,20 +385,16 @@ class GmshGeom(GeomTopBase):
         children = children[1:]
 
         objs = GeomObjs()
-        self._objs = objs        
-        from .gmsh_primitives import Geometry
+        self._objs = objs
+
+        from .gmsh_primitives import Geometry        
         geom = Geometry()
-        globals()['gmsh_Major']=geom._GMSH_MAJOR
         
         geom.set_factory('OpenCASCADE')
         
-        for child in children:
-            if not child.enabled: continue            
-            child.vt.preprocess_params(child)
-            if child is stop1: break            # for build before
-            child.build_geom(geom, objs)
-            if child is stop2: break            # for build after
-
+        self.walk_over_geom_chidlren(geom, objs,
+                                     stop1=stop1, stop2=stop2)
+ 
         unrolled, rolled, entities = generate_mesh(geom, dim = 0,
                                                   filename = filename)
         unrolled = [x.strip() for x in unrolled]
@@ -348,6 +435,17 @@ class GmshGeom(GeomTopBase):
         self._txt_unrolled = unrolled
         self._num_entities = entities
 
+    def build_geom(self, stop1=None, stop2=None, filename = None,
+                   finalize = False):
+
+        if globals()['gmsh_Major']==4 and use_gmsh_api:
+            self.build_geom4(stop1=stop1, stop2=stop2,
+                             filename=filename,
+                             finalize=finalize)
+        else:
+            self.build_geom3(stop1=stop1, stop2=stop2,
+                             filename=filename,
+                             finalize=finalize)
 
     def onExportGeom(self, evt):
         print("export geom file")
