@@ -1,4 +1,5 @@
 import numpy as np
+from collections import defaultdict
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshPrimitives')
@@ -12,16 +13,21 @@ try:
   class Geometry(pygmsh.Geometry):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
+        self._point_mask = []
         super(Geometry, self).__init__(*args, **kwargs)
 
     def add_point(self, *args, **kwargs):
+        mask = kwargs.pop("mask", True)      
         pt = tuple(args[0])
         if not pt in self._point_loc:
             obj = super(Geometry, self).add_point(*args, **kwargs)
             self._point_loc[pt] = obj
         else:
             obj = self._point_loc[pt]
+
+        if mask : self._point_mask.append(obj)
         return obj
+      
 
   has_gmsh = True
 except:
@@ -237,8 +243,9 @@ class Line(GeomPB):
            return
 
         pts = []
-        for p in pos:
-            pt = geom.add_point(p, lcar)
+        for ii, p in enumerate(pos):
+            pt = geom.add_point(p, lcar,
+                                mask = (ii == 0 or ii == len(pos)-1))
             pts.append(pt)
 
         if not self.make_spline:
@@ -254,7 +261,11 @@ class Line(GeomPB):
             spline = geom.add_spline(pts)
             newobj = objs.addobj(spline, 'sp')
             self._newobjs = [newobj]
-
+        newobj1 = objs.addobj(pts[0], 'pt')
+        newobj2 = objs.addobj(pts[-1], 'pt')
+        self._newobjs.append(newobj1)
+        self._newobjs.append(newobj2)
+        
         self._objkeys = objs.keys()
 
 class Polygon(GeomPB):

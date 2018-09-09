@@ -335,14 +335,18 @@ class GmshGeom(GeomTopBase):
         children = children[1:]
     
         for child in children:
+            print(child)
             if not child.enabled: continue            
             child.vt.preprocess_params(child)
             if child is stop1: break            # for build before
             child.build_geom(geom, objs)
             if child is stop2: break            # for build after
+
+#            if globals()['gmsh_Major']==4 and use_gmsh_api:
+#                geom.call_synchronize()
     
     def build_geom4(self, stop1=None, stop2=None, filename = None,
-                   finalize = False):        
+                    finalize = False, no_mesh=False):        
         '''
         filename : export geometry to a real file (for debug)
         '''
@@ -362,19 +366,33 @@ class GmshGeom(GeomTopBase):
         self.walk_over_geom_chidlren(geom, objs,
                                      stop1=stop1, stop2=stop2)
         
-        geom.apply_fragment()
+        if finalize:
+            print("finalize is on : computing  fragments")
+            geom.apply_fragments()
         geom.factory.synchronize()
 
+        if no_mesh: return geom
+        
         # here we ask for 2D mesh for plotting.
         # we may need a smart size constraist here
+        import gmsh
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.01)
         geom.model.mesh.generate(2)        
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops
         ptx, cells, cell_data = read_pts_groups(geom)
+        
+        if finalize:
+            # has to add geometry vertex detection....
+            pass
+        else:
+            cells['vertex_mask'] = np.array(geom._point_mask)-1
+
         v, s, l = read_loops(geom)
         self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)
 
-        geom.write(self.name() +  '.msh')
+        if finalize:
+            geom.write(self.name() +  '.msh')
 
     def build_geom3(self, stop1=None, stop2=None, filename = None,
                    finalize = False):
