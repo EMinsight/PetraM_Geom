@@ -235,9 +235,19 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments
-        return [Point, Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove
+        return [Point,  Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove]
     
+    def get_possible_child_menu(self):
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove
+        return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
+                ("", Spline), ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
+                ("", LineLoop), ("", SurfaceLoop),
+                ("", Extrude), ("", Revolve),
+                ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
+                ("", Copy), ("", Remove),
+                ]
+                
     def get_special_menu(self):
         return [('Build All', self.onBuildAll),
                 ('Export .geo', self.onExportGeom)]
@@ -385,8 +395,8 @@ class GmshGeom(GeomTopBase):
         if finalize:
             # has to add geometry vertex detection....
             pass
-        else:
-            cells['vertex_mask'] = np.array(geom._point_mask)-1
+        #else:
+        #    cells['vertex_mask'] = np.array(geom._point_mask)-1
 
         v, s, l = read_loops(geom)
         self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)

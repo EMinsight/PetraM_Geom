@@ -51,6 +51,29 @@ class LineLoopID(GeomIDBase):
 class SurfaceLoopID(GeomIDBase):   
    def __add__(self, v):
        return SurfaceLoopID(int(self) + v)
+
+def id2dimtag(en):
+    if isinstance(en, LineID):
+        return (1, int(en))
+    elif isinstance(en, SurfaceID):
+        return (2, int(en))
+    elif hasattr(en, 'surface'):
+        return (2, int(en))
+    elif isinstance(en, VolumeID):
+        return (3, int(en))
+    else:
+        assert False, "Illegal entity"
+
+def dimtag2id(dimtags):        
+    out3 = []; out2 = []; out1 = []
+    for dim, tag in dimtags:
+        if dim == 3 and not tag in out3:
+           out3.append(VolumeID(tag))                               
+        elif dim == 2 and not tag in out2:
+           out2.append(SurfaceID(tag))                               
+        elif dim == 1 and not tag in out1:
+           out1.append(LineID(tag))
+    return out3 + out2 + out1                     
    
 class Geometry(object):
     def __init__(self, *args, **kwargs):
@@ -153,62 +176,55 @@ class Geometry(object):
         return ret
 
     def _boolean_xxx(self, m, input_entity, tool_entity,
-                     removeObject=True, removeTool=True, delete=False):
+                     removeObject=False, removeTool=False, delete=False):
        
         def get_dimtag(entity):
            dimtags = []
-           for en in entitiy:
-               if isintstance(en, LineID):
-                   dimtags.append((1, int(en))
-               elif isintstance(en, SurfaceID):
-                   dimtags.append((2, int(en))
-               elif hasattr(en, 'surface'):
-                   dimtags.append((2, int(en))
-               elif isintstance(en, VolumeID):
-                   dimtags.append((3, int(en))
-               else:
-                   assert False, "Illegal entity"
+           for en in entity:
+               dimtags.append(id2dimtag(en))
            return dimtags
 
-        dimtag1 = self._boolean_get_dimtag(input_entity)
-        dimtag2 = self._boolean_get_dimtag(tool_entity)
+        dimtag1 = get_dimtag(input_entity)
+        dimtag2 = get_dimtag(tool_entity)
                                
         if delete:
              removeObject=True
              removeTool=True
 
-        m = getattr(self, factory, name)                      
-        dimtag3 = m(dimtag1, dimtag2, removeObject=True, removeTool=True)
+        m = getattr(self.factory, m)
+        print("remove", removeObject, removeTool)
+        
+        dimtag3, dimtagMap = m(dimtag1, dimtag2,
+                               removeObject=removeObject,
+                               removeTool=removeTool)
 
-        out = []
-        for dim, tag in dimtag3:
-            if dim == 3:
-               out.append(VolumeID(tag))                               
-            elif dim == 2:
-               out.append(SurfaceID(tag))                               
-            elif dim == 1:
-               out.append(LineID(tag))
+        return dimtag2id(dimtag3)                
         
     def boolean_intersection(self, input_entity, tool_entity,
-                             removeObject=True, removeTool=True, delete=False):
+                             removeObject=False, removeTool=False, delete=False):
         return self._boolean_xxx('intersect', input_entity, tool_entity,
-                          removeObject=True, removeTool=True, delete=False):
+                                 removeObject=removeObject, removeTool=removeTool,
+                                 delete=delete)
                                
     def boolean_union(self, input_entity, tool_entity,
-                      removeObject=True, removeTool=True, delete=False):
+                      removeObject=False, removeTool=False, delete=False):
         return self._boolean_xxx('fuse', input_entity, tool_entity,
-                          removeObject=True, removeTool=True, delete=False):
+                                 removeObject=removeObject, removeTool=removeTool,
+                                 delete=delete)
+
      
     def boolean_difference(self, input_entity, tool_entity,
-                           removeObject=True, removeTool=True, delete=False):
+                           removeObject=False, removeTool=False, delete=False):
         return self._boolean_xxx('cut', input_entity, tool_entity,
-                          removeObject=True, removeTool=True, delete=False):
+                                 removeObject=removeObject, removeTool=removeTool,
+                                 delete=delete)
+
 
     def boolean_fragments(self, input_entity, tool_entity,
-                          removeObject=True, removeTool=True, delete=False):
+                          removeObject=False, removeTool=False, delete=False):
         return self._boolean_xxx('fragment', input_entity, tool_entity,
-                          removeObject=True, removeTool=True, delete=False):
-
+                                 removeObject=removeObject, removeTool=removeTool,
+                                 delete=delete)
         
     def apply_fragments(self):
         self.factory.synchronize()        
@@ -238,7 +254,25 @@ class Geometry(object):
                              
     def call_synchronize(self):
         self.factory.synchronize()        
-        self.p = len(self.model.getEntities(0))     
+        self.p = len(self.model.getEntities(0))
+
+    def remove(self, entity, recursive=False):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+        self.factory.remove(dimtags, recursive=recursive)
+        return []
+        
+    def copy(self, entity):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+        dimtags2 = self.factory.copy(dimtags)
+        return dimtag2id(dimtags2)                        
+
+       
+
+       
         
             
 

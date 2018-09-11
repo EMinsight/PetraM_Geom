@@ -27,8 +27,33 @@ try:
 
         if mask : self._point_mask.append(obj)
         return obj
-      
 
+    def boolean_union(self, *args, **kwargs):
+        a = kwargs.pop("removeObject", False)
+        b = kwargs.pop("removeTool", False)
+        kwargs["delete"] = a or b
+        return super(Geometry, self).boolean_union(*args, **kwargs)
+      
+    def boolean_difference(self, *args, **kwargs):
+        a = kwargs.pop("removeObject", False)
+        b = kwargs.pop("removeTool", False)
+        kwargs["delete"] = a or b
+        return super(Geometry, self).boolean_difference(*args, **kwargs)
+      
+    def boolean_intersection(self, *args, **kwargs):
+        a = kwargs.pop("removeObject", False)
+        b = kwargs.pop("removeTool", False)
+        kwargs["delete"] = a or b
+        return super(Geometry, self).boolean_intersection(*args, **kwargs)
+      
+    def boolean_fragments(self, *args, **kwargs):
+        a = kwargs.pop("removeObject", False)
+        b = kwargs.pop("removeTool", False)
+        kwargs["delete"] = a or b
+        return super(Geometry, self).boolean_fragments(*args, **kwargs)
+      
+    def copy(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
   has_gmsh = True
 except:
   has_gmsh = False
@@ -486,35 +511,99 @@ class Revolve(GeomPB):
         self._newobjs = newkeys
 
 
+'''
+ objection transformations
+'''
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), )
+
+class Rotate(GeomPB):
+  pass
+class Dilate(GeomPB):
+  pass  
+class Transform(GeomPB):
+  pass
+class Flip(GeomPB):
+  pass
+
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), )
+
+class Copy(GeomPB):
+    vt = Vtable(data0)  
+    def build_geom(self, geom, objs):
+        targets  = self.vt.make_value_or_expression(self)[0]
+        targets = [x.strip() for x in targets.split(',')]
+
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        ret = geom.copy(tt)
+        for r in ret:
+            newkeys.append(objs.addobj(r, 'cp'))
+                               
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('recursive', VtableElement('recursive', type='bool',
+                                      guilabel = 'Recursive',
+                                      default = True,
+                                      tip = "delete recursively")), )
+
+class Remove(GeomPB):
+    vt = Vtable(data0)  
+    def build_geom(self, geom, objs):
+        targets, recursive= self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        geom.remove(tt, recursive=recursive)
+        for t in targets:
+             del objs[t]
+                               
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
 
 class GeomPB_Bool(GeomPB):
     def attribute_set(self, v):
         v = super(GeomPB, self).attribute_set(v)
         self.vt.attribute_set(v)
         v["delete_input"] = True
+        v["delete_tool"] = True        
         return v
     
     def panel1_param(self):
         ll = GeomPB.panel1_param(self)
-        ll.append(["Delete",
+        ll.append(["Delete Input",
                     self.delete_input,  3, {"text":""}])
+        ll.append(["Delete Tool",
+                    self.delete_tool,  3, {"text":""}])
         return ll
         
     def get_panel1_value(self):
         v = GeomPB.get_panel1_value(self)
-        return v + [self.delete_input]
+        return v + [self.delete_input, self.delete_tool]
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        GeomPB.import_panel1_value(self, v[:-1])        
-        self.delete_input = v[-1]
+        GeomPB.import_panel1_value(self, v[:-2])        
+        self.delete_input = v[-2]
+        self.delete_tool = v[-1]
 
     def panel1_tip(self):
         tip = GeomPB.panel1_tip(self)
-        return tip + ['delete input objects']
+        return tip + ['delete input objects'] + ['delete tool objects']
 
 
 ddata =  (('objplus', VtableElement('objplus', type='string',
@@ -538,7 +627,9 @@ class Difference(GeomPB_Bool):
         ret = geom.boolean_difference(
                           input_entity,
                           tool_entity,
-                          delete = self.delete_input)
+                          removeObject = self.delete_input,
+                          removeTool = self.delete_tool)
+
         newkeys = []
         newkeys.append(objs.addobj(ret[0], 'diff'))
         if len(ret) > 1:
@@ -565,7 +656,9 @@ class Union(GeomPB_Bool):
         ret = geom.boolean_union(
                           input_entity,
                           tool_entity,
-                          delete = self.delete_input)
+                          removeObject = self.delete_input,
+                          removeTool = self.delete_tool)
+        
         newkeys = []
         newkeys.append(objs.addobj(ret[0], 'uni'))
         if len(ret) > 1:
@@ -587,7 +680,8 @@ class Intersection(GeomPB_Bool):
         ret = geom.boolean_intersection(
                           input_entity,
                           tool_entity,
-                          delete = self.delete_input)
+                          removeObject = self.delete_input,
+                          removeTool = self.delete_tool)
         newkeys = []
         newkeys.append(objs.addobj(ret[0], 'its'))
         if len(ret) > 1:
@@ -609,7 +703,9 @@ class Fragments(GeomPB_Bool):
         ret = geom.boolean_fragments(
                           input_entity,
                           tool_entity,
-                          delete = self.delete_input)
+                          removeObject = self.delete_input,
+                          removeTool = self.delete_tool)
+
         newkeys = []
         newkeys.append(objs.addobj(ret[0], 'frag'))
         if len(ret) > 1:
