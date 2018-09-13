@@ -111,7 +111,14 @@ class Geometry(object):
     @staticmethod        
     def finalize():        
         gmsh.finalize()
-        
+
+    @property
+    def dim(self):
+        if len(self.model.getEntities(3)) > 0: return 3
+        if len(self.model.getEntities(2)) > 0: return 2
+        if len(self.model.getEntities(1)) > 0: return 1
+        return 0
+     
     def add_point(self, p, lcar=0.0, mask=True):
         p = tuple(p)
         if not p in self._point_loc:
@@ -119,7 +126,6 @@ class Geometry(object):
             self.factory.addPoint(p[0], p[1], p[2], lcar, self.p)            
             self._point_loc[p] = self.p
             
-        if self.dim < 1: self.dim=0
         p_id = self._point_loc[p]
         if mask : self._point_mask.append(p_id)
         return p_id
@@ -128,7 +134,6 @@ class Geometry(object):
         self.l = self.l + 1      
         self.factory.addLine(p1, p2, self.l)
         
-        if self.dim < 1: self.dim=1
         return self.l
       
     def add_circle_arc(self, p2, pc, p3):
@@ -149,19 +154,22 @@ class Geometry(object):
         return self.s       
 
     def add_line_loop(self, pts):
+        tags = list(np.atleast_1d(pts))       
         self.ll = self.ll+1
-        self.factory.addCurveLoop(list(pts), self.ll)
-        if self.dim < 1: self.dim=1
+        self.factory.addCurveLoop(tags, self.ll)
         return self.ll
         
-    def add_surface_loop(self, *ca):
-        self.sl = self.sl+1             
-        if self.dim < 2: self.dim=2
-        return self.sl        
+    def add_surface_loop(self, sl):
+        tags = list(np.atleast_1d(sl))              
+        self.sl = self.sl+1
+        self.factory.addSurfaceLoop(tags, self.sl)        
+        return self.sl
       
-    def add_volume(self, *ca):
-        self.dim=3
-        pass
+    def add_volume(self, shells):
+        tags = list(np.atleast_1d(shells))              
+        self.v = self.v+1
+        self.factory.addVolume(tags, self.v)
+        return self.sl
       
 
     def add_polygon(self, pos, lcar = 0.0):
@@ -170,9 +178,7 @@ class Geometry(object):
         lns.append(self.add_line(pts[-1], pts[0]))
         ll = self.add_line_loop(lns)
         sl = self.add_plane_surface((ll,))
-        
         ret =  Polygon(sl, ll, lcar)
-        if self.dim < 2: self.dim=2
         return ret
 
     def _boolean_xxx(self, m, input_entity, tool_entity,
@@ -262,21 +268,58 @@ class Geometry(object):
             dimtags.append(id2dimtag(en))
         self.factory.remove(dimtags, recursive=recursive)
         return []
-        
+     
     def copy(self, entity):
         dimtags = []
         for en in entity:
             dimtags.append(id2dimtag(en))
         dimtags2 = self.factory.copy(dimtags)
+        return dimtag2id(dimtags2)                                
+        
+    def rotate(self, entity, x, y, z, ax, ay, az, angle):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+        dimtags2 = self.factory.rotate(dimtags, x, y, z, ax, ay, az, angle)
         return dimtag2id(dimtags2)                        
 
+    def translate(self, entity, dx, dy, dz):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+        self.factory.translate(dimtags, dx, dy, dz)
+        return []
+
+    def dilate(self, entity, x, y, z, a, b, c):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+        self.factory.dilate(dimtags, x, y, z, a, b, c)
+        return []
+     
+    def symmetrize(self, entity, a, b, c, d):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+        self.factory.symmetrize(dimtags, a, b, c, d)
+        return []
        
 
-       
-        
-            
+'''
+   def addCircleArc(startTag, centerTag, endTag, tag=-1, nx=0., ny=0., nz=0.):        
+   def addEllipse(x, y, z, r1, r2, tag=-1, angle1=0., angle2=2*pi):
+   def addEllipseArc(startTag, centerTag, majorTag, endTag, tag=-1, nx=0., ny=0., nz=0.)
+   def addBezier(pointTags, tag=-1)
+   def addCurveLoop(curveTags, tag=-1)
+   def addSurfaceFilling(wireTags, tag=-1, sphereCenterTag=-1)
+   def twist(dimTags, x, y, z, dx, dy, dz, ax, ay, az, angle, numElements=[], heights=[], recombine=False)
+   def addDisk(xc, yc, zc, rx, ry, tag=-1)
+   def addSphere(xc, yc, zc, radius, tag=-1, angle1=-pi/2, angle2=pi/2, angle3=2*pi)
+   def addBox(x, y, z, dx, dy, dz, tag=-1)
+   def addCylinder(x, y, z, dx, dy, dz, r, tag=-1, angle=2*pi)
+   def addCone(x, y, z, dx, dy, dz, r1, r2, tag=-1, angle=2*pi)
+   def addWedge(x, y, z, dx, dy, dz, tag=-1, ltx=0.)
+   def addTorus(x, y, z, r1, r2, tag=-1, angle=2*pi)
 
-          
-
-        
-    
+   def addThruSections(wireTags, tag=-1, makeSolid=True, makeRuled=False)
+   def addThickSolid(volumeTag, excludeSurfaceTags, offset, tag=-1)

@@ -54,6 +54,17 @@ try:
       
     def copy(self, *args, **kwargs):
         assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def remove(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def rotate(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def translate(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def dilate(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def symmetrize(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+        
   has_gmsh = True
 except:
   has_gmsh = False
@@ -517,17 +528,185 @@ class Revolve(GeomPB):
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
-                                          tip = "object to move")), )
+                                          tip = "object to move")), 
+          ('dx', VtableElement('dx', type='float',
+                                   guilabel = 'dx',
+                                   default = '0.0',
+                                   tip = "x-displacement")),
+          ('dy', VtableElement('dy', type='float',
+                                   guilabel = 'dy',
+                                   default = '0.0',                               
+                                   tip = "x-displacement")),
+          ('dz', VtableElement('dz', type='float',
+                                   guilabel = 'dz',
+                                   default = '0.0',
+                                   tip = "z-displacement")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
 
+
+class Move(GeomPB): # tanslate in gmsh
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, dx, dy, dz, keep  = self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        if keep:
+           tt = geom.copy(tt)          
+        geom.translate(tt, dx, dy, dz)
+        if keep:
+            newkeys.append(objs.addobj(tt, 'mv'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('cx', VtableElement('cx', type='float',
+                                   guilabel = 'x(center)',
+                                   default = '0.0',
+                                   tip = "point on revolustion axis")),            
+          ('cy', VtableElement('cy', type='float',
+                                   guilabel = 'y(center)',
+                                   default = '0.0',
+                                   tip = "point on revolustion axis")),           
+          ('cz', VtableElement('cz', type='float',
+                                   guilabel = 'z(center)',
+                                   default = '0.0',
+                                   tip = "point on revolustion axis")),
+          ('ax', VtableElement('ax', type='float',
+                                   guilabel = 'ax',
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('ay', VtableElement('ay', type='float',
+                                   guilabel = 'ay',
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('az', VtableElement('az', type='float',
+                                   guilabel = 'az',
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('angle', VtableElement('angle', type='float',
+                                   guilabel = 'angle',
+                                   default = '0.0',
+                                   tip = "angle of revoluiton")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
+        
 class Rotate(GeomPB):
-  pass
-class Dilate(GeomPB):
-  pass  
-class Transform(GeomPB):
-  pass
-class Flip(GeomPB):
-  pass
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, cx, cy, cz, ax, ay, az, angle, keep  = self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]        
+        if keep:
+           tt = geom.copy(tt)          
+        geom.rotate(tt, cx, cy, cz, ax, ay, az, angle)
+        if keep:
+            newkeys.append(objs.addobj(tt, 'rot'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('cx', VtableElement('cx', type='float',
+                                   guilabel = 'x(center)',
+                                   default = '0.0',
+                                   tip = "point on revolustion axis")),            
+          ('cy', VtableElement('cy', type='float',
+                                   guilabel = 'y(center)',
+                                   default = '0.0',
+                                   tip = "point on revolustion axis")),           
+          ('cz', VtableElement('cz', type='float',
+                                   guilabel = 'z(center)',
+                                   default = '0.0',
+                                   tip = "point on revolustion axis")),
+          ('scalex', VtableElement('scalex', type='float',
+                                   guilabel = 'X scale',
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('scaley', VtableElement('scaley', type='float',
+                                   guilabel = 'Y scale',
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('scalez', VtableElement('scalez', type='float',
+                                   guilabel = 'Z scale',
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
 
+  
+class Scale(GeomPB):  # Dilate in gmsh
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, cx, cy, cz, sx, sy, sz, keep  = self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        if keep:
+           tt = geom.copy(tt)          
+        geom.dilate(tt, cx, cy, cz, sx, sy, sz)
+        if keep:
+            newkeys.append(objs.addobj(tt, 'sc'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('flip_ax', VtableElement('flip_ax', type='float',
+                                    guilabel = 'Flip Axis X',
+                                    default = '0.0',
+                                    tip = "direction on flip axis")),            
+          ('flip_ay', VtableElement('flip_ay', type='float',
+                                    guilabel = 'Flip Axis Y',
+                                    default = '0.0',
+                                    tip = "direction on flip axis")),           
+          ('flip_az', VtableElement('flip_az', type='float',
+                                    guilabel = 'Flip Axis Z',
+                                   default = '0.0',
+                                    tip = "direction on flip axis")), 
+          ('flip_d', VtableElement('flip_d', type='float',
+                                   guilabel = 'Offset', 
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
+
+class Flip(GeomPB):
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, a, b, c, d,  keep  = self.vt.make_value_or_expression(self)
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        if keep:
+           tt = geom.copy(tt)          
+        geom.symmetrize(tt, a, b, c, d)  
+        if keep:
+            newkeys.append(objs.addobj(tt, 'flp'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+  
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
@@ -544,7 +723,7 @@ class Copy(GeomPB):
         ret = geom.copy(tt)
         for r in ret:
             newkeys.append(objs.addobj(r, 'cp'))
-                               
+        
         self._objkeys = objs.keys()
         self._newobjs = newkeys
         
