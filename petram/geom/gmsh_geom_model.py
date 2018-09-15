@@ -293,7 +293,7 @@ class GmshGeom(GeomTopBase):
 
         objs = GeomObjs()
         self._objs = objs        
-        from .gmsh_primitives import Geometry
+        from petram.geom.gmsh_primitives import Geometry
         geom = Geometry()
         geom.set_factory('OpenCASCADE')
         
