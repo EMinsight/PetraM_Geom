@@ -48,7 +48,7 @@ def mesh(dim = 1):
     return lines
 
 def reset_cl(line):
-    line.extend(['Mesh.CharacteristicLengthMax = 10^300;', 
+    line.extend(['Mesh.CharacteristicLengthMax = 10e+302;',
                  'Mesh.CharacteristicLengthMin = 0.0'])
 
 def transfiniteL(gid, nseg='', progression = 0, bump = 0, meshdim = 1):
@@ -83,25 +83,31 @@ def transfiniteS(gid, points = None):
     lines.append(c+';')
     return lines
 
-def freemesh(gid, clmax=None, clmin=None):
+def freemesh(gid, clmax=None, clmin=None, defclmax=None, defclmin=None,
+             use_smooth = False):
     lines = []
     ll = 0
-    print("free mesh")
+
     if clmax > 0:
         lines.append('Mesh.CharacteristicLengthMax = ' + str(clmax) + ';')
         ll = ll+1
-    #else:
+    else:
+        lines.append('Mesh.CharacteristicLengthMax = ' + str(defclmax) + ';')        
     #    lines.append('Mesh.CharacteristicLengthMax = 10e+302;')
     if clmin > 0:
         lines.append('Mesh.CharacteristicLengthMin = ' + str(clmin) + ';')
         ll = ll+1        
-    #else:
+    else:
+        lines.append('Mesh.CharacteristicLengthMin = ' + str(defclmin) + ';')
+        
     #    lines.append('Mesh.CharacteristicLengthMin = 0.0;')        
-    print(ll)
-    if ll > 0:
+    #if ll > 0:
+    if not use_smooth:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;')
     else:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 1;')
+
+
     return lines
 
 def characteristiclength(gid, cl = 1e20):
@@ -279,6 +285,7 @@ class GmshMesher(object):
 
     def freemesh(self, gid,  mode='Line', clmax=-1, clmin=-1,
                  meshdim=1, embed_s="", embed_l="", embed_p=""):
+
         '''
         freemesh  = unstructured volume/surface/line
         '''
@@ -286,14 +293,17 @@ class GmshMesher(object):
         clmin  = self.clmin if clmin == -1 else clmin
         
         lines = []
+        use_smooth=False
         if meshdim == 3 and mode == 'Volume':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
+            use_smooth = True            
         elif meshdim == 2 and mode == 'Volume':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
+            use_smooth = True            
             if self.done['Surface']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                  mode = 'Surface'))
@@ -311,6 +321,7 @@ class GmshMesher(object):
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
+            use_smooth = True            
         elif meshdim == 1 and mode == 'Surface':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
@@ -322,6 +333,7 @@ class GmshMesher(object):
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
+            use_smooth = True
 
         elif meshdim == 0:
             lines = embed(gid, embed_s=embed_s, embed_l=embed_l,
@@ -330,7 +342,11 @@ class GmshMesher(object):
         else:
             return []
 
-        lines.extend(freemesh(gid, clmax=clmax, clmin=clmin))
+        lines.extend(freemesh(gid, clmax=clmax, clmin=clmin,
+                              defclmax=self.clmax,
+                              defclmin=self.clmin,
+                              use_smooth=use_smooth))
+
         self.record_finished(gid, mode = mode)                
         return lines
 
@@ -523,8 +539,10 @@ class GmshMesher(object):
                     
     def get_remaining_txt(self, mode = "Line"):
         if self.done[mode] == "*": return ''
+        print(self.num_entities[mode])
         ll = [x+1 for x in range(self.num_entities[mode])]
-        for x in self.done[mode]:ll.remove(x)
+        for x in self.done[mode]:
+            if x in ll: ll.remove(x)
         if len(ll) == 0:
             self.done[mode] = "*"
             return ''

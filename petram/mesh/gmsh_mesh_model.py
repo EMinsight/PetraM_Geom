@@ -239,10 +239,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface]
 
     def get_special_menu(self):
-        return [('Build All', self.onBuildAll),
-                ('Export .geo', self.onExportGeom),
-                ('Export .msh', self.onExportMsh),
-                ('Clear Mesh', self.onClearMesh)]        
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+        if use_gmsh_api:
+            return [('Build All', self.onBuildAll),
+                    ('Export .msh', self.onExportMsh),
+                    ('Clear Mesh', self.onClearMesh)]        
+        else:
+             return [('Build All', self.onBuildAll),
+                     ('Export .geo', self.onExportGeom),
+                     ('Export .msh', self.onExportMsh),
+                     ('Clear Mesh', self.onClearMesh)]        
     
     def onSetDefSize(self, evt):
         geom_root = self.geom_root
@@ -385,10 +391,40 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.onUpdateMeshView(evt, bin='',
                               geo_text = self._txt_rolled[:],
                               filename = filename)
-        self.onGenerateMsh(evt)
+        
+
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+
+        if use_gmsh_api:
+            import gmsh
+            geom_root = self.geom_root
+
+            geom = geom_root._gmsh4_data[-1]
+
+            for k, x in enumerate(geom.model.getEntities(dim=3)):
+                value = geom.model.addPhysicalGroup(3, [x[1]])
+                geom.model.setPhysicalName(3, value, 'volume'+str(value))
+            for k, x in enumerate(geom.model.getEntities(dim=2)):
+                value = geom.model.addPhysicalGroup(2, [x[1]])
+                geom.model.setPhysicalName(2, value, 'surface'+str(value))
+            for k, x in enumerate(geom.model.getEntities(dim=1)):
+                value = geom.model.addPhysicalGroup(1, [x[1]])                
+                geom.model.setPhysicalName(1, value, 'line'+str(value))
+            for k, x in enumerate(geom.model.getEntities(dim=0)):
+                value = geom.model.addPhysicalGroup(0, [x[1]])                
+                geom.model.setPhysicalName(0, value, 'point'+str(value))
+                
+            dlg = evt.GetEventObject().GetTopLevelParent()
+            viewer = dlg.GetParent()
+            engine = viewer.engine
+        
+            filename = os.path.join(viewer.model.owndir(), self.name())
+            geom.write(filename +  '.msh')                
+        else:
+            self.onGenerateMsh(evt)
         evt.Skip()
         
-    def onGenerateMsh(self, evt):
+    def onGenerateMsh3(self, evt):
         from petram.geom.gmsh_geom_model import read_loops, generate_mesh
         
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -398,9 +434,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         filename = os.path.join(viewer.model.owndir(), self.name())
         
         from petram.mesh.gmsh_mesher import write_physical, write_embed
-        embed = self.gather_embed()
-        geo_text = write_embed(self._txt_rolled[:], embed)        
-        geo_text = write_physical(geo_text)
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+
+        if not use_gmsh_api:
+             embed = self.gather_embed()
+             geo_text = write_embed(self._txt_rolled[:], embed)        
+             geo_text = write_physical(geo_text)
+        else:
+             geo_text = []
 
         print("Generating msh with physcal index")
         ret =  generate_mesh(geo_object = None,
@@ -432,11 +473,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.vt.preprocess_params(self)
 
         if use_gmsh_api:
-            geom = geom_root._gmsh4_data[-1]            
-            num_entities = [len(geom.model.getEntities(0)),
-                            len(geom.model.getEntities(1)),
-                            len(geom.model.getEntities(2)),
-                            len(geom.model.getEntities(3))]
+            geom = geom_root._gmsh4_data[-1]
+            def mmax(l):
+                if len(l) == 0: return 0
+                return max([x[1] for x in l])
+            num_entities = [mmax(geom.model.getEntities(0)),
+                            mmax(geom.model.getEntities(1)),
+                            mmax(geom.model.getEntities(2)),
+                            mmax(geom.model.getEntities(3))]
             l = geom_root._gmsh4_data[3]
             s = geom_root._gmsh4_data[4]
             v = geom_root._gmsh4_data[5]                

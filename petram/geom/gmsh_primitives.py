@@ -27,7 +27,18 @@ try:
 
         if mask : self._point_mask.append(obj)
         return obj
-
+      
+    def add_surface_filling(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def add_sphere(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def add_wedge(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def add_torus(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+    def add_cone(self, *args, **kwargs):
+        assert False, "Not implemented for gmsh3. Use gmsh new API"
+        
     def boolean_union(self, *args, **kwargs):
         a = kwargs.pop("removeObject", False)
         b = kwargs.pop("removeTool", False)
@@ -99,6 +110,11 @@ boolean operation
    Fragments
 
 '''
+invalid_pdata = (('NotUsedValue', VtableElement('NotUsedValue', type='array',
+                                  guilabel = 'not_implemented',
+                                  default = '0.0',
+                                  tip = "This panel is not implemented" )),)
+
 pdata = (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
                               default = '0.0',
@@ -221,8 +237,299 @@ class Rect(GeomPB):
         newkey = objs.addobj(rec1, 'rec')
         self._objkeys = objs.keys()
         self._newobjs = [newkey]
+        
+rdata =  (('corner', VtableElement('corner', type='float',
+                             guilabel = 'Corner',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+          ('edge1', VtableElement('edge1', type='float',
+                             guilabel = 'Edge(1)',
+                             suffix =('x', 'y', 'z'),
+                             default = [1,0,0],
+                             tip = "Edge of rectangle" )),
+          ('edge2', VtableElement('edge2', type='float',
+                             guilabel = 'Edge(2)',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,1,0],
+                             tip = "Edge of rectangle" )),
+          ('edge3', VtableElement('edge3', type='float',
+                                  guilabel = 'Edge(3)',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,1],
+                             tip = "Edge of rectangle" )),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                              tip = "characteristc length from point" )),)
 
+class Box(GeomPB):
+    vt = Vtable(rdata)
     
+    def build_geom(self, geom, objs):
+        c1,  e1,  e2,  e3, lcar = self.vt.make_value_or_expression(self)
+        c1 = np.array(c1);
+        e1 = np.array(e1);        e2 = np.array(e2);
+        p1 = geom.add_point(c1, lcar)
+        p2 = geom.add_point(c1+e1, lcar)
+        p3 = geom.add_point(c1+e2, lcar)
+        p4 = geom.add_point(c1+e3, lcar)
+        p5 = geom.add_point(c1+e1+e2, lcar)        
+        p6 = geom.add_point(c1+e2+e3, lcar)
+        p7 = geom.add_point(c1+e3+e1, lcar)
+        p8 = geom.add_point(c1+e3+e2+e1, lcar)
+        
+        l1 = geom.add_line(p1, p2)
+        l2 = geom.add_line(p2, p5)
+        l3 = geom.add_line(p5, p3)
+        l4 = geom.add_line(p3, p1)
+        
+        l5 = geom.add_line(p1, p4)
+        l6 = geom.add_line(p2, p7)
+        l7 = geom.add_line(p5, p8)
+        l8 = geom.add_line(p3, p6)
+        
+        l9  = geom.add_line(p4, p7)
+        l10 = geom.add_line(p7, p8)
+        l11 = geom.add_line(p8, p6)
+        l12 = geom.add_line(p6, p4)        
+        
+        ll1 = geom.add_line_loop([l1, l2, l3, l4])
+        ll2 = geom.add_line_loop([l5, l9, l6, l1])
+        ll3 = geom.add_line_loop([l6, l10, l7, l2])
+        ll4 = geom.add_line_loop([l7, l11, l8, l3])
+        ll5 = geom.add_line_loop([l8, l12, l5, l4])
+        ll6 = geom.add_line_loop([l9, l10, l11, l12])
+        
+        rec1 = geom.add_plane_surface(ll1)
+        rec2 = geom.add_plane_surface(ll2)
+        rec3 = geom.add_plane_surface(ll3)
+        rec4 = geom.add_plane_surface(ll4)
+        rec5 = geom.add_plane_surface(ll5)
+        rec5 = geom.add_plane_surface(ll6)
+
+        sl = geom.add_surface_loop([ll1, ll2, ll3, ll4, ll5, ll6])
+        v1 = geom.add_volume(sl)
+        
+        newkey = objs.addobj(v1, 'bx')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+
+
+vtdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+          ('x_radius', VtableElement('x_radius', type='float',
+                                     guilabel = 'radius (X)',
+                                     default = 1.0,
+                                     tip = "radius in X direction" )),
+          ('y_radius', VtableElement('y_radius', type='float',
+                                     guilabel = 'radius (Y)',
+                                     default = 1.0,
+                                     tip = "radius in Y direction" )),
+          ('z_rarius', VtableElement('z_radius', type='float',
+                                     guilabel = 'radius (Z)',
+                                     default = 1.0,                                
+                                     tip = "radius in Z direction" )),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                                   tip = "characteristc length from point" )),)
+                 
+class Ball(GeomPB):
+    vt = Vtable(vtdata)
+    def build_geom(self, geom, objs):
+        x0,  l1,  l2,  l3, lcar = self.vt.make_value_or_expression(self)
+
+        # Add points.
+        radii = [l1, l2, l3]
+        rr = min(radii)
+        v1 = geom.add_sphere(x0[0], x0[1], x0[2], rr)
+        if (l1/rr != 1.0 or l2/rr != 1.0 or l3/rr != 1.0):
+            geom.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
+        newkey = objs.addobj(v1, 'bl')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+
+        '''
+        print(radii)
+        p = [ geom.add_point(x0, lcar=lcar),
+              geom.add_point([x0[0]+radii[0], x0[1], x0[2]], lcar=lcar),
+              geom.add_point([x0[0], x0[1]+radii[1], x0[2]], lcar=lcar),
+              geom.add_point([x0[0], x0[1], x0[2]+radii[2]], lcar=lcar),
+              geom.add_point([x0[0]-radii[0], x0[1], x0[2]], lcar=lcar),
+              geom.add_point([x0[0], x0[1]-radii[1], x0[2]], lcar=lcar),
+              geom.add_point([x0[0], x0[1], x0[2]-radii[2]], lcar=lcar), ]
+
+        c = [geom.add_ellipse_arc(p[1], p[0], p[6]),
+             geom.add_ellipse_arc(p[6], p[0], p[4]),
+             geom.add_ellipse_arc(p[4], p[0], p[3]),
+             geom.add_ellipse_arc(p[3], p[0], p[1]),
+             geom.add_ellipse_arc(p[1], p[0], p[2]),
+             geom.add_ellipse_arc(p[2], p[0], p[4]),
+             geom.add_ellipse_arc(p[4], p[0], p[5]),
+             geom.add_ellipse_arc(p[5], p[0], p[1]),
+             geom.add_ellipse_arc(p[6], p[0], p[2]),
+             geom.add_ellipse_arc(p[2], p[0], p[3]),
+             geom.add_ellipse_arc(p[3], p[0], p[5]),
+             geom.add_ellipse_arc(p[5], p[0], p[6]), ]
+        ll = [geom.add_line_loop([c[4], c[9], c[3]]),
+              geom.add_line_loop([c[8], -c[4], c[0]]),
+              geom.add_line_loop([-c[9], c[5], c[2]]),
+              geom.add_line_loop([-c[5], -c[8], c[1]]),
+              geom.add_line_loop([c[7], -c[3], c[10]]),
+              geom.add_line_loop([c[11], -c[7], -c[0]]),
+              geom.add_line_loop([-c[10], -c[2], c[6]]),
+              geom.add_line_loop([-c[1], -c[6], -c[11]]), ]
+        s = [geom.add_surface_filling(l) for l in ll]
+        # Combine the surfaces to avoid seams
+        #new_surfs = [
+        #        self.add_surface_filling(s[:4]),
+        #        self.add_compound(s[4:])
+        #        ]
+
+        # Create the surface loop and volume
+        sl = geom.add_surface_loop(s)
+        v1= geom.add_volume(sl)
+        
+        newkey = objs.addobj(v1, 'bl')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+        '''
+vtdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+           ('axis', VtableElement('axis', type='float',
+                             guilabel = 'Axis',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,1],
+                             tip = "Center of Circle" )),           
+          ('r1', VtableElement('r1', type='float',
+                               guilabel = 'radius1',
+                               default = 1.0,
+                               tip = "r1")),
+          ('r2', VtableElement('r2', type='float',
+                               guilabel = 'radius2',
+                               default = 0.0,
+                               tip = "r2")),
+          ('angle', VtableElement('angle', type='float',
+                               guilabel = 'Angle',
+                               default = 360,
+                               tip = "angle")),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                                   tip = "characteristc length from point" )),)
+
+class Cone(GeomPB):
+    vt = Vtable(vtdata)
+    def build_geom(self, geom, objs):
+        x0,  d0,  r1, r2, angle, lcar = self.vt.make_value_or_expression(self)
+
+        v1 = geom.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
+                           r1, r2,  angle/180*np.pi)
+        newkey = objs.addobj(v1, 'cn')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+
+vtdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+           ('axis', VtableElement('axis', type='float',
+                             guilabel = 'Axis',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,1],
+                             tip = "Center of Circle" )),           
+          ('radius', VtableElement('radius', type='float',
+                               guilabel = 'Radius',
+                               default = 1.0,
+                               tip = "radius")),
+          ('angle', VtableElement('angle', type='float',
+                               guilabel = 'Angle',
+                               default = 360,
+                               tip = "angle")),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                                   tip = "characteristc length from point" )),)
+class Cylinder(GeomPB):  
+    vt = Vtable(vtdata)
+    def build_geom(self, geom, objs):
+        x0,  d0,  r1,  angle, lcar = self.vt.make_value_or_expression(self)
+
+        v1 = geom.add_cylinder(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
+                           r1, angle/180*np.pi)
+        newkey = objs.addobj(v1, 'cn')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+        
+vtdata =  (('corner', VtableElement('corner', type='float',
+                             guilabel = 'Corner',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+           ('dxdydz', VtableElement('dxdydz', type='float',
+                             guilabel = 'Size',
+                             suffix =('x', 'y', 'z'),
+                             default = [1,1,0.1],
+                             tip = "Size of Wedge" )),           
+          ('ltx', VtableElement('ltx', type='float',
+                               guilabel = 'Top Extendradius1',
+                               default = 1.0,
+                               tip = "r1")),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                                   tip = "characteristc length from point" )),)
+
+class Wedge(GeomPB):
+    vt = Vtable(vtdata)
+    def build_geom(self, geom, objs):
+        x0,  d0,  ltx, lcar = self.vt.make_value_or_expression(self)
+        print(x0, d0, ltx, lcar)
+        v1 = geom.add_wedge(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2], ltx)
+        newkey = objs.addobj(v1, 'wdg')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+
+vtdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', 'z'),
+                             default = [0,0,0],
+                             tip = "Center of Circle" )),
+          ('r1', VtableElement('r1', type='float',
+                               guilabel = 'radius1',
+                               default = 1.0,
+                               tip = "r1")),
+          ('r2', VtableElement('r2', type='float',
+                               guilabel = 'radius2',
+                               default = 0.0,
+                               tip = "r2")),
+          ('angle', VtableElement('angle', type='float',
+                               guilabel = 'Angle',
+                               default = 360,
+                               tip = "angle")),
+          ('lcar', VtableElement('lcar', type='float',
+                                   guilabel = 'lcar',
+                                   default = 0.0, 
+                                   tip = "characteristc length from point" )),)
+
+class Torus(GeomPB):
+    vt = Vtable(vtdata)
+    def build_geom(self, geom, objs):
+        x0,  r1,  r2, angle, lcar = self.vt.make_value_or_expression(self)
+        v1 = geom.add_torus(x0[0], x0[1], x0[2], r1, r2, angle)
+        newkey = objs.addobj(v1, 'trs')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+
+
 pdata =  (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
                               default = '0.0',
@@ -559,7 +866,8 @@ class Move(GeomPB): # tanslate in gmsh
            tt = geom.copy(tt)          
         geom.translate(tt, dx, dy, dz)
         if keep:
-            newkeys.append(objs.addobj(tt, 'mv'))          
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'mv'))          
         self._objkeys = objs.keys()
         self._newobjs = newkeys
 
@@ -610,9 +918,10 @@ class Rotate(GeomPB):
         tt = [objs[t] for t in targets]        
         if keep:
            tt = geom.copy(tt)          
-        geom.rotate(tt, cx, cy, cz, ax, ay, az, angle)
+        geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)
         if keep:
-            newkeys.append(objs.addobj(tt, 'rot'))          
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'rot'))          
         self._objkeys = objs.keys()
         self._newobjs = newkeys
         
@@ -662,7 +971,9 @@ class Scale(GeomPB):  # Dilate in gmsh
            tt = geom.copy(tt)          
         geom.dilate(tt, cx, cy, cz, sx, sy, sz)
         if keep:
-            newkeys.append(objs.addobj(tt, 'sc'))          
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'sc'))          
+
         self._objkeys = objs.keys()
         self._newobjs = newkeys
 
@@ -701,9 +1012,11 @@ class Flip(GeomPB):
         tt = [objs[t] for t in targets]
         if keep:
            tt = geom.copy(tt)          
-        geom.symmetrize(tt, a, b, c, d)  
+        geom.symmetrize(tt, a, b, c, d)
         if keep:
-            newkeys.append(objs.addobj(tt, 'flp'))          
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'flp'))          
+
         self._objkeys = objs.keys()
         self._newobjs = newkeys
   

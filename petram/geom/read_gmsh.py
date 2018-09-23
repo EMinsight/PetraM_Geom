@@ -72,7 +72,8 @@ def read_pts_groups(geom):
         return np.array([]).reshape((-1,3)), {}, {}
     points = np.array(node_coords).reshape(-1, 3)
 
-    node2idx = np.zeros(node_id[-1]+1, dtype=int)
+    node2idx = np.zeros(max(node_id)+1, dtype=int)
+
     for k, id in enumerate(node_id): node2idx[id] = k
 
     # cells is element_type -> node_id 

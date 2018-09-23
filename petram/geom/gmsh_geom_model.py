@@ -174,8 +174,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         return [None]+list(self.vt.panel_tip())
 
     def build_geom(self, geom, objs):
-        raise NotImplementedError(
-             "you must specify this method in subclass")
+        self._newobjs = []
+        warnings.warn("Not implemented: " + self.__class__.__name__, Warning)        
 
     def gsize_hint(self, geom, objs):
         '''
@@ -235,13 +235,17 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale
-        return [Point,  Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
-                ("", Spline), ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
+                ("", Spline),
+                ("3D shape...", Box),
+                ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
+                ("!", Torus),
+                ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
                 ("", LineLoop), ("", SurfaceLoop),
                 ("", Extrude), ("", Revolve),
                 ("", Copy), ("", Remove),
@@ -251,8 +255,12 @@ class GmshGeom(GeomTopBase):
                 ]
                 
     def get_special_menu(self):
-        return [('Build All', self.onBuildAll),
-                ('Export .geo', self.onExportGeom)]
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+        if use_gmsh_api:
+             return [('Build All', self.onBuildAll),]
+        else:
+            return [('Build All', self.onBuildAll),
+                    ('Export .geo', self.onExportGeom)]
     
     def panel1_param(self):
         return [["", "Geometry model using GMSH", 2, None],
@@ -345,9 +353,9 @@ class GmshGeom(GeomTopBase):
     def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
         children = [x for x in self.walk()]
         children = children[1:]
-    
         for child in children:
-            print(child)
+            if hasattr(child, "_newobjs"): del child._newobjs
+        for child in children:
             if not child.enabled: continue            
             child.vt.preprocess_params(child)
             if child is stop1: break            # for build before
@@ -370,7 +378,7 @@ class GmshGeom(GeomTopBase):
         objs = GeomObjs()
         self._objs = objs
 
-        from .gmsh_geom_wrapper import Geometry
+        from petram.geom.gmsh_geom_wrapper import Geometry
         geom = Geometry()
         
         geom.set_factory('OpenCASCADE')
@@ -386,9 +394,16 @@ class GmshGeom(GeomTopBase):
         if no_mesh: return geom
         
         # here we ask for 2D mesh for plotting.
-        # we may need a smart size constraist here
+        # size control is done based on geometry size.
+        ss = geom.getObjSizes()
+        dim2_size = min([s[2] for s in ss if s[0]==2])
+        dim1_size = min([s[2] for s in ss if s[0]==1])
+
         import gmsh
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 0.01)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/3.)
+        geom.model.mesh.generate(1)        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
         geom.model.mesh.generate(2)        
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops
@@ -417,7 +432,7 @@ class GmshGeom(GeomTopBase):
         objs = GeomObjs()
         self._objs = objs
 
-        from .gmsh_primitives import Geometry        
+        from petram.geom.gmsh_primitives import Geometry        
         geom = Geometry()
         
         geom.set_factory('OpenCASCADE')
