@@ -193,7 +193,13 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         engine = viewer.engine
         engine.build_ns()
         try:
-            self.parent.build_geom(**kwargs)
+            p  = self.parent
+            if isinstance(p, GmshGeom):
+                rootg = p
+            else: # work plane
+                rootg = p.parent
+            rootg.build_geom(**kwargs)
+
         except:
             import ifigure.widgets.dialog as dialog               
             dialog.showtraceback(parent = dlg,
@@ -201,7 +207,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
                                  title='Error',
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
-        self.parent.onUpdateGeoView(evt)
+        rootg.onUpdateGeoView(evt)
 
         
     def onBuildBefore(self, evt):
@@ -235,11 +241,11 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),
                 ("3D shape...", Box),
@@ -251,7 +257,7 @@ class GmshGeom(GeomTopBase):
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("!", Scale),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
-
+                ("", WorkPlane),
                 ]
                 
     def get_special_menu(self):
@@ -355,13 +361,44 @@ class GmshGeom(GeomTopBase):
         children = children[1:]
         for child in children:
             if hasattr(child, "_newobjs"): del child._newobjs
+            
+        children = self.get_children()
         for child in children:
-            if not child.enabled: continue            
-            child.vt.preprocess_params(child)
-            if child is stop1: break            # for build before
-            child.build_geom(geom, objs)
-            if child is stop2: break            # for build after
+            if not child.enabled: continue
+            
+            if len(child.get_children())==0:
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before
+                child.build_geom(geom, objs)
+                if child is stop2: break            # for build after
+                
+            else:  # workplane
+                children2 = child.get_children()
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before                
+                objs2 = GeomObjs(objs.copy())
+                org_keys = objs.keys()
+                do_break = False
+                for child2 in children2:
+                    if not child2.enabled: continue                    
+                    child2.vt.preprocess_params(child2)
+                    if child2 is stop1:
+                        do_break = True
+                        break            # for build before
+                    child2.build_geom(geom, objs2)
+                    if child2 is stop2:
+                        do_break = True                        
+                        break            # for build after
 
+                # translate 2D objects in 3D space
+                for x in org_keys: del objs2[x]
+                child.build_geom(geom, objs2)
+
+                # copy new objects to objs
+                for x in objs2: objs[x] = objs2[x]
+                
+                if do_break: break
+                if child is stop2: break            # for build after                
 #            if globals()['gmsh_Major']==4 and use_gmsh_api:
 #                geom.call_synchronize()
     
@@ -400,7 +437,7 @@ class GmshGeom(GeomTopBase):
         dim1_size = min([s[2] for s in ss if s[0]==1])
 
         import gmsh
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/3.)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
         geom.model.mesh.generate(1)        
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)

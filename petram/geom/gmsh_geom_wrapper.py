@@ -262,7 +262,8 @@ class Geometry(object):
         return ret
 
     def _boolean_xxx(self, m, input_entity, tool_entity,
-                     removeObject=False, removeTool=False, delete=False):
+                     removeObject=False, removeTool=False,
+                     delete=False):
        
         def get_dimtag(entity):
            dimtags = []
@@ -283,7 +284,7 @@ class Geometry(object):
         dimtag3, dimtagMap = m(dimtag1, dimtag2,
                                removeObject=removeObject,
                                removeTool=removeTool)
-
+        
         return dimtag2id(dimtag3)                
         
     def boolean_intersection(self, input_entity, tool_entity,
@@ -311,7 +312,57 @@ class Geometry(object):
         return self._boolean_xxx('fragment', input_entity, tool_entity,
                                  removeObject=removeObject, removeTool=removeTool,
                                  delete=delete)
+     
+    def boolean_union2d(self, input_entity, tool_entity,
+                      removeObject=False, removeTool=False, delete=False):
+       
+        def get_dimtag(entity):
+           dimtags = []
+           for en in entity:
+               dimtags.append(id2dimtag(en))
+           return dimtags
+       
+
+        all_entity = input_entity + tool_entity     
+        out_entity = self._boolean_xxx('fuse', input_entity, tool_entity,
+                                 removeObject=removeObject, removeTool=removeTool,
+                                 delete=delete)
+        self.factory.synchronize()                
+        print(out_entity)
+        xmax = -np.inf
+        xmin =  np.inf
+        ymax = -np.inf
+        ymin =  np.inf
+        zmax = -np.inf
+        zmin =  np.inf
         
+        def update_maxmin(dim, tag, xmin, ymin, zmin, xmax, ymax, zmax):
+            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)           
+            xmax = np.max([xmax, x2])
+            ymax = np.max([ymax, y2])
+            zmax = np.max([zmax, z2])
+            xmin = np.min([xmin, x1])
+            ymin = np.min([ymin, y1])
+            zmin = np.min([zmin, z1])
+            return xmin, ymin, zmin, xmax, ymax, zmax
+        
+        out_dimtag = get_dimtag(out_entity)
+        for dim, tag in out_dimtag:
+            xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
+                                                               xmin, ymin, zmin,
+                                                               xmax, ymax, zmax)
+        print("bounding box", xmin, ymin, zmin, xmax, ymax, zmax)
+        dx = xmax-xmin
+        dy = ymax-ymin
+        bbx = self.factory.addRectangle(xmin-dx/10., ymin-dy/10., (zmin+zmax)/2.,
+                                        dx*1.2, dy*1.2)
+        out_dimtag2, dimtagMap = self.factory.cut(((2, bbx),), out_dimtag)
+        print(out_dimtag2)
+        bbx = self.factory.addRectangle(xmin-dx/10., ymin-dy/10., (zmin+zmax)/2.,
+                                        dx*1.2, dy*1.2)
+        out_dimtag3, dimtagMap = self.factory.cut(((2,bbx),), out_dimtag2)
+        return dimtag2id(out_dimtag3)                        
+
     def apply_fragments(self):
         self.factory.synchronize()        
         if self.dim == 0: return
@@ -379,7 +430,26 @@ class Geometry(object):
             dimtags.append(id2dimtag(en))
         self.factory.symmetrize(dimtags, a, b, c, d)
         return []
-     
+
+    def extrude(self, entity, translation_axis=None,
+                point_on_axis=None,
+                rotation_axis=None,
+                angle = 0):
+       
+        #for en in entity:
+        dimtags = [id2dimtag(entity)]
+            
+        if translation_axis is not None:
+            tax = translation_axis
+            dimtags2 = self.factory.extrude(dimtags, tax[0], tax[1], tax[2],)
+        else:
+            pax = point_on_axis
+            rax = rotation_axis
+            dimtags2 = self.factory.revolve(dimtags, pax[0], pax[1], pax[2],
+                                          rax[0], rax[1], rax[2], angle)
+        print("extrude out", dimtags2)          
+        return dimtag2id(dimtags2)
+
     def call_synchronize(self):
         self.factory.synchronize()        
         #self.p = len(self.model.getEntities(0))
