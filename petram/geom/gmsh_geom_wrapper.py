@@ -63,7 +63,9 @@ class SurfaceLoopID(GeomIDBase):
        return SurfaceLoopID(-int(self))
 
 def id2dimtag(en):
-    if isinstance(en, LineID):
+    if isinstance(en, VertexID):
+        return (0, int(en))
+    elif isinstance(en, LineID):
         return (1, int(en))
     elif isinstance(en, SurfaceID):
         return (2, int(en))
@@ -74,8 +76,14 @@ def id2dimtag(en):
     else:
         assert False, "Illegal entity"+str(en)
 
+def get_dimtag(entity):
+    dimtags = []
+    for en in entity:
+        dimtags.append(id2dimtag(en))
+    return dimtags
+
 def dimtag2id(dimtags):        
-    out3 = []; out2 = []; out1 = []
+    out3 = []; out2 = []; out1 = []; out0 = []
     for dim, tag in dimtags:
         if dim == 3 and not tag in out3:
            out3.append(VolumeID(tag))                               
@@ -83,8 +91,10 @@ def dimtag2id(dimtags):
            out2.append(SurfaceID(tag))                               
         elif dim == 1 and not tag in out1:
            out1.append(LineID(tag))
-    return out3 + out2 + out1                     
-   
+        elif dim == 0 and not tag in out1:
+           out0.append(VertexID(tag))
+    return out3 + out2 + out1 + out0
+
 class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
@@ -98,12 +108,12 @@ class Geometry(object):
         self.model = gmsh.model
         self.factory = gmsh.model.occ
 
-        self.p = VertexID(0) 
-        self.l = LineID(0)   
-        self.ll = LineLoopID(0)  
-        self.s = SurfaceID(0)   
-        self.sl = SurfaceLoopID(0)
-        self.v = VolumeID(0)      
+        #self.p = VertexID(0) 
+        #self.l = LineID(0)   
+        #self.ll = LineLoopID(0)  
+        #self.s = SurfaceID(0)   
+        #self.sl = SurfaceLoopID(0)
+        #self.v = VolumeID(0)      
 
         self._point = {}
         self._point_mask = []
@@ -178,9 +188,10 @@ class Geometry(object):
      
     def add_point(self, p, lcar=0.0, mask=True):
         p = tuple(p)
-        if not p in self._point_loc:
-            p = self.factory.addPoint(p[0], p[1], p[2], lcar)
-            self._point_loc[p] = VertexID(p)
+        #if not p in self._point_loc:
+        pp = self.factory.addPoint(p[0], p[1], p[2], lcar)
+        self._point_loc[p] = VertexID(pp)
+        print("made point ", pp, p)
             
         p_id = self._point_loc[p]
         self._point[p_id]=np.array(p)
@@ -188,69 +199,70 @@ class Geometry(object):
         return p_id
         
     def add_line(self, p1, p2):
-        self.l = self.factory.addLine(p1, p2)
-        return LineID(self.l)
+        l = self.factory.addLine(p1, p2)
+        return LineID(l)
       
     def add_circle_arc(self, p2, pc, p3):
-        if self.dim < 1: self.dim=1      
-
+        l = self.factory.addCircleArc(p2, pc, p3)
+        return LineID(l)        
 
     def add_spline(self, pts):
-        self.l = self.factory.addSpline(pts)
-        return LineID(self.l)
+        l = self.factory.addSpline(pts)
+        return LineID(l)
 
     def add_plane_surface(self, tags):
         # tags : 1st element exterier, others makes hole
         tags = list(np.atleast_1d(tags))
-        self.s = self.factory.addPlaneSurface(tags)
-        return SurfaceID(self.s)
+        s = self.factory.addPlaneSurface(tags)
+        return SurfaceID(s)
 
     def add_surface_filling(self, ll):
-        self.s = self.factory.addSurfaceFilling(ll)
-        return SurfaceID(self.s)
+        s = self.factory.addSurfaceFilling(ll)
+        return SurfaceID(s)
        
     def add_line_loop(self, pts):
         tags = list(np.atleast_1d(pts))       
-        self.ll = self.factory.addCurveLoop(tags)
-        return LineLoopID(self.ll)
+        ll = self.factory.addCurveLoop(tags)
+        return LineLoopID(ll)
         
     def add_surface_loop(self, sl):
         tags = list(np.atleast_1d(sl))              
-        self.sl = self.factory.addSurfaceLoop(tags)
-        return SurfaceLoopID(self.sl)
+        sl = self.factory.addSurfaceLoop(tags)
+        return SurfaceLoopID(sl)
 
     def add_sphere(self, x, y, z, radius):
-        self.v = self.factory.addSphere(x, y, z, radius)
-        return VolumeID(self.v)
+        v = self.factory.addSphere(x, y, z, radius)
+        return VolumeID(v)
      
     def add_cone(self, x, y, z, dx, dy, dz, r1, r2, angle):
-        self.v = self.factory.addCone(x, y, z, dx, dy, dz, r1, r2, angle=angle)
-        return VolumeID(self.v)
-     
+        v = self.factory.addCone(x, y, z, dx, dy, dz, r1, r2, angle=angle)
+        return VolumeID(v)
+   
     def add_wedge(self, x, y, z, dx, dy, dz, ltx):
-        self.v = self.factory.addWedge(x, y, z, dx, dy, dz, -1, ltx)
-        return VolumeID(self.v)
+        v = self.factory.addWedge(x, y, z, dx, dy, dz, -1, ltx)
+        return VolumeID(v)
+
+    def add_cylinder(self, x, y, z, dx, dy, dz, r, angle):
+        v = self.factory.addCylinder(x, y, z, dx, dy, dz, r, angle=angle)
+        return VolumeID(v)
      
     def add_torus(self, x, y, z, r1, r2, angle):
-        self.v = self.factory.addTorus(x, y, z, r1, r2, -1, angle)
-        return VolumeID(self.v)
+        v = self.factory.addTorus(x, y, z, r1, r2, -1, angle)
+        return VolumeID(v)
         
     def add_volume(self, shells):
         tags = list(np.atleast_1d(shells))              
-        self.v = self.factory.addVolume(tags)
-        return VolumeID(self.v)
+        v = self.factory.addVolume(tags)
+        return VolumeID(v)
      
     def add_ellipse_arc(self, startTag, centerTag, endTag):
-        self.l = self.l + 1
         a =  self._point[startTag] - self._point[centerTag]
         b =  self._point[endTag] - self._point[centerTag]
         if np.sum(a*a) > np.sum(b*b):
-            self.factory.addEllipseArc(startTag, centerTag, endTag,
-                                   tag=self.l)
+            l = self.factory.addEllipseArc(startTag, centerTag, endTag)
         else:
-            self.factory.addEllipseArc(endTag, centerTag, startTag,
-                                   tag=self.l)
-        return self.l
+            l = self.factory.addEllipseArc(endTag, centerTag, startTag)
+        return LineID(l)
                       
     def add_polygon(self, pos, lcar = 0.0):
         pts = [self.add_point(p, lcar=lcar) for p in pos]
@@ -265,12 +277,6 @@ class Geometry(object):
                      removeObject=False, removeTool=False,
                      delete=False):
        
-        def get_dimtag(entity):
-           dimtags = []
-           for en in entity:
-               dimtags.append(id2dimtag(en))
-           return dimtags
-
         dimtag1 = get_dimtag(input_entity)
         dimtag2 = get_dimtag(tool_entity)
                                
@@ -279,8 +285,6 @@ class Geometry(object):
              removeTool=True
 
         m = getattr(self.factory, m)
-        print("remove", removeObject, removeTool)
-        
         dimtag3, dimtagMap = m(dimtag1, dimtag2,
                                removeObject=removeObject,
                                removeTool=removeTool)
@@ -328,7 +332,7 @@ class Geometry(object):
                                  removeObject=removeObject, removeTool=removeTool,
                                  delete=delete)
         self.factory.synchronize()                
-        print(out_entity)
+
         xmax = -np.inf
         xmin =  np.inf
         ymax = -np.inf
@@ -351,13 +355,14 @@ class Geometry(object):
             xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
                                                                xmin, ymin, zmin,
                                                                xmax, ymax, zmax)
-        print("bounding box", xmin, ymin, zmin, xmax, ymax, zmax)
+        dprint1("bounding box", xmin, ymin, zmin, xmax, ymax, zmax)
+        
         dx = xmax-xmin
         dy = ymax-ymin
         bbx = self.factory.addRectangle(xmin-dx/10., ymin-dy/10., (zmin+zmax)/2.,
                                         dx*1.2, dy*1.2)
         out_dimtag2, dimtagMap = self.factory.cut(((2, bbx),), out_dimtag)
-        print(out_dimtag2)
+        #print(out_dimtag2)
         bbx = self.factory.addRectangle(xmin-dx/10., ymin-dy/10., (zmin+zmax)/2.,
                                         dx*1.2, dy*1.2)
         out_dimtag3, dimtagMap = self.factory.cut(((2,bbx),), out_dimtag2)
@@ -447,17 +452,29 @@ class Geometry(object):
             rax = rotation_axis
             dimtags2 = self.factory.revolve(dimtags, pax[0], pax[1], pax[2],
                                           rax[0], rax[1], rax[2], angle)
-        print("extrude out", dimtags2)          
+        dprint1("extrude out", dimtags2)          
         return dimtag2id(dimtags2)
 
     def call_synchronize(self):
         self.factory.synchronize()        
         #self.p = len(self.model.getEntities(0))
 
-       
+    def get_unigue_entity(self, entity):
+        dimtags = get_dimtag(entity)
+        dimtags = [x for x in sorted(dimtags)]
 
+        outdimtags = list(dimtags)
+        self.factory.synchronize()
+        
+        for dimtag in dimtags:
+           bdimtags = self.model.getBoundary((dimtag,), oriented=False, recursive=True)
+           print(bdimtags)                                  
+           for x in bdimtags:
+               if x in outdimtags:
+                   idx = outdimtags.index(x)
+                   del outdimtags[idx]
+        return dimtag2id(outdimtags)
 '''
-   def addCircleArc(startTag, centerTag, endTag, tag=-1, nx=0., ny=0., nz=0.):        
    def addEllipse(x, y, z, r1, r2, tag=-1, angle1=0., angle2=2*pi):
    def addEllipseArc(startTag, centerTag, majorTag, endTag, tag=-1, nx=0., ny=0., nz=0.)
    def addBezier(pointTags, tag=-1)

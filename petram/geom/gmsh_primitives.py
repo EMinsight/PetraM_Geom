@@ -166,16 +166,13 @@ cdata =  (('center', VtableElement('center', type='float',
           ('radius', VtableElement('radius', type='float',
                                    guilabel = 'r',
                                    default = 1.0, 
-                                   tip = "radius" )),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                                   tip = "characteristc length from point" )),)
+                                   tip = "radius" )),)
 
 class Circle(GeomPB):
     vt = Vtable(cdata)
     def build_geom(self, geom, objs):
-        center, ax1, ax2, radius, lcar = self.vt.make_value_or_expression(self)
+        center, ax1, ax2, radius = self.vt.make_value_or_expression(self)
+        lcar = 0.0
         a1 = np.array(ax1);  a2 = np.array(ax2)
         a2 = np.cross(np.cross(a1, a2), a1)
         a1 = a1/np.sqrt(np.sum(a1**2))*radius
@@ -541,11 +538,12 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
           ('zarr', VtableElement('zarr', type='array',
                               guilabel = 'Z',
                               default = '0.0',
-                              tip = "Z" )),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                              tip = "characteristc length from point" )),)
+                              tip = "Z" )),)
+#          ('lcar', VtableElement('lcar', type='float',
+#                                   guilabel = 'lcar',
+#                                   default = 0.0, 
+#                              tip = "characteristc length from point" )),)
+
 class Line(GeomPB):
     vt = Vtable(pdata)
     def attribute_set(self, v):
@@ -575,9 +573,14 @@ class Line(GeomPB):
     def panel1_tip(self):
         tip = GeomPB.panel1_tip(self)
         return tip + ['make spline curve']
+      
+    def _make_value_or_expression(self):
+        #xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)      
+        return self.vt.make_value_or_expression(self)
 
     def build_geom(self, geom, objs):
-        xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
+        xarr, yarr, zarr, = self._make_value_or_expression()
+        lcar = 0.0
         if len(xarr) < 2: return
         try:
            pos = np.vstack((xarr, yarr, zarr)).transpose()
@@ -606,6 +609,8 @@ class Line(GeomPB):
             self._newobjs = [newobj]
         newobj1 = objs.addobj(pts[0], 'pt')
         newobj2 = objs.addobj(pts[-1], 'pt')
+        print("entities(0)", geom.model.getEntities())                     
+        
         self._newobjs.append(newobj1)
         self._newobjs.append(newobj2)
         
@@ -776,9 +781,13 @@ class Extrude(GeomPB):
                           translation_axis=tax,)
                           #rotation_axis=rax,
                           #point_on_axis=pax
-
-             newkeys.append(objs.addobj(ret[0], t))
-             newkeys.append(objs.addobj(ret[1], 'ex'))             
+             from petram.geom.gmsh_geom_model import use_gmsh_api
+             if use_gmsh_api:
+                 newkeys.append(objs.addobj(ret[1], t))
+                 newkeys.append(objs.addobj(ret[0], 'ex'))             
+             else:
+                 newkeys.append(objs.addobj(ret[0], t))
+                 newkeys.append(objs.addobj(ret[1], 'ex'))             
              #for o in ret[2:]:
              #   newkeys.append(objs.addobj(o,  get_geom_key(o))
                                
@@ -819,9 +828,14 @@ class Revolve(GeomPB):
                                 rotation_axis=rax,
                                 point_on_axis=pax,
                                 angle = angle*np.pi/180.)
-
-             newkeys.append(objs.addobj(ret[0], t))
-             newkeys.append(objs.addobj(ret[1], 'ex'))             
+             
+             from petram.geom.gmsh_geom_model import use_gmsh_api
+             if use_gmsh_api:
+                 newkeys.append(objs.addobj(ret[1], t))
+                 newkeys.append(objs.addobj(ret[0], 'ex'))             
+             else:
+                 newkeys.append(objs.addobj(ret[0], t))
+                 newkeys.append(objs.addobj(ret[1], 'ex'))             
              #for o in ret[2:]:
              #   newkeys.append(objs.addobj(o,  get_geom_key(o))
                                
@@ -1258,14 +1272,73 @@ class Fragments(GeomPB_Bool):
         
           
 
-        
 class Point2D(GeomPB):
     pass
-class Line2D(GeomPB):
-    pass
-class Circle2D(GeomPB):
-    pass
 
+pdata =  (('xarr', VtableElement('xarr', type='array',
+                              guilabel = 'X',
+                              default = '0.0',
+                              tip = "X" )),
+          ('yarr', VtableElement('yarr', type='array',
+                              guilabel = 'Y',
+                              default = '0.0',
+                              tip = "Y" )),)
+
+class Line2D(Line):
+    vt = Vtable(pdata)
+    def _make_value_or_expression(self):
+        #xarr, yarr, zarr = self.vt.make_value_or_expression(self)
+        xarr, yarr= self.vt.make_value_or_expression(self)
+        zarr = [0.0 for x in yarr]
+        return xarr, yarr, zarr
+    
+        
+cdata =  (('center', VtableElement('center', type='float',
+                             guilabel = 'Center',
+                             suffix =('x', 'y', ),
+                             default = [0,0,],
+                             tip = "Center of Circle" )),
+          ('ax1', VtableElement('ax1', type='float',
+                                   guilabel = 'axis1',
+                                   suffix =('x', 'y',),
+                                   default = [1, 0, ], 
+                                   tip = "axis 1" )),
+          ('ax2', VtableElement('ax2', type='float',
+                                 guilabel = 'axis2',
+                                 suffix =('x', 'y', ),
+                                 default = [0, 1, ], 
+                                 tip = "axis 2" )),
+          ('radius', VtableElement('radius', type='float',
+                                   guilabel = 'r',
+                                   default = 1.0, 
+                                   tip = "radius" )),)
+
+class Circle2D(GeomPB):
+    vt = Vtable(cdata)
+    def build_geom(self, geom, objs):
+        center, ax1, ax2, radius = self.vt.make_value_or_expression(self)
+        lcar = 0.0
+        a1 = np.array(ax1+[0]);  a2 = np.array(ax2+[0])
+        a2 = np.cross(np.cross(a1, a2), a1)
+        a1 = a1/np.sqrt(np.sum(a1**2))*radius
+        a2 = a2/np.sqrt(np.sum(a2**2))*radius                      
+
+        c =np.array(center+[0])
+        p1 = geom.add_point(c+a1, lcar)
+        p2 = geom.add_point(c+a2, lcar)
+        p3 = geom.add_point(c-a1, lcar)
+        p4 = geom.add_point(c-a2, lcar)                      
+        pc = geom.add_point(c, lcar)
+        ca1 = geom.add_circle_arc(p1, pc, p2)
+        ca2 = geom.add_circle_arc(p2, pc, p3)
+        ca3 = geom.add_circle_arc(p3, pc, p4)
+        ca4 = geom.add_circle_arc(p4, pc, p1)
+        ll1 = geom.add_line_loop([ca1, ca2, ca3, ca4])
+        ps1 = geom.add_plane_surface(ll1)
+        newkey = objs.addobj(ps1, 'ps')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+  
 rdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Corner',
                              suffix =('x', 'y'),
@@ -1350,10 +1423,24 @@ class WorkPlane(GeomPB):
         an = np.arcsin(np.sqrt(np.sum(ax**2)))
         
         tt = [objs[t] for t in objs]
-        
-        geom.translate(tt, c1[0], c1[1], c1[2])        
-        geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
 
+        from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
+
+        print("tt_in", tt)
+        tt = geom.get_unigue_entity(tt)
+        dprint1("tt_out", tt)        
+        #print("entities(1)", geom.model.getEntities())
+        #for t in tt:
+        #     if isinstance(t, SurfaceID): continue
+        #     print("working on t", t)             
+        #     geom.translate([t], c1[0], c1[1], c1[2])
+        #     geom.factory.synchronize()
+        #     print("entities(-1)", geom.model.getEntities())             
+        #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
+        geom.translate(tt, c1[0], c1[1], c1[2])
+        if np.sum(ax**2) != 0.0 and an != 0.0:
+            print(ax, an)
+            geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
         c = np.cos(an); s = np.sin(an)
         R = np.array(
             [[c + (1-c)*ax[0]**2, ax[0]*ax[1]*(1-c)-ax[2]*s, ax[0]*ax[2]*(1-c)+ax[1]*s],
@@ -1365,8 +1452,15 @@ class WorkPlane(GeomPB):
                      
         ax = np.cross(y2, a2)
         an = np.arcsin(np.sqrt(np.sum(ax**2)))
-                     
-        geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
+        
+        #for t in tt:
+        #     if isinstance(t, SurfaceID): continue
+        #     print("working on t", t)             
+        #
+        #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
+        if np.sum(ax**2) != 0.0 and an != 0.0:
+            print(ax, an)          
+            geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
 
         self._newobjs = objs.keys()
         # transform all object in objs (obj in wk)
@@ -1374,7 +1468,7 @@ class WorkPlane(GeomPB):
       
     def get_possible_child(self):
         return [Point2D,  Line2D, Circle2D, Rect2D, Polygon2D, Spline2D,
-               Union, Intersection, Difference, Fragments, Copy, Remove]
+               Union2D, Intersection, Difference, Fragments, Copy, Remove]
 
     def get_possible_child_menu(self):
         return [("", Point2D),("", Line2D), ("", Circle2D), ("", Rect2D),

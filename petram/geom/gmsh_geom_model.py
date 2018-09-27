@@ -117,9 +117,18 @@ def get_geom_key(obj):
     return key
 
 class GeomObjs(dict):
+    def duplicate(self):
+        if not hasattr(self, "_past_keys"):
+            self._past_keys = []            
+        obj = GeomObjs(self)
+        obj._past_keys = self._past_keys
+        return obj
+        
     def addobj(self, obj, name):
-        key = ''.join([i for i in name if not i.isdigit()])        
-        keys = self.keys()
+        key = ''.join([i for i in name if not i.isdigit()])
+        if not hasattr(self, "_past_keys"):
+            self._past_keys = []
+        keys = self._past_keys
         nums = []
         for k in keys:
            t = ''.join([i for i in k if not i.isdigit()])
@@ -131,6 +140,7 @@ class GeomObjs(dict):
         else:
            newkey = key+str(max(nums)+1)
         self[newkey] = obj
+        self._past_keys.append(newkey)
         return newkey
 
 class GmshPrimitiveBase(GeomBase, Vtable_mixin):
@@ -261,9 +271,8 @@ class GmshGeom(GeomTopBase):
                 ]
                 
     def get_special_menu(self):
-        from petram.geom.gmsh_geom_model import use_gmsh_api
         if use_gmsh_api:
-             return [('Build All', self.onBuildAll),]
+            return [('Build All', self.onBuildAll),]
         else:
             return [('Build All', self.onBuildAll),
                     ('Export .geo', self.onExportGeom)]
@@ -376,7 +385,7 @@ class GmshGeom(GeomTopBase):
                 children2 = child.get_children()
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before                
-                objs2 = GeomObjs(objs.copy())
+                objs2 = objs.duplicate()
                 org_keys = objs.keys()
                 do_break = False
                 for child2 in children2:
@@ -437,10 +446,17 @@ class GmshGeom(GeomTopBase):
         dim1_size = min([s[2] for s in ss if s[0]==1])
 
         import gmsh
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
-        geom.model.mesh.generate(1)        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        #print(geom.model.getEntities())
+        geom.model.setVisibility(((3,7), ), False, True)
+
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
+        geom.model.mesh.generate(1)                
         geom.model.mesh.generate(2)        
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops

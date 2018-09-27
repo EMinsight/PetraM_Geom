@@ -243,12 +243,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if use_gmsh_api:
             return [('Build All', self.onBuildAll),
                     ('Export .msh', self.onExportMsh),
-                    ('Clear Mesh', self.onClearMesh)]        
+                    ('Clear Mesh', self.onClearMesh),
+                    ('Clear Mesh Sequense...', self.onClearMeshSq)]                         
         else:
              return [('Build All', self.onBuildAll),
                      ('Export .geo', self.onExportGeom),
                      ('Export .msh', self.onExportMsh),
-                     ('Clear Mesh', self.onClearMesh)]        
+                     ('Clear Mesh', self.onClearMesh),
+                     ('Clear Mesh Sequense...', self.onClearMeshSq)]                 
     
     def onSetDefSize(self, evt):
         geom_root = self.geom_root
@@ -356,7 +358,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             geom_root.onBuildAll(evt)
             
         try:
-            self.build_mesh(geom_root, nochild =True)
+            err = self.build_mesh(geom_root, nochild =True)
+            if err is not None: return
         except:
             import ifigure.widgets.dialog as dialog               
             dialog.showtraceback(parent = dlg,
@@ -366,7 +369,27 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         dlg.OnRefreshTree()
         self.onUpdateMeshView(evt)
         viewer._view_mode_group = ''
-        viewer.set_view_mode('mesh', self)        
+        viewer.set_view_mode('mesh', self)
+        
+    def onClearMeshSq(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        engine = viewer.engine
+        
+        import ifigure.widgets.dialog as dialog
+        ret = dialog.message(parent=dlg,
+                             message='Are you sure to delete all Mesh sequence',
+                             title='Mesh Sequence Delete',
+                             style=2)
+        if ret == 'ok':
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to generate meshing script',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+            
+            for x in self.keys():
+                del self[x]
+            dlg.tree.RefreshItems()
         
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -473,6 +496,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.vt.preprocess_params(self)
 
         if use_gmsh_api:
+            if not hasattr(geom_root, "_gmsh4_data"): return -1
             geom = geom_root._gmsh4_data[-1]
             def mmax(l):
                 if len(l) == 0: return 0
