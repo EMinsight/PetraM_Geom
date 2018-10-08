@@ -170,6 +170,20 @@ class Geometry(object):
             s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
             size.append((dim, tag, s))
         return size
+     
+    def getVertexCL(self):
+        from collections import defaultdict
+        
+        lcar = defaultdict(lambda: np.inf)
+        
+        for dim, tag in self.model.getEntities(1):
+            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)
+            s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
+            bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
+            for bdim, btag in bdimtags:
+                lcar[btag] = min((lcar[btag], s))
+        return dict(lcar)
+               
        
     @staticmethod
     def write(filename):
@@ -191,7 +205,7 @@ class Geometry(object):
         #if not p in self._point_loc:
         pp = self.factory.addPoint(p[0], p[1], p[2], lcar)
         self._point_loc[p] = VertexID(pp)
-        print("made point ", pp, p)
+        #print("made point ", pp, p)
             
         p_id = self._point_loc[p]
         self._point[p_id]=np.array(p)

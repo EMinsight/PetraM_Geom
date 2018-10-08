@@ -450,21 +450,48 @@ vtdata =  (('center', VtableElement('center', type='float',
           ('angle', VtableElement('angle', type='float',
                                guilabel = 'Angle',
                                default = 360,
-                               tip = "angle")),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                                   tip = "characteristc length from point" )),)
+                               tip = "angle")),)
+
 class Cylinder(GeomPB):  
     vt = Vtable(vtdata)
     def build_geom(self, geom, objs):
-        x0,  d0,  r1,  angle, lcar = self.vt.make_value_or_expression(self)
+        x0,  d0,  r1,  angle = self.vt.make_value_or_expression(self)
 
-        v1 = geom.add_cylinder(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
-                           r1, angle/180*np.pi)
-        newkey = objs.addobj(v1, 'cn')
+        
+        lcar = 0.0
+        d0 = np.array(d0)
+        if np.sum(d0*np.array([1,0,0])) > np.sum(d0*np.array([0,1,0])):
+           a1 = np.cross(d0, [0, 1, 0])
+        else:
+           a1 = np.cross(d0, [1, 0, 0])
+        a2 = np.cross(d0, a1)   
+
+        a1 = a1/np.sqrt(np.sum(a1**2))*r1
+        a2 = a2/np.sqrt(np.sum(a2**2))*r1
+
+        c =np.array(x0)
+        p1 = geom.add_point(c+a1, lcar)
+        p2 = geom.add_point(c+a2, lcar)
+        p3 = geom.add_point(c-a1, lcar)
+        p4 = geom.add_point(c-a2, lcar)                      
+        pc = geom.add_point(c, lcar)
+        ca1 = geom.add_circle_arc(p1, pc, p2)
+        ca2 = geom.add_circle_arc(p2, pc, p3)
+        ca3 = geom.add_circle_arc(p3, pc, p4)
+        ca4 = geom.add_circle_arc(p4, pc, p1)
+        ll1 = geom.add_line_loop([ca1, ca2, ca3, ca4])
+        ps1 = geom.add_plane_surface(ll1)
+        
+        ret = geom.extrude(ps1, translation_axis=d0,)
+        newkey = objs.addobj(ret[0], 'cn')
         self._objkeys = objs.keys()
         self._newobjs = [newkey]
+        
+        #v1 = geom.add_cylinder(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
+        #                   r1, angle/180*np.pi)
+        #newkey = objs.addobj(v1, 'cn')
+        #self._objkeys = objs.keys()
+        #self._newobjs = [newkey]
         
 vtdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Corner',
@@ -889,29 +916,15 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
                                           tip = "object to move")), 
-          ('cx', VtableElement('cx', type='float',
-                                   guilabel = 'x(center)',
-                                   default = '0.0',
+          ('ctr_rot', VtableElement('ctr_rot', type='float',
+                                   guilabel = 'Center',
+                                   suffix = ('x', 'y', 'z'), 
+                                   default = [0,0,0],
                                    tip = "point on revolustion axis")),            
-          ('cy', VtableElement('cy', type='float',
-                                   guilabel = 'y(center)',
-                                   default = '0.0',
-                                   tip = "point on revolustion axis")),           
-          ('cz', VtableElement('cz', type='float',
-                                   guilabel = 'z(center)',
-                                   default = '0.0',
-                                   tip = "point on revolustion axis")),
-          ('ax', VtableElement('ax', type='float',
-                                   guilabel = 'ax',
-                                   default = '0.0',
-                                   tip = "direction of revolustion axis")),
-          ('ay', VtableElement('ay', type='float',
-                                   guilabel = 'ay',
-                                   default = '0.0',
-                                   tip = "direction of revolustion axis")),
-          ('az', VtableElement('az', type='float',
-                                   guilabel = 'az',
-                                   default = '0.0',
+          ('ax_rot', VtableElement('ax_rot', type='float',
+                                   guilabel = 'Axis',
+                                   suffix = ('x', 'y', 'z'),                                    
+                                   default = [0., 0., 0.0],
                                    tip = "direction of revolustion axis")),
           ('angle', VtableElement('angle', type='float',
                                    guilabel = 'angle',
@@ -925,7 +938,9 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 class Rotate(GeomPB):
     vt = Vtable(data0)
     def build_geom(self, geom, objs):          
-        targets, cx, cy, cz, ax, ay, az, angle, keep  = self.vt.make_value_or_expression(self)
+        targets, cc, aa,  angle, keep  = self.vt.make_value_or_expression(self)
+        cx, cy, cz = cc
+        ax, ay, az = aa
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
@@ -942,41 +957,28 @@ class Rotate(GeomPB):
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
-                                          tip = "object to move")), 
-          ('cx', VtableElement('cx', type='float',
-                                   guilabel = 'x(center)',
-                                   default = '0.0',
-                                   tip = "point on revolustion axis")),            
-          ('cy', VtableElement('cy', type='float',
-                                   guilabel = 'y(center)',
-                                   default = '0.0',
-                                   tip = "point on revolustion axis")),           
-          ('cz', VtableElement('cz', type='float',
-                                   guilabel = 'z(center)',
-                                   default = '0.0',
-                                   tip = "point on revolustion axis")),
-          ('scalex', VtableElement('scalex', type='float',
-                                   guilabel = 'X scale',
-                                   default = '0.0',
-                                   tip = "direction of revolustion axis")),
-          ('scaley', VtableElement('scaley', type='float',
-                                   guilabel = 'Y scale',
-                                   default = '0.0',
-                                   tip = "direction of revolustion axis")),
-          ('scalez', VtableElement('scalez', type='float',
-                                   guilabel = 'Z scale',
-                                   default = '0.0',
-                                   tip = "direction of revolustion axis")),
+                                          tip = "object to move")),
+          ('ctr_scale', VtableElement('ctr_scale', type='float',
+                                   guilabel = 'Center',
+                                   suffix = ('x', 'y', 'z'), 
+                                   default = [0,0,0],
+                                   tip = "center of scale")),            
+          ('size_scale', VtableElement('size_scale', type='float',
+                                   guilabel = 'Scale',
+                                   suffix = ('x', 'y', 'z'),                                    
+                                   default = [1., 1., 1.],
+                                   tip = "scale size")),
           ('keep_org', VtableElement('kepp_org', type='bool',
                                       guilabel = 'Copy',
                                       default = True,
                                       tip = "Keep original")), )
 
-  
 class Scale(GeomPB):  # Dilate in gmsh
     vt = Vtable(data0)
     def build_geom(self, geom, objs):          
-        targets, cx, cy, cz, sx, sy, sz, keep  = self.vt.make_value_or_expression(self)
+        targets,  cc, ss, keep  = self.vt.make_value_or_expression(self)
+        cx, cy, cz = cc
+        sx, sy, sz = ss
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
@@ -1384,14 +1386,187 @@ class Polygon2D(GeomPB):
     pass
 class Spline2D(GeomPB):
     pass
-class Move2D(GeomPB):
-    pass
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('dx', VtableElement('dx', type='float',
+                                   guilabel = 'dx',
+                                   default = '0.0',
+                                   tip = "x-displacement")),
+          ('dy', VtableElement('dy', type='float',
+                                   guilabel = 'dy',
+                                   default = '0.0',                               
+                                   tip = "x-displacement")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
+
+
+class Move2D(GeomPB): # tanslate in gmsh
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, dx, dy, keep  = self.vt.make_value_or_expression(self)
+        dz = 0.0
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        if keep:
+           tt = geom.copy(tt)          
+        geom.translate(tt, dx, dy, dz)
+        if keep:
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'mv'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+        
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('ctr_rot', VtableElement('ctr_rot', type='float',
+                                    guilabel = 'Center',
+                                    suffix = ('x', 'y',),
+                                    default = [0,0],
+                                    tip = "point on revolustion axis")),
+          ('angle', VtableElement('angle', type='float',
+                                   guilabel = 'angle',
+                                   default = '0.0',
+                                   tip = "angle of revoluiton")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
+        
 class Rotate2D(GeomPB):
-    pass
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, cc, angle, keep  = self.vt.make_value_or_expression(self)
+        cx, cy= cc; cz = 0.0
+        ax, ay, az = 0.0, 0.0, 1.0
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]        
+        if keep:
+           tt = geom.copy(tt)          
+        geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)
+        if keep:
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'rot'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")), 
+          ('flip_ax', VtableElement('flip_ax', type='float',
+                                    guilabel = 'Flip Axis X',
+                                    default = '0.0',
+                                    tip = "direction on flip axis")),            
+          ('flip_ay', VtableElement('flip_ay', type='float',
+                                    guilabel = 'Flip Axis Y',
+                                    default = '0.0',
+                                    tip = "direction on flip axis")),           
+          ('flip_d', VtableElement('flip_d', type='float',
+                                   guilabel = 'Offset', 
+                                   default = '0.0',
+                                   tip = "direction of revolustion axis")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
+
 class Flip2D(GeomPB):
-    pass
-class Scale2D(GeomPB):
-    pass
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets, a, b, d,  keep  = self.vt.make_value_or_expression(self)
+        c = 0.0
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        if keep:
+           tt = geom.copy(tt)          
+        geom.symmetrize(tt, a, b, c, d)
+        if keep:
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'flp'))          
+
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+  
+data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")),
+          ('ctr_scale', VtableElement('ctr_scale', type='float',
+                                   guilabel = 'Center',
+                                   suffix = ('x', 'y'), 
+                                   default = [0., 0.],
+                                   tip = "center of scale")),            
+          ('size_scale', VtableElement('size_scale', type='float',
+                                   guilabel = 'Scale',
+                                   suffix = ('x', 'y'),                                    
+                                   default = [1., 1.],
+                                   tip = "scale size")),
+          ('keep_org', VtableElement('kepp_org', type='bool',
+                                      guilabel = 'Copy',
+                                      default = True,
+                                      tip = "Keep original")), )
+
+class Scale2D(GeomPB):  # Dilate in gmsh
+    vt = Vtable(data0)
+    def build_geom(self, geom, objs):          
+        targets,  cc, ss, keep  = self.vt.make_value_or_expression(self)
+        cx, cy = cc; cz = 0.0
+        sx, sy = ss; sz = 1.0
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        if keep:
+           tt = geom.copy(tt)          
+        geom.dilate(tt, cx, cy, cz, sx, sy, sz)
+        if keep:
+            for t in tt:
+                newkeys.append(objs.addobj(t, 'sc'))          
+
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+  
+class Array2D(GeomPB):
+    data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")),   
+              ('array_count', VtableElement('array_count', type='int',
+                                            guilabel = 'Count', default = 1,
+                                            tip = "Center of Circle" )),
+              ('displacement', VtableElement('displacement', type='float',
+                               guilabel = 'displacement',
+                               suffix =('x', 'y',),
+                               default = [1, 0, ], 
+                               tip = "displacemnt" )),)
+    vt = Vtable(data0)  
+    def build_geom(self, geom, objs):          
+        targets, count, displacement  = self.vt.make_value_or_expression(self)
+        dx, dy = displacement
+        dz = 0.0
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = [objs[t] for t in targets]
+        for i in range(count):
+           tt = geom.copy(tt)          
+           geom.translate(tt, dx, dy, dz)
+           for t in tt:
+                newkeys.append(objs.addobj(t, 'cp'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
 
 data0 = (('center', VtableElement('center', type='float',
                                  guilabel = 'Center',
@@ -1474,6 +1649,6 @@ class WorkPlane(GeomPB):
         return [("", Point2D),("", Line2D), ("", Circle2D), ("", Rect2D),
                 ("", Polygon2D), ("", Spline2D),
                 ("", Copy), ("", Remove),
-                ("Translate...", Move2D,), ("", Rotate2D),("", Flip2D),("!", Scale2D),
+                ("Translate...", Move2D,), ("", Rotate2D),("", Flip2D),("", Scale2D),("!", Array2D, "Array"),
                 ("Boolean...", Union2D, "Union"),("",Intersection),("",Difference),("!",Fragments),
                 ]      

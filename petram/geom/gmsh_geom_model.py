@@ -223,12 +223,16 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
+        if mm is None: return
+        
         self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
+        if mm is None: return
+        
         self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
@@ -248,6 +252,7 @@ class GmshGeom(GeomTopBase):
         v = super(GmshGeom, self).attribute_set(v)
         v['geom_finalized'] = False
         v['geom_timestamp'] = 0
+        v['geom_prev_algorithm'] = 2
         return v
         
     def get_possible_child(self):
@@ -278,17 +283,26 @@ class GmshGeom(GeomTopBase):
                     ('Export .geo', self.onExportGeom)]
     
     def panel1_param(self):
+        import wx
         return [["", "Geometry model using GMSH", 2, None],
+                ["PreviewAlgorith", "Automatic", 4, {"style":wx.CB_READONLY,
+                                                     "choices": ["Auto", "MeshAdpat",
+                                                                 "Delaunay", "Frontal"]}],
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
-                
+
     def get_panel1_value(self):
-        return [None, self]
+        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
+        txt = aname[self.geom_prev_algorithm]
+        return [None, txt, self]
        
     def import_panel1_value(self, v):
-        pass
-    
+        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
+        print("import", v[1])
+        for k in aname:
+            if v[1] == aname[k]:
+                self.geom_prev_algorithm = k
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -442,21 +456,28 @@ class GmshGeom(GeomTopBase):
         # here we ask for 2D mesh for plotting.
         # size control is done based on geometry size.
         ss = geom.getObjSizes()
-        dim2_size = min([s[2] for s in ss if s[0]==2])
-        dim1_size = min([s[2] for s in ss if s[0]==1])
+        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
+        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
+
+        vcl = geom.getVertexCL()
+        print("vertec cl", vcl)
+        for tag in vcl:
+           geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
 
         import gmsh
         #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
         #print(geom.model.getEntities())
-        geom.model.setVisibility(((3,7), ), False, True)
+        #geom.model.setVisibility(((3,7), ), False, True)
 
         #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
         #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
         #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
-        geom.model.mesh.generate(1)                
+        geom.model.mesh.generate(1)
+        print("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
         geom.model.mesh.generate(2)        
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops
