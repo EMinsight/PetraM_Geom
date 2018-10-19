@@ -253,6 +253,7 @@ class GmshGeom(GeomTopBase):
         v['geom_finalized'] = False
         v['geom_timestamp'] = 0
         v['geom_prev_algorithm'] = 2
+        v['geom_prev_res'] = 30
         return v
         
     def get_possible_child(self):
@@ -288,6 +289,7 @@ class GmshGeom(GeomTopBase):
                 ["PreviewAlgorith", "Automatic", 4, {"style":wx.CB_READONLY,
                                                      "choices": ["Auto", "MeshAdpat",
                                                                  "Delaunay", "Frontal"]}],
+                ["PreviewResolution", 30,  400, None],
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
@@ -295,7 +297,7 @@ class GmshGeom(GeomTopBase):
     def get_panel1_value(self):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
         txt = aname[self.geom_prev_algorithm]
-        return [None, txt, self]
+        return [None, txt, self.geom_prev_res, self]
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
@@ -303,6 +305,8 @@ class GmshGeom(GeomTopBase):
         for k in aname:
             if v[1] == aname[k]:
                 self.geom_prev_algorithm = k
+
+        self.geom_prev_res = long(v[2])
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -459,6 +463,9 @@ class GmshGeom(GeomTopBase):
         dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
         dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
 
+        xmin, xmax, ymin, ymax, zmin,zmax = geom.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+
         vcl = geom.getVertexCL()
         print("vertec cl", vcl)
         for tag in vcl:
@@ -466,7 +473,8 @@ class GmshGeom(GeomTopBase):
 
         import gmsh
         #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+
+
         #print(geom.model.getEntities())
         #geom.model.setVisibility(((3,7), ), False, True)
 
@@ -475,9 +483,13 @@ class GmshGeom(GeomTopBase):
         #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
         #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)        
         geom.model.mesh.generate(1)
         print("Mesh.Algorithm", self.geom_prev_algorithm)
         gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
         geom.model.mesh.generate(2)        
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops

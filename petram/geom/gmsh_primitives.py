@@ -615,6 +615,11 @@ class Line(GeomPB):
            print("can not make proper input array")
            return
 
+        dist = np.sqrt(np.sum((pos[:-1,:]- pos[1:,:])**2,1))
+        if min(dist) == 0.0:
+           assert False, "minimum distance between point is 0.0"
+        if max(dist) > min(dist)*1e4:
+           assert False, "some points are too close (d_max > d_min*1e4)"
         pts = []
         for ii, p in enumerate(pos):
             pt = geom.add_point(p, lcar,
@@ -631,12 +636,12 @@ class Line(GeomPB):
                 newkeys.append(objs.addobj(ln, 'ln'))
             self._newobjs = newkeys
         else:     
-            spline = geom.add_spline(pts)
+            spline = geom.add_spline(pts, remove_control=True)
             newobj = objs.addobj(spline, 'sp')
             self._newobjs = [newobj]
         newobj1 = objs.addobj(pts[0], 'pt')
         newobj2 = objs.addobj(pts[-1], 'pt')
-        print("entities(0)", geom.model.getEntities())                     
+        #print("entities(0)", geom.model.getEntities())                     
         
         self._newobjs.append(newobj1)
         self._newobjs.append(newobj2)
@@ -646,7 +651,8 @@ class Line(GeomPB):
 class Polygon(GeomPB):
     vt = Vtable(pdata)
     def build_geom(self, geom, objs):
-        xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
+        xarr, yarr, zarr = self.vt.make_value_or_expression(self)
+        lcar = 0.0
         if len(xarr) < 2: return
         try:
            pos = np.vstack((xarr, yarr, zarr)).transpose()
@@ -717,6 +723,9 @@ class LineLoop(GeomPB):
         pts = [x.strip() for x in pts[0].split(',')]
         
         pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        for x in pts:
+           if x.startswith('-'): del objs[x[1:]]
+           else: del objs[x]
         
         spline = geom.add_line_loop(pts)
         newobj = objs.addobj(spline, 'll')
@@ -731,9 +740,13 @@ class CreateSurface(GeomPB):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
         
-        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        
-        ll = geom.add_line_loop(pts)
+        objid = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        objsign = [not x.startswith('-') for x in pts]        
+        for x in pts:
+           if x.startswith('-'): del objs[x[1:]]
+           else: del objs[x]
+           
+        ll = geom.add_line_loop(objid, objsign)
         newobj1 = objs.addobj(ll, 'll')
         surface = geom.add_plane_surface(ll)
         newobj2 = objs.addobj(surface, 'ps')
@@ -1378,11 +1391,40 @@ class Rect2D(GeomPB):
         newkey = objs.addobj(rec1, 'rec')
         self._objkeys = objs.keys()
         self._newobjs = [newkey]
-  
+        
+pdata =  (('xarr', VtableElement('xarr', type='array',
+                              guilabel = 'X',
+                              default = '0.0',
+                              tip = "X" )),
+          ('yarr', VtableElement('yarr', type='array',
+                              guilabel = 'Y',
+                              default = '0.0',
+                              tip = "Y" )),)
 class Polygon2D(GeomPB):
+    vt = Vtable(pdata)
+    def build_geom(self, geom, objs):
+        xarr, yarr = self.vt.make_value_or_expression(self)
+        zarr = [0]*len(yarr)
+        lcar = 0.0
+        if len(xarr) < 2: return
+        try:
+           pos = np.vstack((xarr, yarr, zarr)).transpose()
+        except:
+           print("can not make proper input array")
+           return
+        # check if data is already closed...
+        if np.abs(np.sum((pos[0] - pos[-1])**2)) < 1e-17:
+            pos = pos[:-1]
+        poly = geom.add_polygon(pos, lcar = lcar)
+
+        # apparently I should use this object (poly.surface)...?
+        newkey = objs.addobj(poly.surface, 'pol')
+        self._objkeys = objs.keys()
+        self._newobjs = [newkey]
+  
+class Spline2D(Spline):
     pass
-class Spline2D(GeomPB):
-    pass
+  
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
@@ -1599,7 +1641,7 @@ class WorkPlane(GeomPB):
         from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
 
         print("tt_in", tt)
-        tt = geom.get_unigue_entity(tt)
+        tt = geom.get_unique_entity(tt)
         dprint1("tt_out", tt)        
         #print("entities(1)", geom.model.getEntities())
         #for t in tt:
@@ -1640,11 +1682,13 @@ class WorkPlane(GeomPB):
       
     def get_possible_child(self):
         return [Point2D,  Line2D, Circle2D, Rect2D, Polygon2D, Spline2D,
-               Union2D, Intersection, Difference, Fragments, Copy, Remove]
+                Union2D, Intersection, Difference, Fragments, Copy, Remove,
+               CreateLine, CreateSurface]
 
     def get_possible_child_menu(self):
         return [("", Point2D),("", Line2D), ("", Circle2D), ("", Rect2D),
                 ("", Polygon2D), ("", Spline2D),
+                ("", CreateLine), ("", CreateSurface),
                 ("", Copy), ("", Remove),
                 ("Translate...", Move2D,), ("", Rotate2D),("", Flip2D),("", Scale2D),("!", Array2D, "Array"),
                 ("Boolean...", Union2D, "Union"),("",Intersection),("",Difference),("!",Fragments),

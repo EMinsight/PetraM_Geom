@@ -1,3 +1,4 @@
+
 from __future__ import print_function
 
 import numpy as np
@@ -220,27 +221,59 @@ class Geometry(object):
         l = self.factory.addCircleArc(p2, pc, p3)
         return LineID(l)        
 
-    def add_spline(self, pts):
+    def add_spline(self, pts, remove_control=True):
         l = self.factory.addSpline(pts)
+        if remove_control:
+           dimtags = [(0, x) for x in pts[1:-1]]
+           self.factory.remove(dimtags)
         return LineID(l)
 
     def add_plane_surface(self, tags):
         # tags : 1st element exterier, others makes hole
         tags = list(np.atleast_1d(tags))
+        #self.factory.synchronize()                        
         s = self.factory.addPlaneSurface(tags)
+        #self.factory.synchronize()                                
         return SurfaceID(s)
 
     def add_surface_filling(self, ll):
         s = self.factory.addSurfaceFilling(ll)
         return SurfaceID(s)
        
-    def add_line_loop(self, pts):
-        tags = list(np.atleast_1d(pts))       
-        ll = self.factory.addCurveLoop(tags)
+    def add_line_loop(self, pts, sign=None):
+        tags = list(np.atleast_1d(pts))
+        if sign is not None:
+           for k, v in enumerate(sign):
+               if not v: tags[k] = -tags[k]
+              
+        print("line loop", tags)               
+
+        #self.factory.synchronize()                                
+        #en1 = self.model.getEntities(1)
+        
+        ll = self.factory.addWire(tags, checkClosed=True)
+
+        #self.factory.synchronize()                                
+        #en2 = self.model.getEntities(1)
+        #if len(en1) != len(en2):
+        #  print("removing", tags[-1])
+        #  self.factory.remove(((1, abs(tags[-1])),))
+
+        # (note)
+        #   somehow, addWire create a duplicated line sometimes
+        #   here I delete input lines to enforce re-numbering.
+        #
+        dimtags = [(1, x) for x in tags]
+        self.factory.remove(dimtags)
+           
+        #self.factory.synchronize()
+        #en3 = self.model.getEntities(1)
+        #print(en1, en2, en3)
         return LineLoopID(ll)
         
     def add_surface_loop(self, sl):
-        tags = list(np.atleast_1d(sl))              
+        tags = list(np.atleast_1d(sl))
+
         sl = self.factory.addSurfaceLoop(tags)
         return SurfaceLoopID(sl)
 
@@ -473,20 +506,42 @@ class Geometry(object):
         self.factory.synchronize()        
         #self.p = len(self.model.getEntities(0))
 
-    def get_unigue_entity(self, entity):
+    def recursive_getBdry(self, dimtag, bdr=None):
+        if bdr is None: bdr = []
+        bb = self.model.getBoundary((dimtag,), oriented=False,)
+        bdr.extend(bb)
+
+        for x in bb:
+           if x[0] > 0:
+               bdr = self.recursive_getBdry(x, bdr=bdr)
+        return bdr
+       
+    def get_unique_entity(self, entity):
+        entity = [x for x in entity if isinstance(x, GeomIDBase)
+                  and not isinstance(x, LineLoopID)
+                  and not isinstance(x, SurfaceLoopID)]
         dimtags = get_dimtag(entity)
         dimtags = [x for x in sorted(dimtags)]
 
-        outdimtags = list(dimtags)
         self.factory.synchronize()
-        
-        for dimtag in dimtags:
-           bdimtags = self.model.getBoundary((dimtag,), oriented=False, recursive=True)
-           print(bdimtags)                                  
+
+        allent = self.model.getEntities()
+        print('all', allent)
+        dimtags = [x for x in dimtags if x in allent]
+        outdimtags = dimtags[:]
+
+        print('input', dimtags)
+        for dimtag in reversed(dimtags):
+           bdimtags = self.recursive_getBdry(dimtag)
+           print("checking", dimtag, bdimtags)
            for x in bdimtags:
                if x in outdimtags:
                    idx = outdimtags.index(x)
                    del outdimtags[idx]
+               if not x in allent:
+                   idx = outdimtags.index(x)
+                   del outdimtags[idx]
+        print('output', outdimtags)                                                     
         return dimtag2id(outdimtags)
 '''
    def addEllipse(x, y, z, r1, r2, tag=-1, angle1=0., angle2=2*pi):
