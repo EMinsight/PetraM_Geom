@@ -320,6 +320,12 @@ class Geometry(object):
         ret =  Polygon(sl, ll, lcar)
         return ret
 
+    def import_shapes(self, fileName, highestDimOnly=True, format=""):
+        out_dimtags = self.factory.importShapes(fileName,
+                                                highestDimOnly=highestDimOnly,
+                                                format="")
+        return dimtag2id(out_dimtags)
+     
     def _boolean_xxx(self, m, input_entity, tool_entity,
                      removeObject=False, removeTool=False,
                      delete=False):

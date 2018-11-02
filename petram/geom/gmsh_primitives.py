@@ -114,7 +114,6 @@ invalid_pdata = (('NotUsedValue', VtableElement('NotUsedValue', type='array',
                                   guilabel = 'not_implemented',
                                   default = '0.0',
                                   tip = "This panel is not implemented" )),)
-
 pdata = (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
                               default = '0.0',
@@ -1686,10 +1685,54 @@ class WorkPlane(GeomPB):
                CreateLine, CreateSurface]
 
     def get_possible_child_menu(self):
-        return [("", Point2D),("", Line2D), ("", Circle2D), ("", Rect2D),
-                ("", Polygon2D), ("", Spline2D),
+        return [("", Point2D, "Point"),("", Line2D, "Line"), ("", Circle2D, "Circle"),
+                ("", Rect2D, "Rect"), ("", Polygon2D, "Polygon"), ("", Spline2D, "Spline"),
                 ("", CreateLine), ("", CreateSurface),
                 ("", Copy), ("", Remove),
-                ("Translate...", Move2D,), ("", Rotate2D),("", Flip2D),("", Scale2D),("!", Array2D, "Array"),
-                ("Boolean...", Union2D, "Union"),("",Intersection),("",Difference),("!",Fragments),
-                ]      
+                ("Translate...", Move2D, "Move"), ("", Rotate2D, "Rotate"),
+                ("", Flip2D, "Flip"),("", Scale2D, "Scale"),("!", Array2D, "Array"),
+                ("Boolean...", Union2D, "Union"),
+                ("",Intersection),("",Difference),("!",Fragments),
+                ]
+      
+class CADImport(GeomPB):
+    vt = Vtable(tuple())
+    def panel1_param(self):
+        from wx import BU_EXACTFIT
+        b1 = {"label": "S", "func": self.onBuildBefore,
+              "noexpand": True, "style": BU_EXACTFIT}
+        b2 = {"label": "R", "func": self.onBuildAfter,
+              "noexpand": True, "style": BU_EXACTFIT}
+        wc = "ANY|*|STEP|*.stp|IGES|*.igs"        
+        ll = [[None, None, 241, {'buttons':[b1,b2],
+                                 'alignright':True,
+                                 'noexpand': True},],
+              ["File(STEP/IGES)", None, 45, {'wildcard':wc}],]
+        return ll
+      
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        v["cad_file"] = ""
+        return v
+        
+    def get_panel1_value(self):
+        return [None, self.cad_file, None]
+
+    def preprocess_params(self, engine):
+        return
+
+    def import_panel1_value(self, v):
+        self.cad_file = str(v[1])
+
+    def panel1_tip(self):
+        return [None, None, None]
+  
+    def build_geom(self, geom, objs):
+        PTs = geom.import_shapes(self.cad_file)
+        # apparently I should use this object (poly.surface)...?
+        self._newobjs = []        
+        for p in PTs:
+           newkey = objs.addobj(p, 'cd')
+           self._newobjs.append(newkey)
+        self._objkeys = objs.keys()
+

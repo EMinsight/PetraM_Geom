@@ -248,6 +248,12 @@ class GmshGeom(GeomTopBase):
     def is_finalized(self):
         return self.geom_finalized
     
+    @property    
+    def build_stop(self):
+        if not hasattr(self, "_build_stop"):
+            self._build_stop = (None, None)
+        return self._build_stop
+    
     def attribute_set(self, v):
         v = super(GmshGeom, self).attribute_set(v)
         v['geom_finalized'] = False
@@ -257,11 +263,11 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),
                 ("3D shape...", Box),
@@ -273,7 +279,7 @@ class GmshGeom(GeomTopBase):
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("!", Scale),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
-                ("", WorkPlane),
+                ("", WorkPlane),("", CADImport),
                 ]
                 
     def get_special_menu(self):
@@ -384,6 +390,8 @@ class GmshGeom(GeomTopBase):
 
 
     def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
+        self._build_stop = (None, None)
+        
         children = [x for x in self.walk()]
         children = children[1:]
         for child in children:
@@ -425,9 +433,9 @@ class GmshGeom(GeomTopBase):
                 for x in objs2: objs[x] = objs2[x]
                 
                 if do_break: break
-                if child is stop2: break            # for build after                
-#            if globals()['gmsh_Major']==4 and use_gmsh_api:
-#                geom.call_synchronize()
+                if child is stop2: break            # for build after
+        if stop1 is not None: self._build_stop = (stop1, None)
+        if stop2 is not None: self._build_stop = (None, stop2)
     
     def build_geom4(self, stop1=None, stop2=None, filename = None,
                     finalize = False, no_mesh=False):        
