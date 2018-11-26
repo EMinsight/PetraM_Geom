@@ -263,13 +263,13 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
-                ("", Spline),
+                ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
@@ -277,7 +277,7 @@ class GmshGeom(GeomTopBase):
                 ("", LineLoop), ("", SurfaceLoop),
                 ("", Extrude), ("", Revolve),
                 ("", Copy), ("", Remove),
-                ("Translate...", Move,), ("", Rotate),("", Flip),("!", Scale),
+                ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),("!", Array),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
                 ("", WorkPlane),("", CADImport),
                 ]
@@ -475,7 +475,7 @@ class GmshGeom(GeomTopBase):
         modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
 
         vcl = geom.getVertexCL()
-        print("vertec cl", vcl)
+        #print("vertec cl", vcl)
         for tag in vcl:
            geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
 
@@ -492,11 +492,13 @@ class GmshGeom(GeomTopBase):
         #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
         #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
 
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
         geom.model.mesh.generate(1)
         print("Mesh.Algorithm", self.geom_prev_algorithm)
         gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
         geom.model.mesh.generate(2)        
 

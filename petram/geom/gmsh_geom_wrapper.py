@@ -320,6 +320,29 @@ class Geometry(object):
         ret =  Polygon(sl, ll, lcar)
         return ret
 
+    def fillet(self, volumes, curves, radii, removeVolume=True):
+        volumeTags = list(np.atleast_1d(volumes))
+        curveTags = list(np.atleast_1d(curves))
+        radii = list(np.atleast_1d(radii))
+        print(volumeTags, curveTags, radii)
+        outTags = self.factory.fillet(volumeTags,
+                                curveTags,
+                                radii,
+                                removeVolume=removeVolume)
+        return [VolumeID(v[1]) for v in outTags]        
+
+    def chamfer(self, volumes, curves, surfaces, distances, removeVolume=True):
+        volumeTags = list(np.atleast_1d(volumes))
+        curveTags = list(np.atleast_1d(curves))
+        surfaceTags = list(np.atleast_1d(surfaces))        
+        distances = list(np.atleast_1d(distances))
+        outTags = self.factory.chamfer(volumeTags,
+                                       curveTags,
+                                       surfacesTags,
+                                       distances,
+                                       removeVolume=removeVolume)
+        return [VolumeID(v[1]) for v in outTags]        
+     
     def import_shapes(self, fileName, highestDimOnly=True, format=""):
         out_dimtags = self.factory.importShapes(fileName,
                                                 highestDimOnly=highestDimOnly,
