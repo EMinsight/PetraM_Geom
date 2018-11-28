@@ -115,12 +115,12 @@ boolean operation
 def get_target1(objs, targets, cls):
     from petram.geom.gmsh_geom_wrapper import LineID, VertexID, SurfaceID, VolumeID  
     # this is when target type is given
-    if cls == 'l': class=LineID
-    if cls == 'v': class=VolumeID
-    if cls == 's': class=SurfaceID
-    if cls == 'p': class=VertexID    
+    if cls == 'l': cc = LineID
+    if cls == 'v': cc = VolumeID
+    if cls == 's': cc = SurfaceID
+    if cls == 'p': cc = VertexID    
     
-    return [objs[t] if t in objs else class(t)  for t in targets]
+    return [objs[t] if t in objs else cc(t)  for t in targets]
 
 def get_target2(objs, targets):
     # this is when target type is given
