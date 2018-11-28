@@ -1,3 +1,4 @@
+
 import numpy as np
 from collections import defaultdict
 
@@ -111,6 +112,33 @@ boolean operation
    Fragments
 
 '''
+def get_target1(objs, targets, cls):
+    from petram.geom.gmsh_geom_wrapper import LineID, VertexID, SurfaceID, VolumeID  
+    # this is when target type is given
+    if cls == 'l': class=LineID
+    if cls == 'v': class=VolumeID
+    if cls == 's': class=SurfaceID
+    if cls == 'p': class=VertexID    
+    
+    return [objs[t] if t in objs else class(t)  for t in targets]
+
+def get_target2(objs, targets):
+    # this is when target type is given
+    from petram.geom.gmsh_geom_wrapper import LineID, VertexID, SurfaceID, VolumeID
+    ret = []
+    print("here", targets)
+    for t in targets:
+        if t in objs:
+           ret.append(objs[t])
+        else:
+           if t.startswith("p"): ret.append(VertexID(int(t[1:])))
+           if t.startswith("l"): ret.append(LineID(int(t[1:])))
+           if t.startswith("s"): ret.append(SurfaceID(int(t[1:])))
+           if t.startswith("v"): ret.append(VolumeID(int(t[1:])))         
+    print("here2", ret)
+    return ret 
+  
+  
 invalid_pdata = (('NotUsedValue', VtableElement('NotUsedValue', type='array',
                                   guilabel = 'not_implemented',
                                   default = '0.0',
@@ -814,13 +842,13 @@ class Extrude(GeomPB):
     def build_geom(self, geom, objs):
         targets,  tax, len = self.vt.make_value_or_expression(self)
         targets = [x.strip() for x in targets.split(',')]
-
+        targetID = get_target2(objs, targets)
         tax = tax/np.sqrt(np.sum(np.array(tax)**2))*len          
         newkeys = []
-        for t in targets:
+        for t, id in zip(targets, targetID):
              if not t in objs:
                  assert False, t + " does not exist"
-             ret = geom.extrude(objs[t],
+             ret = geom.extrude(id,
                           translation_axis=tax,)
                           #rotation_axis=rax,
                           #point_on_axis=pax
@@ -1105,8 +1133,10 @@ class Fillet(GeomPB):
         curves = [x.strip() for x in curves.split(',')]
         
         radii = [radius]
-        volumes = [objs[t] if t in objs else int(t)  for t in volumes]
-        curves  = [objs[t] if t in objs else int(t)  for t in curves]
+
+        volumes = get_target1(objs, volumes, 'v')
+        curves  = get_target1(objs, curves, 'v')
+        
         ret = geom.fillet(volumes, curves, radii, removeVolume=True)
         newkeys = []
         for r in ret:
@@ -1246,8 +1276,9 @@ class Difference(GeomPB_Bool):
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]          
 
-        input_entity = [objs[x] for x in tp]
-        tool_entity  = [objs[x] for x in tm]
+        input_entity = get_target2(objs, tp)
+        tool_entity  = get_target2(objs, tm)
+        
         ret = geom.boolean_difference(
                           input_entity,
                           tool_entity,
