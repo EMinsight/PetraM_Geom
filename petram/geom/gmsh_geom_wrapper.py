@@ -364,7 +364,8 @@ class Geometry(object):
         dimtag3, dimtagMap = m(dimtag1, dimtag2,
                                removeObject=removeObject,
                                removeTool=removeTool)
-        
+        self.factory.synchronize()
+        self.model.getEntities()
         return dimtag2id(dimtag3)                
         
     def boolean_intersection(self, input_entity, tool_entity,
@@ -442,6 +443,7 @@ class Geometry(object):
         bbx = self.factory.addRectangle(xmin-dx/10., ymin-dy/10., (zmin+zmax)/2.,
                                         dx*1.2, dy*1.2)
         out_dimtag3, dimtagMap = self.factory.cut(((2,bbx),), out_dimtag2)
+        self.factory.synchronize()                       
         return dimtag2id(out_dimtag3)                        
 
     def apply_fragments(self):
@@ -472,6 +474,7 @@ class Geometry(object):
                              
     def remove(self, entity, recursive=False):
         dimtags = []
+        print("print here", self.model.getEntities())
         for en in entity:
             dimtags.append(id2dimtag(en))
         self.factory.remove(dimtags, recursive=recursive)
@@ -519,7 +522,6 @@ class Geometry(object):
        
         #for en in entity:
         dimtags = [id2dimtag(entity)]
-            
         if translation_axis is not None:
             tax = translation_axis
             dimtags2 = self.factory.extrude(dimtags, tax[0], tax[1], tax[2],)

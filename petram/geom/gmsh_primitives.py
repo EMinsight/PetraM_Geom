@@ -8,79 +8,81 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GmshPrimitives')
 from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
-
+from petram.geom.gmsh_geom_model import use_gmsh_api
 
 try:
-  import pygmsh
-  class Geometry(pygmsh.Geometry):
-    def __init__(self, *args, **kwargs):
-        self._point_loc = {}
-        self._point_mask = []
-        super(Geometry, self).__init__(*args, **kwargs)
+    if use_gmsh_api:
+        has_gmsh = True            
+    else:
+        import pygmsh
+        class Geometry(pygmsh.Geometry):
+            def __init__(self, *args, **kwargs):
+                self._point_loc = {}
+                self._point_mask = []
+                super(Geometry, self).__init__(*args, **kwargs)
 
-    def add_point(self, *args, **kwargs):
-        mask = kwargs.pop("mask", True)      
-        pt = tuple(args[0])
-        if not pt in self._point_loc:
-            obj = super(Geometry, self).add_point(*args, **kwargs)
-            self._point_loc[pt] = obj
-        else:
-            obj = self._point_loc[pt]
+            def add_point(self, *args, **kwargs):
+                mask = kwargs.pop("mask", True)      
+                pt = tuple(args[0])
+                if not pt in self._point_loc:
+                    obj = super(Geometry, self).add_point(*args, **kwargs)
+                    self._point_loc[pt] = obj
+                else:
+                    obj = self._point_loc[pt]
 
-        if mask : self._point_mask.append(obj)
-        return obj
-      
-    def add_surface_filling(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def add_sphere(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def add_wedge(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def add_torus(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def add_cone(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-        
-    def boolean_union(self, *args, **kwargs):
-        a = kwargs.pop("removeObject", False)
-        b = kwargs.pop("removeTool", False)
-        kwargs["delete"] = a or b
-        return super(Geometry, self).boolean_union(*args, **kwargs)
-      
-    def boolean_difference(self, *args, **kwargs):
-        a = kwargs.pop("removeObject", False)
-        b = kwargs.pop("removeTool", False)
-        kwargs["delete"] = a or b
-        return super(Geometry, self).boolean_difference(*args, **kwargs)
-      
-    def boolean_intersection(self, *args, **kwargs):
-        a = kwargs.pop("removeObject", False)
-        b = kwargs.pop("removeTool", False)
-        kwargs["delete"] = a or b
-        return super(Geometry, self).boolean_intersection(*args, **kwargs)
-      
-    def boolean_fragments(self, *args, **kwargs):
-        a = kwargs.pop("removeObject", False)
-        b = kwargs.pop("removeTool", False)
-        kwargs["delete"] = a or b
-        return super(Geometry, self).boolean_fragments(*args, **kwargs)
-      
-    def copy(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def remove(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def rotate(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def translate(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def dilate(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-    def symmetrize(self, *args, **kwargs):
-        assert False, "Not implemented for gmsh3. Use gmsh new API"
-        
-  has_gmsh = True
+                if mask : self._point_mask.append(obj)
+                return obj
+
+            def add_surface_filling(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def add_sphere(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def add_wedge(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def add_torus(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def add_cone(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+
+            def boolean_union(self, *args, **kwargs):
+                a = kwargs.pop("removeObject", False)
+                b = kwargs.pop("removeTool", False)
+                kwargs["delete"] = a or b
+                return super(Geometry, self).boolean_union(*args, **kwargs)
+
+            def boolean_difference(self, *args, **kwargs):
+                a = kwargs.pop("removeObject", False)
+                b = kwargs.pop("removeTool", False)
+                kwargs["delete"] = a or b
+                return super(Geometry, self).boolean_difference(*args, **kwargs)
+
+            def boolean_intersection(self, *args, **kwargs):
+                a = kwargs.pop("removeObject", False)
+                b = kwargs.pop("removeTool", False)
+                kwargs["delete"] = a or b
+                return super(Geometry, self).boolean_intersection(*args, **kwargs)
+
+            def boolean_fragments(self, *args, **kwargs):
+                a = kwargs.pop("removeObject", False)
+                b = kwargs.pop("removeTool", False)
+                kwargs["delete"] = a or b
+                return super(Geometry, self).boolean_fragments(*args, **kwargs)
+
+            def copy(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def remove(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def rotate(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def translate(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def dilate(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+            def symmetrize(self, *args, **kwargs):
+                assert False, "Not implemented for gmsh3. Use gmsh new API"
+        has_gmsh = True
 except:
-  has_gmsh = False
+    has_gmsh = False
 
 '''
 object created from givn coordinates
@@ -117,25 +119,23 @@ def get_target1(objs, targets, cls):
     # this is when target type is given
     if cls == 'l': cc = LineID
     if cls == 'v': cc = VolumeID
-    if cls == 's': cc = SurfaceID
+    if cls == 'f': cc = SurfaceID
     if cls == 'p': cc = VertexID    
     
     return [objs[t] if t in objs else cc(t)  for t in targets]
-
+  
 def get_target2(objs, targets):
     # this is when target type is given
     from petram.geom.gmsh_geom_wrapper import LineID, VertexID, SurfaceID, VolumeID
     ret = []
-    print("here", targets)
     for t in targets:
         if t in objs:
            ret.append(objs[t])
         else:
            if t.startswith("p"): ret.append(VertexID(int(t[1:])))
            if t.startswith("l"): ret.append(LineID(int(t[1:])))
-           if t.startswith("s"): ret.append(SurfaceID(int(t[1:])))
+           if t.startswith("f"): ret.append(SurfaceID(int(t[1:])))
            if t.startswith("v"): ret.append(VolumeID(int(t[1:])))         
-    print("here2", ret)
     return ret 
   
   
@@ -714,8 +714,8 @@ class Spline(GeomPB):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
         
-        pts = [objs[x] for x in pts]
-        
+        #pts = [objs[x] for x in pts]
+        pts = get_target1(objs, pts, 'p')        
         spline = geom.add_spline(pts)
         newobj = objs.addobj(spline, 'sp')
         
@@ -727,17 +727,17 @@ class CreateLine(GeomPB):
     def build_geom(self, geom, objs):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]        
-
+        pts = get_target1(objs, pts, 'p')
         pts0 = pts[:-1]
         pts1 = pts[1:]
         self._newobjs = []
         
         for p0, p1 in zip(pts0, pts1):
-             if not p0 in objs:
-                 assert False, p0 + " does not exist"
-             if not p1 in objs:
-                 assert False, p1 + " does not exist"
-             line = geom.add_line(objs[p0], objs[p1])
+             #if not p0 in objs:
+             #    assert False, p0 + " does not exist"
+             #if not p1 in objs:
+             #    assert False, p1 + " does not exist"
+             line = geom.add_line(p0, p1)
              self._newobjs.append(objs.addobj(line, 'ln'))
 
         self._objkeys = objs.keys()
@@ -752,13 +752,18 @@ class LineLoop(GeomPB):
     def build_geom(self, geom, objs):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
-        
-        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+
+        ptx = get_target1(objs, pts, 'l')
+        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
         for x in pts:
-           if x.startswith('-'): del objs[x[1:]]
-           else: del objs[x]
-        
-        spline = geom.add_line_loop(pts)
+           if x.startswith('-'):
+               if x[1:] in objs:
+                   del objs[x[1:]]
+           else:
+               if x in objs:
+                   del objs[x]
+               
+        spline = geom.add_line_loop(ptx)
         newobj = objs.addobj(spline, 'll')
         
         self._newobjs = [newobj]
@@ -771,13 +776,23 @@ class CreateSurface(GeomPB):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
         
-        objid = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        objsign = [not x.startswith('-') for x in pts]        
+        ptx = get_target1(objs, pts, 'l')
+        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
         for x in pts:
-           if x.startswith('-'): del objs[x[1:]]
-           else: del objs[x]
+           if x.startswith('-'):
+               if x[1:] in objs:
+                   del objs[x[1:]]
+           else:
+               if x in objs:
+                   del objs[x]
+                   
+        #objid = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        #objsign = [not x.startswith('-') for x in pts]        
+        #for x in pts:
+        #   if x.startswith('-'): del objs[x[1:]]
+        #   else: del objs[x]
            
-        ll = geom.add_line_loop(objid, objsign)
+        ll = geom.add_line_loop(ptx)
         newobj1 = objs.addobj(ll, 'll')
         surface = geom.add_plane_surface(ll)
         newobj2 = objs.addobj(surface, 'ps')
@@ -794,8 +809,8 @@ class SurfaceLoop(GeomPB):
     def build_geom(self, geom, objs):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
-        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        
+        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        ptx = get_target(objs, targets, 'f')        
         sl = geom.add_surface_loop(pts)
         newobj = objs.addobj(sl, 'sl')
         
@@ -807,8 +822,8 @@ class CreateVolume(GeomPB):
     def build_geom(self, geom, objs):
         pts = self.vt.make_value_or_expression(self)
         pts = [x.strip() for x in pts[0].split(',')]
-        pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        
+        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
+        ptx = get_target(objs, targets, 'f')                
         sl = geom.add_surface_loop(pts)
         newobj1 = objs.addobj(sl, 'sl')
         vol = geom.add_volume(sl)
@@ -845,10 +860,10 @@ class Extrude(GeomPB):
         targetID = get_target2(objs, targets)
         tax = tax/np.sqrt(np.sum(np.array(tax)**2))*len          
         newkeys = []
-        for t, id in zip(targets, targetID):
-             if not t in objs:
-                 assert False, t + " does not exist"
-             ret = geom.extrude(id,
+        for t, idd in zip(targets, targetID):
+             #if not t in objs:
+             #    assert False, t + " does not exist"
+             ret = geom.extrude(idd,
                           translation_axis=tax,)
                           #rotation_axis=rax,
                           #point_on_axis=pax
@@ -859,8 +874,6 @@ class Extrude(GeomPB):
              else:
                  newkeys.append(objs.addobj(ret[0], t))
                  newkeys.append(objs.addobj(ret[1], 'ex'))             
-             #for o in ret[2:]:
-             #   newkeys.append(objs.addobj(o,  get_geom_key(o))
                                
         self._objkeys = objs.keys()
         self._newobjs = newkeys
@@ -890,12 +903,13 @@ class Revolve(GeomPB):
     def build_geom(self, geom, objs):
         targets, pax, rax, angle = self.vt.make_value_or_expression(self)
         targets = [x.strip() for x in targets.split(',')]
+        targetID = get_target2(objs, targets)
 
         newkeys = []
-        for t in targets:
-             if not t in objs:
-                 assert False, t + " does not exist"
-             ret = geom.extrude(objs[t],
+        for t, id in zip(targets, targetID):          
+             #if not t in objs:
+             #    assert False, t + " does not exist"
+             ret = geom.extrude(idd,
                                 rotation_axis=rax,
                                 point_on_axis=pax,
                                 angle = angle*np.pi/180.)
@@ -946,7 +960,8 @@ class Move(GeomPB): # tanslate in gmsh
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)                                
+
         if keep:
            tt = geom.copy(tt)          
         geom.translate(tt, dx, dy, dz)
@@ -988,7 +1003,8 @@ class Rotate(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]        
+        tt = get_target2(objs, targets)                        
+
         if keep:
            tt = geom.copy(tt)          
         geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)
@@ -1026,7 +1042,8 @@ class Scale(GeomPB):  # Dilate in gmsh
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)                
+
         if keep:
            tt = geom.copy(tt)          
         geom.dilate(tt, cx, cy, cz, sx, sy, sz)
@@ -1057,10 +1074,51 @@ class Array(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)        
+
         for i in range(count):
            tt = geom.copy(tt)          
            geom.translate(tt, dx, dy, dz)
+           for t in tt:
+                newkeys.append(objs.addobj(t, 'cp'))          
+        self._objkeys = objs.keys()
+        self._newobjs = newkeys
+
+class ArrayRot(GeomPB):
+    data0 =  (('target_object', VtableElement('target_object', type='string',
+                                          guilabel = 'Object',
+                                          default = "",
+                                          tip = "object to move")),
+              ('array_count', VtableElement('array_count', type='int',
+                                            guilabel = 'Count', default = 1,
+                                            tip = "Center of Circle" )),
+              ('ctr_rot', VtableElement('ctr_rot', type='float',
+                                   guilabel = 'Center',
+                                   suffix = ('x', 'y', 'z'), 
+                                   default = [0,0,0],
+                                   tip = "point on revolustion axis")),            
+              ('ax_rot', VtableElement('ax_rot', type='float',
+                                   guilabel = 'Axis',
+                                   suffix = ('x', 'y', 'z'),                                    
+                                   default = [0., 0., 0.0],
+                                   tip = "direction of revolustion axis")),
+              ('angle', VtableElement('angle', type='float',
+                                   guilabel = 'angle',
+                                   default = 180.0,
+                                   tip = "angle of revoluiton")),)
+    vt = Vtable(data0)  
+    def build_geom(self, geom, objs):          
+        targets, count, cc, aa,  angle = self.vt.make_value_or_expression(self)
+        cx, cy, cz = cc
+        ax, ay, az = aa
+        targets = [x.strip() for x in targets.split(',')]
+          
+        newkeys = []
+        tt = get_target2(objs, targets)                        
+        
+        for i in range(count):
+           tt = geom.copy(tt)
+           geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)           
            for t in tt:
                 newkeys.append(objs.addobj(t, 'cp'))          
         self._objkeys = objs.keys()
@@ -1099,7 +1157,7 @@ class Flip(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)
 
         if keep:
            tt = geom.copy(tt)          
@@ -1112,7 +1170,7 @@ class Flip(GeomPB):
         self._newobjs = newkeys
 
 data0 =  (('target_object', VtableElement('target_object', type='string',
-                                          guilabel = 'Object',
+                                          guilabel = 'Volume',
                                           default = "",
                                           tip = "object to add fillet")), 
           ('curves', VtableElement('curves', type='string',
@@ -1146,7 +1204,7 @@ class Fillet(GeomPB):
         self._newobjs = newkeys
 
 data0 =  (('target_object', VtableElement('target_object', type='string',
-                                          guilabel = 'Object',
+                                          guilabel = 'Volume',
                                           default = "",
                                           tip = "object to add chamfer")), 
           ('curves', VtableElement('curves', type='string',
@@ -1194,7 +1252,7 @@ class Copy(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
 
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)
         ret = geom.copy(tt)
         for r in ret:
             newkeys.append(objs.addobj(r, 'cp'))
@@ -1218,10 +1276,10 @@ class Remove(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
 
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)
         geom.remove(tt, recursive=recursive)
         for t in targets:
-             del objs[t]
+           if t in objs: del objs[t]
                                
         self._objkeys = objs.keys()
         self._newobjs = newkeys
@@ -1292,9 +1350,11 @@ class Difference(GeomPB_Bool):
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
                 
         if self.delete_input:
-           for x in tp[:1]: del objs[x]
+            for x in tp[:1]: 
+                if x in objs: del objs[x]          
         if self.delete_tool:
-           for x in tp[1:]: del objs[x]
+            for x in tp[1:]: 
+                if x in objs: del objs[x]          
             
         self._objkeys = objs.keys()
         self._newobjs = newkeys
@@ -1311,8 +1371,8 @@ class Union(GeomPB_Bool):
         tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
-        input_entity = [objs[x] for x in tp[:1]]
-        tool_entity  = [objs[x] for x in tp[1:]]
+        input_entity = get_target2(objs, tp[:1])
+        tool_entity  = get_target2(objs, tp[1:])
         ret = geom.boolean_union(
                           input_entity,
                           tool_entity,
@@ -1326,10 +1386,11 @@ class Union(GeomPB_Bool):
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
                 
         if self.delete_input:
-           for x in tp[:1]: del objs[x]
+           for x in tp[:1]:
+             if x in objs: del objs[x]
         if self.delete_tool:
-           for x in tp[1:]: del objs[x]
-           
+           for x in tp[1:]: 
+             if x in objs: del objs[x]           
         self._objkeys = objs.keys()
         self._newobjs = newkeys
 
@@ -1340,8 +1401,8 @@ class Union2D(GeomPB_Bool):
         tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
-        input_entity = [objs[x] for x in tp[:1]]
-        tool_entity  = [objs[x] for x in tp[1:]]
+        input_entity = get_target2(objs, tp[:1])
+        tool_entity  = get_target2(objs, tp[1:])
         ret = geom.boolean_union2d(
                           input_entity,
                           tool_entity,
@@ -1355,9 +1416,12 @@ class Union2D(GeomPB_Bool):
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
                 
         if self.delete_input:
-           for x in tp[:1]: del objs[x]
+            for x in tp[:1]: 
+                if x in objs: del objs[x]          
+
         if self.delete_tool:
-           for x in tp[1:]: del objs[x]
+            for x in tp[1:]: 
+                if x in objs: del objs[x]          
             
         self._objkeys = objs.keys()
         self._newobjs = newkeys
@@ -1369,8 +1433,9 @@ class Intersection(GeomPB_Bool):
         tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
-        input_entity = [objs[x] for x in tp[:1]]
-        tool_entity  = [objs[x] for x in tp[1:]]
+        input_entity = get_target2(objs, tp[:1])
+        tool_entity  = get_target2(objs, tp[1:])
+
         ret = geom.boolean_intersection(
                           input_entity,
                           tool_entity,
@@ -1383,9 +1448,11 @@ class Intersection(GeomPB_Bool):
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
 
         if self.delete_input:
-           for x in tp[:1]: del objs[x]
+            for x in tp[:1]: 
+                if x in objs: del objs[x]          
         if self.delete_tool:
-           for x in tp[1:]: del objs[x]
+            for x in tp[1:]: 
+                if x in objs: del objs[x]          
                 
         self._objkeys = objs.keys()
         self._newobjs = newkeys
@@ -1397,8 +1464,8 @@ class Fragments(GeomPB_Bool):
         tp = [x.strip() for x in tp[0].split(',')]
         if len(tp) < 2: return
 
-        input_entity = [objs[x] for x in tp[:1]]
-        tool_entity  = [objs[x] for x in tp[1:]]
+        input_entity = get_target2(objs, tp[:1])
+        tool_entity  = get_target2(objs, tp[1:])
         ret = geom.boolean_fragments(
                           input_entity,
                           tool_entity,
@@ -1412,9 +1479,11 @@ class Fragments(GeomPB_Bool):
                 newkeys.append(objs.addobj(o, get_geom_key(o)))
                 
         if self.delete_input:
-           for x in tp[:1]: del objs[x]
+            for x in tp[:1]: 
+                if x in objs: del objs[x]          
         if self.delete_tool:
-           for x in tp[1:]: del objs[x]
+            for x in tp[1:]: 
+                if x in objs: del objs[x]          
             
         self._objkeys = objs.keys()
         self._newobjs = newkeys
@@ -1658,7 +1727,7 @@ class Move2D(GeomPB): # tanslate in gmsh
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)                                
         if keep:
            tt = geom.copy(tt)          
         geom.translate(tt, dx, dy, dz)
@@ -1695,7 +1764,8 @@ class Rotate2D(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]        
+        tt = get_target2(objs, targets)                                        
+
         if keep:
            tt = geom.copy(tt)          
         geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)
@@ -1733,7 +1803,7 @@ class Flip2D(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)        
         if keep:
            tt = geom.copy(tt)          
         geom.symmetrize(tt, a, b, c, d)
@@ -1772,7 +1842,7 @@ class Scale2D(GeomPB):  # Dilate in gmsh
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)                
         if keep:
            tt = geom.copy(tt)          
         geom.dilate(tt, cx, cy, cz, sx, sy, sz)
@@ -1804,7 +1874,7 @@ class Array2D(GeomPB):
         targets = [x.strip() for x in targets.split(',')]
           
         newkeys = []
-        tt = [objs[t] for t in targets]
+        tt = get_target2(objs, targets)                        
         for i in range(count):
            tt = geom.copy(tt)          
            geom.translate(tt, dx, dy, dz)
@@ -1847,7 +1917,7 @@ class WorkPlane(GeomPB):
 
         from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
 
-        print("tt_in", tt)
+        #print("tt_in", tt)
         tt = geom.get_unique_entity(tt)
         dprint1("tt_out", tt)        
         #print("entities(1)", geom.model.getEntities())
