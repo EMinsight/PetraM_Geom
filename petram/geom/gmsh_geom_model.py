@@ -36,12 +36,38 @@ from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 debug = True
-
 geom_key_dict = {'SurfaceBase': 'sb',
                  'PlaneSurface' : 'sp',
                  'Point': 'pt',
                  'Line': 'ln',
                  'Spline': 'sp'}
+
+
+def get_gmsh_exe():
+    macos_gmsh_location = '/Applications/Gmsh.app/Contents/MacOS/gmsh'
+    if os.path.isfile(macos_gmsh_location):
+        gmsh_executable = macos_gmsh_location
+    else:
+        gmsh_executable = 'gmsh'
+    return gmsh_executable
+
+
+def get_gmsh_major_version():
+    gmsh_exe = get_gmsh_exe()
+    try:
+        out = subprocess.check_output(
+                [gmsh_exe, '--version'],
+                 stderr=subprocess.STDOUT
+                 ).strip().decode('utf8')
+    except:
+        return -1
+    ex = out.split('.')
+    return int(ex[0])
+
+use_gmsh_api = True
+gmsh_Major=get_gmsh_major_version()
+if gmsh_Major <= 3: use_gmsh_api = False
+
 def enqueue_output(p, queue):
     while True:
         line = p.stdout.readline()
@@ -94,9 +120,18 @@ def get_geom_key(obj):
     return key
 
 class GeomObjs(dict):
+    def duplicate(self):
+        if not hasattr(self, "_past_keys"):
+            self._past_keys = []            
+        obj = GeomObjs(self)
+        obj._past_keys = self._past_keys
+        return obj
+        
     def addobj(self, obj, name):
-        key = ''.join([i for i in name if not i.isdigit()])        
-        keys = self.keys()
+        key = ''.join([i for i in name if not i.isdigit()])
+        if not hasattr(self, "_past_keys"):
+            self._past_keys = []
+        keys = self._past_keys
         nums = []
         for k in keys:
            t = ''.join([i for i in k if not i.isdigit()])
@@ -108,6 +143,7 @@ class GeomObjs(dict):
         else:
            newkey = key+str(max(nums)+1)
         self[newkey] = obj
+        self._past_keys.append(newkey)
         return newkey
 
 class GmshPrimitiveBase(GeomBase, Vtable_mixin):
@@ -151,8 +187,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         return [None]+list(self.vt.panel_tip())
 
     def build_geom(self, geom, objs):
-        raise NotImplementedError(
-             "you must specify this method in subclass")
+        self._newobjs = []
+        warnings.warn("Not implemented: " + self.__class__.__name__, Warning)        
 
     def gsize_hint(self, geom, objs):
         '''
@@ -170,7 +206,13 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         engine = viewer.engine
         engine.build_ns()
         try:
-            self.parent.build_geom(**kwargs)
+            p  = self.parent
+            if isinstance(p, GmshGeom):
+                rootg = p
+            else: # work plane
+                rootg = p.parent
+            rootg.build_geom(**kwargs)
+
         except:
             import ifigure.widgets.dialog as dialog               
             dialog.showtraceback(parent = dlg,
@@ -178,18 +220,22 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
                                  title='Error',
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
-        self.parent.onUpdateGeoView(evt)
+        rootg.onUpdateGeoView(evt)
 
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
+        if mm is None: return
+        
         self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
+        if mm is None: return
+        
         self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
@@ -205,32 +251,72 @@ class GmshGeom(GeomTopBase):
     def is_finalized(self):
         return self.geom_finalized
     
+    @property    
+    def build_stop(self):
+        if not hasattr(self, "_build_stop"):
+            self._build_stop = (None, None)
+        return self._build_stop
+    
     def attribute_set(self, v):
         v = super(GmshGeom, self).attribute_set(v)
         v['geom_finalized'] = False
         v['geom_timestamp'] = 0
+        v['geom_prev_algorithm'] = 2
+        v['geom_prev_res'] = 30
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments
-        return [Point, Line, Circle, Rect, Polygon, Spline, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array, ArrayRot
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array, ArrayRot]
     
+    def get_possible_child_menu(self):
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array, ArrayRot
+        return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
+                ("", Spline),("", Fillet), ("", Chamfer), 
+                ("3D shape...", Box),
+                ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
+                ("!", Torus),
+                ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
+                ("", LineLoop), ("", SurfaceLoop),
+                ("", Extrude), ("", Revolve),
+                ("", Copy), ("", Remove),
+                ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
+                ("", Array, "Array"), ("!", ArrayRot, "ArrayR"),
+                ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
+                ("", WorkPlane),("", CADImport),
+                ]
+                
     def get_special_menu(self):
-        return [('Build All', self.onBuildAll),
-                ('Export .geo', self.onExportGeom)]
+        if use_gmsh_api:
+            return [('Build All', self.onBuildAll),]
+        else:
+            return [('Build All', self.onBuildAll),
+                    ('Export .geo', self.onExportGeom)]
     
     def panel1_param(self):
+        import wx
         return [["", "Geometry model using GMSH", 2, None],
+                ["PreviewAlgorith", "Automatic", 4, {"style":wx.CB_READONLY,
+                                                     "choices": ["Auto", "MeshAdpat",
+                                                                 "Delaunay", "Frontal"]}],
+                ["PreviewResolution", 30,  400, None],
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
-                
+
     def get_panel1_value(self):
-        return [None, self]
+        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
+        txt = aname[self.geom_prev_algorithm]
+        return [None, txt, self.geom_prev_res, self]
        
     def import_panel1_value(self, v):
-        pass
-    
+        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
+        print("import", v[1])
+        for k in aname:
+            if v[1] == aname[k]:
+                self.geom_prev_algorithm = k
+
+        self.geom_prev_res = long(v[2])
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -250,14 +336,16 @@ class GmshGeom(GeomTopBase):
 
         filename = os.path.join(viewer.model.owndir(), self.name())
         self.onUpdateGeoView(evt, filename = filename)
-        fid = open(filename + '.geo_unrolled', 'w')
-        fid.write('\n'.join(self._txt_unrolled))
-        fid.close()
+        
+        if not use_gmsh_api:
+            fid = open(filename + '.geo_unrolled', 'w')
+            fid.write('\n'.join(self._txt_unrolled))
+            fid.close()
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
         evt.Skip()
         
-    def onUpdateGeoView(self, evt, filename = None):
+    def onUpdateGeoView3(self, evt, filename = None):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
@@ -282,8 +370,158 @@ class GmshGeom(GeomTopBase):
         self._geom_coords = ret
         viewer._s_v_loop['geom'] = read_loops(self._txt_unrolled)
         viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
+
+    def onUpdateGeoView4(self, evt, filename = None):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
+        ret = ptx, cells, {}, cell_data, {}
         
-    def build_geom(self, stop1=None, stop2=None, filename = None,
+        self._geom_coords = ret
+        viewer.set_figure_data('geom', self.name(), ret)
+        viewer.update_figure('geom', self.name())
+        
+        viewer._s_v_loop['geom'] = s, v
+        viewer._s_v_loop['mesh'] = s, v
+        #geom.finalize()
+        #self._gmsh4_data = None
+        
+    def onUpdateGeoView(self, evt, filename = None):       
+        if globals()['gmsh_Major']==4 and use_gmsh_api:
+            return self.onUpdateGeoView4(evt, filename = filename)
+        else:
+            return self.onUpdateGeoView3(evt, filename = filename)
+
+
+    def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
+        self._build_stop = (None, None)
+        
+        children = [x for x in self.walk()]
+        children = children[1:]
+        for child in children:
+            if hasattr(child, "_newobjs"): del child._newobjs
+            
+        children = self.get_children()
+        for child in children:
+            if not child.enabled: continue
+            
+            if len(child.get_children())==0:
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before
+                child.build_geom(geom, objs)
+                if child is stop2: break            # for build after
+                
+            else:  # workplane
+                children2 = child.get_children()
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before                
+                objs2 = objs.duplicate()
+                org_keys = objs.keys()
+                do_break = False
+                for child2 in children2:
+                    if not child2.enabled: continue                    
+                    child2.vt.preprocess_params(child2)
+                    if child2 is stop1:
+                        do_break = True
+                        break            # for build before
+                    child2.build_geom(geom, objs2)
+                    if child2 is stop2:
+                        do_break = True                        
+                        break            # for build after
+
+                # translate 2D objects in 3D space
+                for x in org_keys: del objs2[x]
+                child.build_geom(geom, objs2)
+
+                # copy new objects to objs
+                for x in objs2: objs[x] = objs2[x]
+                
+                if do_break: break
+                if child is stop2: break            # for build after
+        if stop1 is not None: self._build_stop = (stop1, None)
+        if stop2 is not None: self._build_stop = (None, stop2)
+    
+    def build_geom4(self, stop1=None, stop2=None, filename = None,
+                    finalize = False, no_mesh=False):        
+        '''
+        filename : export geometry to a real file (for debug)
+        '''
+        if not hasattr(self, "_gmsh4_data"):
+            self._gmsh4_data = None
+        if self._gmsh4_data is not  None:
+            self._gmsh4_data[-1].finalize()
+            
+        objs = GeomObjs()
+        self._objs = objs
+
+        from petram.geom.gmsh_geom_wrapper import Geometry
+        geom = Geometry()
+        
+        geom.set_factory('OpenCASCADE')
+        
+        self.walk_over_geom_chidlren(geom, objs,
+                                     stop1=stop1, stop2=stop2)
+        
+        if finalize:
+            print("finalize is on : computing  fragments")
+            geom.apply_fragments()
+        geom.factory.synchronize()
+
+        if no_mesh: return geom
+        
+        # here we ask for 2D mesh for plotting.
+        # size control is done based on geometry size.
+        ss = geom.getObjSizes()
+        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
+        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
+
+        xmin, xmax, ymin, ymax, zmin,zmax = geom.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+
+        vcl = geom.getVertexCL()
+        #print("vertec cl", vcl)
+        for tag in vcl:
+           geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
+
+        import gmsh
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
+
+
+        #print(geom.model.getEntities())
+        #geom.model.setVisibility(((3,7), ), False, True)
+
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
+        geom.model.mesh.generate(1)
+        print("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
+        geom.model.mesh.generate(2)        
+
+        from petram.geom.read_gmsh import read_pts_groups, read_loops
+        ptx, cells, cell_data = read_pts_groups(geom)
+        
+        if finalize:
+            # has to add geometry vertex detection....
+            pass
+        #else:
+        #    cells['vertex_mask'] = np.array(geom._point_mask)-1
+
+        v, s, l = read_loops(geom)
+        self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)
+
+        if finalize:
+            geom.write(self.name() +  '.msh')
+
+    def build_geom3(self, stop1=None, stop2=None, filename = None,
                    finalize = False):
         '''
         filename : export geometry to a real file (for debug)
@@ -292,18 +530,17 @@ class GmshGeom(GeomTopBase):
         children = children[1:]
 
         objs = GeomObjs()
+
         self._objs = objs        
         from petram.geom.gmsh_primitives import Geometry
+
         geom = Geometry()
+        
         geom.set_factory('OpenCASCADE')
         
-        for child in children:
-            if not child.enabled: continue            
-            child.vt.preprocess_params(child)
-            if child is stop1: break            # for build before
-            child.build_geom(geom, objs)
-            if child is stop2: break            # for build after
-
+        self.walk_over_geom_chidlren(geom, objs,
+                                     stop1=stop1, stop2=stop2)
+ 
         unrolled, rolled, entities = generate_mesh(geom, dim = 0,
                                                   filename = filename)
         unrolled = [x.strip() for x in unrolled]
@@ -344,6 +581,17 @@ class GmshGeom(GeomTopBase):
         self._txt_unrolled = unrolled
         self._num_entities = entities
 
+    def build_geom(self, stop1=None, stop2=None, filename = None,
+                   finalize = False):
+
+        if globals()['gmsh_Major']==4 and use_gmsh_api:
+            self.build_geom4(stop1=stop1, stop2=stop2,
+                             filename=filename,
+                             finalize=finalize)
+        else:
+            self.build_geom3(stop1=stop1, stop2=stop2,
+                             filename=filename,
+                             finalize=finalize)
 
     def onExportGeom(self, evt):
         print("export geom file")
@@ -531,6 +779,10 @@ def generate_mesh(
             gmsh_executable,
             '-{}'.format(dim), geo_filename, '-o', geou_filename
             ]
+
+    if globals()['gmsh_Major']==4:
+        cmd.extend(['-format', 'msh2'])
+    print("calling gmsh", cmd)
     cmd = [x for x in cmd if x != '']
     # http://stackoverflow.com/a/803421/353337
     p = subprocess.Popen(
@@ -601,7 +853,7 @@ def generate_mesh(
         fid = open(msh_filename, 'w')
         fid.write(''.join(lines))
         fid.close()
-        
+
     X, cells, pt_data, cell_data, field_data = meshio.read(msh_filename)
 
     # clean up

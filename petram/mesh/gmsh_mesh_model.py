@@ -239,10 +239,18 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface]
 
     def get_special_menu(self):
-        return [('Build All', self.onBuildAll),
-                ('Export .geo', self.onExportGeom),
-                ('Export .msh', self.onExportMsh),
-                ('Clear Mesh', self.onClearMesh)]        
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+        if use_gmsh_api:
+            return [('Build All', self.onBuildAll),
+                    ('Export .msh', self.onExportMsh),
+                    ('Clear Mesh', self.onClearMesh),
+                    ('Clear Mesh Sequense...', self.onClearMeshSq)]                         
+        else:
+             return [('Build All', self.onBuildAll),
+                     ('Export .geo', self.onExportGeom),
+                     ('Export .msh', self.onExportMsh),
+                     ('Clear Mesh', self.onClearMesh),
+                     ('Clear Mesh Sequense...', self.onClearMeshSq)]                 
     
     def onSetDefSize(self, evt):
         geom_root = self.geom_root
@@ -298,27 +306,53 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
             
     def onUpdateMeshView(self, evt, filename=None, bin='-bin', geo_text = None):
-        from petram.geom.gmsh_geom_model import read_loops, generate_mesh
+        
 
+        from petram.geom.gmsh_geom_model import use_gmsh_api
         
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         
         geo_text = self._txt_rolled[:] if geo_text is None else geo_text
-        
-        ret =  generate_mesh(geo_object = None,
+
+        if use_gmsh_api:
+            import gmsh
+            from petram.geom.read_gmsh import read_pts_groups, read_loops
+            
+            geom_root = self.geom_root
+            if not geom_root.is_finalized:
+                print('calling build_geom4')
+                geom = geom_root.build_geom4(no_mesh=True, finalize=True)
+            else:
+                geom = geom_root._gmsh4_data[-1]
+
+            if len(geo_text) > 0:
+                handle, geo_filename = tempfile.mkstemp(suffix='.geo')
+                os.write(handle, "\n".join(geo_text))
+                os.close(handle)
+                gmsh.merge(geo_filename)
+                ptx, cells, cell_data = read_pts_groups(geom)
+                ret = ptx, cells, {}, cell_data, {}
+                viewer.set_figure_data('mesh', self.name(), ret)                
+            else:
+                viewer.del_figure_data('mesh', self.name())
+            #v, s, l = read_loops(geom)
+            if 'geom' in viewer._s_v_loop:
+                viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
+        else:
+            from petram.geom.gmsh_geom_model import read_loops, generate_mesh            
+            ret =  generate_mesh(geo_object = None,
                              dim = self._max_mdim,
                              num_quad_lloyd_steps=0,
                              num_lloyd_steps=0,                             
                              geo_text = geo_text,
                              filename=filename, bin=bin)
-        
-        viewer.set_figure_data('mesh', self.name(), ret)
+            s, v = read_loops(geom_root._txt_unrolled)
+            viewer.set_figure_data('mesh', self.name(), ret)
+            viewer._s_v_loop['mesh'] = s, v
+            viewer._s_v_loop['geom'] = s, v
+            
         viewer.update_figure('mesh', self.figure_data_name())        
-        geom_root = self.geom_root
-        viewer._s_v_loop['mesh'] = read_loops(geom_root._txt_unrolled)
-        viewer._s_v_loop['geom'] = viewer._s_v_loop['mesh']
-
         
     def onClearMesh(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -331,7 +365,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             geom_root.onBuildAll(evt)
             
         try:
-            self.build_mesh(geom_root, nochild =True)
+            err = self.build_mesh(geom_root, nochild =True)
+            if err is not None: return
         except:
             import ifigure.widgets.dialog as dialog               
             dialog.showtraceback(parent = dlg,
@@ -341,7 +376,27 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         dlg.OnRefreshTree()
         self.onUpdateMeshView(evt)
         viewer._view_mode_group = ''
-        viewer.set_view_mode('mesh', self)        
+        viewer.set_view_mode('mesh', self)
+        
+    def onClearMeshSq(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        engine = viewer.engine
+        
+        import ifigure.widgets.dialog as dialog
+        ret = dialog.message(parent=dlg,
+                             message='Are you sure to delete all Mesh sequence',
+                             title='Mesh Sequence Delete',
+                             style=2)
+        if ret == 'ok':
+            dialog.showtraceback(parent = dlg,
+                                 txt='Failed to generate meshing script',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+            
+            for x in self.keys():
+                del self[x]
+            dlg.tree.RefreshItems()
         
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -352,7 +407,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         geom_root = self.geom_root
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
-            
         try:
            self.build_mesh(geom_root)
         except:
@@ -367,10 +421,40 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.onUpdateMeshView(evt, bin='',
                               geo_text = self._txt_rolled[:],
                               filename = filename)
-        self.onGenerateMsh(evt)
+        
+
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+
+        if use_gmsh_api:
+            import gmsh
+            geom_root = self.geom_root
+
+            geom = geom_root._gmsh4_data[-1]
+
+            for k, x in enumerate(geom.model.getEntities(dim=3)):
+                value = geom.model.addPhysicalGroup(3, [x[1]])
+                geom.model.setPhysicalName(3, value, 'volume'+str(value))
+            for k, x in enumerate(geom.model.getEntities(dim=2)):
+                value = geom.model.addPhysicalGroup(2, [x[1]])
+                geom.model.setPhysicalName(2, value, 'surface'+str(value))
+            for k, x in enumerate(geom.model.getEntities(dim=1)):
+                value = geom.model.addPhysicalGroup(1, [x[1]])                
+                geom.model.setPhysicalName(1, value, 'line'+str(value))
+            for k, x in enumerate(geom.model.getEntities(dim=0)):
+                value = geom.model.addPhysicalGroup(0, [x[1]])                
+                geom.model.setPhysicalName(0, value, 'point'+str(value))
+                
+            dlg = evt.GetEventObject().GetTopLevelParent()
+            viewer = dlg.GetParent()
+            engine = viewer.engine
+        
+            filename = os.path.join(viewer.model.owndir(), self.name())
+            geom.write(filename +  '.msh')                
+        else:
+            self.onGenerateMsh(evt)
         evt.Skip()
         
-    def onGenerateMsh(self, evt):
+    def onGenerateMsh3(self, evt):
         from petram.geom.gmsh_geom_model import read_loops, generate_mesh
         
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -380,9 +464,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         filename = os.path.join(viewer.model.owndir(), self.name())
         
         from petram.mesh.gmsh_mesher import write_physical, write_embed
-        embed = self.gather_embed()
-        geo_text = write_embed(self._txt_rolled[:], embed)        
-        geo_text = write_physical(geo_text)
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+
+        if not use_gmsh_api:
+             embed = self.gather_embed()
+             geo_text = write_embed(self._txt_rolled[:], embed)        
+             geo_text = write_physical(geo_text)
+        else:
+             geo_text = []
 
         print("Generating msh with physcal index")
         ret =  generate_mesh(geo_object = None,
@@ -408,12 +497,37 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None,
                          nochild = False):
-        self.vt.preprocess_params(self)
         
-        num_entities = geom_root._num_entities
-        geom_coords = geom_root._geom_coords
-        children = [x for x in self.walk()]
-        children = children[1:]
+        from petram.geom.gmsh_geom_model import use_gmsh_api
+        
+        self.vt.preprocess_params(self)
+
+        if use_gmsh_api:
+            if not hasattr(geom_root, "_gmsh4_data"): return -1
+            geom = geom_root._gmsh4_data[-1]
+            def mmax(l):
+                if len(l) == 0: return 0
+                return max([x[1] for x in l])
+            num_entities = [mmax(geom.model.getEntities(0)),
+                            mmax(geom.model.getEntities(1)),
+                            mmax(geom.model.getEntities(2)),
+                            mmax(geom.model.getEntities(3))]
+            l = geom_root._gmsh4_data[3]
+            s = geom_root._gmsh4_data[4]
+            v = geom_root._gmsh4_data[5]                
+            entity_relations = {"Volume": v, 
+                                "Surface": s, 
+                                "Line":  l }
+            
+            num_entities = (num_entities, entity_relations)
+            geom_coords = (geom_root._gmsh4_data[0],
+                           geom_root._gmsh4_data[1],
+                           {},
+                           geom_root._gmsh4_data[2],
+                           {},)
+        else:
+            num_entities = geom_root._num_entities
+            geom_coords = geom_root._geom_coords
 
         from .gmsh_mesher import GmshMesher
         mesher = GmshMesher(num_entities,
@@ -421,7 +535,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                             CharacteristicLengthMax = self.clmax,
                             CharacteristicLengthMin = self.clmin,
                             MeshAlgorithm = self.algorithm,
-                            MeshAlgorithm3D = self.algorithm3d)                
+                            MeshAlgorithm3D = self.algorithm3d)
+            
+        children = [x for x in self.walk()]
+        children = children[1:]
 
         if not nochild:
             for child in children:
@@ -435,8 +552,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if debug:
             for l in lines:
                  print(l)
-
-        lines = geom_root._txt_rolled + lines
+        if use_gmsh_api and nochild:
+            lines = []
+        if not use_gmsh_api:
+            lines = geom_root._txt_rolled + lines
         self._txt_rolled = lines
         self._max_mdim = max_mdim
         
