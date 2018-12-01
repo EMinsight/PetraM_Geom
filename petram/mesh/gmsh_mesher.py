@@ -107,6 +107,8 @@ def freemesh(gid, clmax=None, clmin=None, defclmax=None, defclmin=None,
     else:
         lines.append('Mesh.CharacteristicLengthExtendFromBoundary = 1;')
 
+    # this doesn't no effect..
+    #lines.append('Mesh.CharacteristicLengthFromPoints = 1;')
 
     return lines
 
@@ -206,6 +208,7 @@ class GmshMesher(object):
         self.entity_relations = entities[1]        
         self.ietg = 0
         
+            
     def new_etg(self):
         self.ietg = self.ietg + 1
         return 'etg'+str(self.ietg)
@@ -307,47 +310,86 @@ class GmshMesher(object):
             if self.done['Surface']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                  mode = 'Surface'))
+            if self.done['Volume']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Volume']]),
+                                  mode = 'Volume', recursive = True))
         elif meshdim == 1 and mode == 'Volume':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
+            #use_smooth = True                        
             if self.done['Line']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Line']]),
                                  mode = 'Line'))
             if self.done['Surface']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                   mode = 'Surface', recursive = True))
+            if self.done['Volume']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Volume']]),
+                                  mode = 'Volume', recursive = True))
+        elif meshdim == 0 and mode == 'Volume':
+            verts = self.find_vertex("Volume", gid)
+            for v in verts:
+                if not v in self.done["Vertex"]:
+                    self.done["Vertex"].append(v)
+                    lines.extend(characteristiclength(str(v), cl = clmax))                    
+            
         elif meshdim == 2 and mode == 'Surface':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
-            use_smooth = True            
+            use_smooth = True
+                                  
         elif meshdim == 1 and mode == 'Surface':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
+            #use_smooth = True            
             if self.done['Line']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Line']]),
                                  mode = 'Line'))
+            if self.done['Surface']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
+                                  mode = 'Surface', recursive = True))
+                                  
+        elif meshdim == 0 and mode == 'Surface':
+            verts = self.find_vertex("Surface", gid)
+            for v in verts:
+                if not v in self.done["Vertex"]:
+                    self.done["Vertex"].append(v)
+                    lines.extend(characteristiclength(str(v), cl = clmax))                   
+                                  
         elif meshdim == 1 and mode == 'Line':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
             use_smooth = True
-
-        elif meshdim == 0:
-            lines = embed(gid, embed_s=embed_s, embed_l=embed_l,
-                          embed_p=embed_p)
-            return lines
+            if self.done['Surface']:
+                lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
+                                  mode = 'Surface', recursive = True))
+                                  
+        elif meshdim == 0 and mode == 'Line':
+            verts = self.find_vertex("Line", gid)
+            for v in verts:
+                if not v in self.done["Vertex"]:
+                    self.done["Vertex"].append(v)
+                    lines.exntend(characteristiclength(str(v), cl = clmax))                   
         else:
-            return []
+            pass
+        
+        print(self.done)
+        
+        if meshdim == 0:
+            lines.extend(embed(gid, embed_s=embed_s, embed_l=embed_l,
+                                 embed_p=embed_p))
+            return lines
 
         lines.extend(freemesh(gid, clmax=clmax, clmin=clmin,
                               defclmax=self.clmax,
                               defclmin=self.clmin,
                               use_smooth=use_smooth))
 
-        self.record_finished(gid, mode = mode)                
+        self.record_finished(gid, mode = mode)
         return lines
 
     def rotate(self, gid, src="", meshdim=0, transform=''):
@@ -457,6 +499,8 @@ class GmshMesher(object):
     
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):
         if meshdim == 0:
+            verts = self.find_vertex("Vertex", gid)                                  
+            self.done["Vertex"].extend(verts)                                  
             return characteristiclength(gid, cl = cl)
         else:
             return []
@@ -469,11 +513,18 @@ class GmshMesher(object):
     def add(self, name, *gids, **kwargs):
         self.sequence.append([name, gids, kwargs])
         
-    def reset_done(self):
-        self.done = {"Vertex":[],     #0D element
-                     "Line": [],     #1D element
-                     "Surface": [],     #2D element
-                     "Volume": []}   #3D element
+    def reset_done(self, mdim):
+        if mdim == 0:
+            self.done["Line"] = []
+            self.done["Surface"] = []
+            self.done["Volume"] = []            
+        elif mdim == 1:
+            self.done["Surface"] = []
+            self.done["Volume"] = []            
+        elif mdim == 2:
+            self.done["Volume"] = []
+        else:
+            pass
 
     def generate(self):
         lines = []
@@ -494,13 +545,14 @@ class GmshMesher(object):
             for proc, gids, kwargs in self.sequence:
                 f = getattr(self, proc)
                 kwargs['meshdim'] = mdim
+                print("calling", f, gids, kwargs)
                 x = f(*gids, **kwargs)
                 if len(x) > 0:
                     lines.extend(x)
                     if mdim > 0:
                         lines.extend(mesh(dim = mdim))
                         max_mdim = mdim
-            self.reset_done()                    
+            self.reset_done(mdim)                    
         lines.extend(hide("*", mode = "Volume"))
 
         return lines, max_mdim
@@ -548,6 +600,52 @@ class GmshMesher(object):
             return ''
         else:
             return ','.join([str(x) for x in ll])
+
+    def find_vertex(self, mode, idx):
+        if idx == "*":
+            assert False, "Not supported..."
+        verts = []
+        
+        if idx != "remaining":
+           idx = [int(x) for x in idx.split(",")]
+
+        print("find_vertex", mode, idx)
+        if mode == "Volume":
+            if idx == "remaining":
+                idx = self.entity_relations["Volume"].keys()
+            s  = []            
+            for k in idx:
+                s.extend(list(self.entity_relations["Volume"][k]))
+        elif mode == "Surface":
+            if idx == "remaining":
+                idx = self.entity_relations["Surface"].keys()
+            s = list(idx)
+        else:
+            s = []
+        if len(s) > 0:
+            l = []
+            for k in s:
+                l.extend(list(self.entity_relations["Surface"][k]))
+        elif mode == "Line":
+            if idx == "remaining":
+                idx = self.entity_relations["Line"].keys()
+            l = list(idx)
+        else:
+            l = []
+        if len(l) > 0:
+            v = []
+            for k in l:
+                v.extend(list(self.entity_relations["Line"][k]))
+        else:
+            if idx == "remaining":
+                idx = []
+                for k in self.entity_relations["Line"].keys():
+                    idx.extend(self.entity_relations["Line"][k])
+            v = list(idx)
+        ret = list(set(v))
+
+        print("find_vertex", mode, idx, ret)
+        return ret
     
 def write_entities_relations(geo_text, writev = -1, writes = -1):
     #from petram.geom.gmsh_geom_model import read_loops

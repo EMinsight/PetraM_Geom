@@ -3,13 +3,18 @@ import numpy as np
 from petram.utils import get_pkg_datafile
 import petram.geom
 
+fdotbk = get_pkg_datafile(petram.pi, 'icon',  'dot_bk.png')
+fedgebk = get_pkg_datafile(petram.pi, 'icon', 'line_bk.png')
+ffacebk = get_pkg_datafile(petram.pi, 'icon', 'face_bk.png')
 fdot = get_pkg_datafile(petram.pi, 'icon',  'dot.png')
 fedge = get_pkg_datafile(petram.pi, 'icon', 'line.png')
 fface = get_pkg_datafile(petram.pi, 'icon', 'face.png')
 fdom = get_pkg_datafile(petram.pi, 'icon', 'domain.png')
+fshow = get_pkg_datafile(petram.pi, 'icon', 'show.png')
 fshowall = get_pkg_datafile(petram.pi, 'icon', 'showall.png')
-show = get_pkg_datafile(petram.pi, 'icon', 'show.png')
-hide = get_pkg_datafile(petram.pi, 'icon', 'hide.png')
+fhide = get_pkg_datafile(petram.pi, 'icon', 'hide.png')
+fsolid = get_pkg_datafile(petram.pi, 'icon', 'solid.png')
+ftrans = get_pkg_datafile(petram.pi, 'icon', 'transparent.png')
 
 from petram.pi.sel_buttons import _select_x
 
@@ -40,7 +45,7 @@ def show_all(evt):
         pass
     viewer.draw_all()    
 
-def hide_elem(evt):
+def hide_elem(evt, inverse=False):
     viewer = evt.GetEventObject().GetTopLevelParent()
     mode = viewer._sel_mode
 
@@ -53,24 +58,34 @@ def hide_elem(evt):
         facesa = []
         facesb = []        
         s, v = viewer._s_v_loop['geom']
-        selected_volume = viewer._dom_bdr_sel                
+        selected_volume = viewer._dom_bdr_sel[0]
+        if not inverse:
+            selected_volume.extend(viewer._hidden_volume)
         for key in v.keys():
             if key in selected_volume:
                 facesa.extend(v[key])
             else:
                 facesb.extend(v[key])
-        facesa = np.unique(np.array(facesa))
-        facesb = np.unique(np.array(facesb))
-        new_hide = list(np.setdiff1d(facesa, facesb, True))
-        for o in objs:        
-            idx = o.hidden_component
-            idx = list(set(idx+new_hide))
-            o.hide_component(idx)        
+        if inverse:
+            for o in objs:             
+                o.hide_component(facesa, inverse=True)
+            hidden_volume = [x for x in v.keys() if not x in selected_volume]            
+            viewer._hidden_volume = hidden_volume
+        else:
+            facesa = np.unique(np.array(facesa))
+            facesb = np.unique(np.array(facesb))
+            new_hide = list(np.setdiff1d(facesa, facesb, True))
+            for o in objs:        
+                idx = o.hidden_component
+                idx = list(set(idx+new_hide))
+                o.hide_component(idx)
+            viewer._hidden_volume.extend(selected_volume)
+            
     elif mode == 'face' or mode == 'edge':
         for o in objs:
              idx = o.getSelectedIndex()
-             idx = list(set(o.hidden_component+idx))        
-             o.hide_component(idx)        
+             idx = list(set(o.hidden_component+idx))      
+             o.hide_component(idx, inverse=inverse)
     elif mode == 'point':
         pass
     else:
@@ -78,11 +93,46 @@ def hide_elem(evt):
     viewer.canvas.unselect_all()
     viewer.draw_all()
     
+def show_only(evt):    
+    hide_elem(evt, inverse=True)
+    
+def make_solid(evt):
+    viewer = evt.GetEventObject().GetTopLevelParent()
+    mode = viewer._sel_mode
+
+    ax = viewer.get_axes()
+    for name, child in ax.get_children():
+        if len(child._artists) > 0:                
+             child.set_alpha(1.0, child._artists[0])
+    viewer.canvas.unselect_all()
+    viewer.draw_all()
+    
+def make_transp(evt):
+    viewer = evt.GetEventObject().GetTopLevelParent()
+    mode = viewer._sel_mode
+
+    ax = viewer.get_axes()
+    for name, child in ax.get_children():
+        if len(child._artists) > 0:                        
+            child.set_alpha(0.75, child._artists[0])
+    viewer.canvas.unselect_all()
+    viewer.draw_all()
+
+from petram.pi.sel_buttons import toggle_dot, toggle_edge, toggle_face
+
 btask = [('gdot',    fdot,  2, 'select dot', select_dot),
          ('gedge',   fedge, 2, 'select edge', select_edge),
          ('gface',   fface, 2, 'select face', select_face),
          ('gdomain', fdom,  2, 'select domain', select_volume),
          ('---', None, None, None),
+         ('gtoggledot',    fdotbk,  0, 'toggle vertex', toggle_dot),
+         ('gtoggleedge',   fedgebk, 0, 'toggle edge', toggle_edge),
+         ('gtoggleface',   ffacebk, 0, 'toggle face', toggle_face),    
+         ('---', None, None, None),         
          ('gshow',   fshowall,  0, 'show all', show_all),
-         ('ghide',   hide,  0, 'hide selection', hide_elem),]         
+         ('ghide',   fhide,  0, 'hide selection', hide_elem),
+         ('gshowonly',  fshow,  0, 'show only', show_only),    
+         ('---', None, None, None),
+         ('gsolid',  fsolid,  0, 'solid', make_solid),
+         ('gtranspaent',  ftrans,  0, 'transparent', make_transp),]
             

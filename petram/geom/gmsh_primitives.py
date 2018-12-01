@@ -906,7 +906,7 @@ class Revolve(GeomPB):
         targetID = get_target2(objs, targets)
 
         newkeys = []
-        for t, id in zip(targets, targetID):          
+        for t, idd in zip(targets, targetID):        
              #if not t in objs:
              #    assert False, t + " does not exist"
              ret = geom.extrude(idd,
