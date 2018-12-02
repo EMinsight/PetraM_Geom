@@ -244,7 +244,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         self.algorithm = str(v[-5])
         self.algorithm3d = str(v[-4])
-        self.gen_all_phys_entity = v[3]
+        self.gen_all_phys_entity = v[-3]
         
     def panel1_tip(self):
         return ([None] +
