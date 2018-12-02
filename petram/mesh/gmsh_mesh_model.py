@@ -352,7 +352,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 os.close(handle)
                 gmsh.merge(geo_filename)
 
-                print("mesh done face/line",  self._mesh_fface, self._mesh_fline)
+                #print("mesh done face/line",  self._mesh_fface, self._mesh_fline)
                 ptx, cells, cell_data = read_pts_groups(geom,
                                                         finished_lines = self._mesh_fline,
                                                         finished_faces = self._mesh_fface)
