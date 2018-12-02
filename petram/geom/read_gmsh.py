@@ -63,7 +63,8 @@ def read_loops(geom):
                                                        oriented=False)]
     return l, s, v
 
-def read_pts_groups(geom):
+def read_pts_groups(geom, finished_lines=None, 
+                          finished_faces=None):
 
     model = geom.model
     
@@ -81,14 +82,34 @@ def read_pts_groups(geom):
     cell_data = {}
     el2idx = {}
     for ndim in range(3):
-        elementTypes, elementTags, nodeTags = model.mesh.getElements(ndim)
+        if (ndim == 1 and finished_lines is not None
+            or
+            ndim == 2 and finished_faces is not None):
+            finished = finished_faces if ndim==2 else finished_lines
+
+            #print("here we are removing unfinished lines",  dimtags, finished_lines)
+            xxx = [model.mesh.getElements(ndim, l) for l in finished]
+            tmp = {}
+            elementTypes = sum([x[0] for x in xxx], [])
+            elementTags =sum([x[1] for x in xxx], [])
+            nodeTags = sum([x[2] for x in xxx], [])
+            dd1 = {};
+            dd2 = {}
+            for k, el_type in enumerate(elementTypes):
+                if not el_type in dd1: dd1[el_type] = []
+                if not el_type in dd2: dd2[el_type] = []                
+                dd1[el_type] = dd1[el_type]+ elementTags[k]
+                dd2[el_type] = dd2[el_type]+ nodeTags[k]
+            elementTypes = dd1.keys()
+            elementTags = [dd1[k] for k in elementTypes]
+            nodeTags = [dd2[k] for k in elementTypes]
+        else:
+            elementTypes, elementTags, nodeTags = model.mesh.getElements(ndim)            
         for k, el_type in enumerate(elementTypes):
             el_type_name = gmsh_element_type[el_type]
             data = np.array([node2idx[tag] for tag in nodeTags[k]], dtype=int)
             data = data.reshape(-1, num_nodes_per_cell[el_type_name])
             cells[el_type_name] = data
-
-            elementTags
             tmp = np.zeros(max(elementTags[k])+1, dtype=int)
             for kk, id in enumerate(elementTags[k]): tmp[id] = kk
             el2idx[el_type_name] = tmp
@@ -98,9 +119,16 @@ def read_pts_groups(geom):
                                        np.zeros(len(elementTags[k]), dtype=int)}
 
         dimtags =  model.getEntities(dim=ndim)
+
+        if (ndim == 1 and finished_lines is not None
+            or
+            ndim == 2 and finished_faces is not None):
+            finished = finished_faces if ndim==2 else finished_lines
+            #print("here we are removing unfinished lines",  dimtags, finished_lines)
+            dimtags = [dt for dt in dimtags if dt[1] in finished]
         for dim, tag in dimtags:
             elType2, elTag2, nodeTag2 = model.mesh.getElements(dim=dim,
-                                                                    tag=tag)
+                                                               tag=tag)
             for k, el_type in enumerate(elType2):                       
                 el_type_name = gmsh_element_type[el_type]
                 for elTag in elTag2[k]:

@@ -43,6 +43,7 @@ def show_all(evt):
         o.hide_component([])
     else:
         pass
+    viewer._dom_bdr_sel  = ([], [], [], [])                
     viewer.draw_all()    
 
 def hide_elem(evt, inverse=False):
@@ -59,10 +60,11 @@ def hide_elem(evt, inverse=False):
         facesb = []        
         s, v = viewer._s_v_loop['geom']
         selected_volume = viewer._dom_bdr_sel[0]
+        target_volumes = selected_volume
         if not inverse:
-            selected_volume.extend(viewer._hidden_volume)
+            target_volumes.extend(viewer._hidden_volume)
         for key in v.keys():
-            if key in selected_volume:
+            if key in target_volumes:
                 facesa.extend(v[key])
             else:
                 facesb.extend(v[key])

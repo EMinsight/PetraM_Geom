@@ -474,7 +474,6 @@ class Geometry(object):
                              
     def remove(self, entity, recursive=False):
         dimtags = []
-        print("print here", self.model.getEntities())
         for en in entity:
             dimtags.append(id2dimtag(en))
         self.factory.remove(dimtags, recursive=recursive)

@@ -249,7 +249,19 @@ class GmshGeom(GeomTopBase):
         
     @property
     def is_finalized(self):
-        return self.geom_finalized
+        if not hasattr(self, "_geom_finalized"):
+            self._geom_finalized = False
+        return self._geom_finalized
+    
+    @property
+    def geom_finalized(self):
+        if not hasattr(self, "_geom_finalized"):
+            self._geom_finalized = False
+        return self._geom_finalized
+    
+    @geom_finalized.setter
+    def geom_finalized(self, value):
+        self._geom_finalized = value
     
     @property    
     def build_stop(self):
@@ -259,7 +271,6 @@ class GmshGeom(GeomTopBase):
     
     def attribute_set(self, v):
         v = super(GmshGeom, self).attribute_set(v)
-        v['geom_finalized'] = False
         v['geom_timestamp'] = 0
         v['geom_prev_algorithm'] = 2
         v['geom_prev_res'] = 30
@@ -311,7 +322,6 @@ class GmshGeom(GeomTopBase):
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
-        print("import", v[1])
         for k in aname:
             if v[1] == aname[k]:
                 self.geom_prev_algorithm = k
@@ -499,7 +509,7 @@ class GmshGeom(GeomTopBase):
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
         geom.model.mesh.generate(1)
-        print("Mesh.Algorithm", self.geom_prev_algorithm)
+        
         gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
@@ -510,10 +520,9 @@ class GmshGeom(GeomTopBase):
         ptx, cells, cell_data = read_pts_groups(geom)
         
         if finalize:
-            # has to add geometry vertex detection....
-            pass
-        #else:
-        #    cells['vertex_mask'] = np.array(geom._point_mask)-1
+            self.geom_finalized = True
+        else:
+            self.geom_finalized = False        
 
         v, s, l = read_loops(geom)
         self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)

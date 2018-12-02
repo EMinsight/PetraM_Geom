@@ -23,6 +23,8 @@ class GMesh(Mesh):
         the dlg_edit_model
         '''
         geom_root = self.geom_root
+        if not geom_root.is_finalized:
+            geom_root.onBuildAll(evt)
         if geom_root.is_finalized:
             if geom_root.geom_timestamp != self.geom_timestamp:
                 self.onClearMesh(evt)
@@ -136,6 +138,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
                 'point':[],}, None
     
     def get_element_selection(self):
+        # this is default..will be overwitten.
         return self.element_selection_empty()
                 
     def onItemSelChanged(self, evt):
@@ -149,14 +152,20 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     def update_viewer_selection(self, dlg):
         viewer = dlg.GetParent()                
         sel, mode = self.get_element_selection()
-        figobj = viewer.highlight_element(sel)
-
-        viewer.set_sel_mode(mode)
-        viewer.set_sel_mode() # update buttons        
-        if figobj is not None:
-            import ifigure.events
-            sel = [weakref.ref(figobj._artists[0])]
-            ifigure.events.SendSelectionEvent(figobj, dlg, sel)
+        if mode == 'volume':
+            viewer.highlight_domain(sel["volume"])
+            viewer._dom_bdr_sel = (sel["volume"], [], [], [])
+            status_txt = 'Volume :'+ ','.join([str(x) for x in sel["volume"]])
+            viewer.set_status_text(status_txt, timeout = 60000)
+            viewer._sel_mode = 'volume'
+        else:
+            figobj = viewer.highlight_element(sel)
+            viewer.set_sel_mode(mode)
+            viewer.set_sel_mode() # update buttons        
+            if figobj is not None:
+                import ifigure.events
+                sel = [weakref.ref(figobj._artists[0])]
+                ifigure.events.SendSelectionEvent(figobj, dlg, sel)
             
     def get_embed(self):
         return [], [], []
@@ -187,6 +196,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         v['geom_group'] = 'GmshGeom1'
         v['algorithm'] = 'default'
         v['algorithm3d'] = 'default'
+        v['gen_all_phys_entity'] = False
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v
@@ -204,19 +214,23 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         setting1 = {"style":CB_READONLY, "choices": c1}
         setting2  ={"style":CB_READONLY, "choices": c2}
         
-        ll.append(["2D Algorithm", c1[-1], 4, setting1])
-        ll.append(["3D Algorithm", c2[-1], 4, setting2])
-        ll.append([None, None, 341, {"label": "Use default size",
-                                  "func": 'onSetDefSize',
-                                   "noexpand": True}])
-        ll.append([None, None, 341, {"label": "Finalize Mesh",
-                                  "func": 'onBuildAll',
-                                   "noexpand": True}])
+        ll.extend([["2D Algorithm", c1[-1], 4, setting1],
+                   ["3D Algorithm", c2[-1], 4, setting2],
+                   ["            ", self.gen_all_phys_entity==1 ,  3,
+                    {"text":"Write physical entities for all dimensions."}],
+                   [None, None, 341, {"label": "Use default size",
+                                      "func": 'onSetDefSize',
+                                      "noexpand": True}], 
+                   [None, None, 341, {"label": "Finalize Mesh",
+                                      "func": 'onBuildAll',
+                                      "noexpand": True}], ])
+
         return ll
     
     def get_panel1_value(self):
         return ([self.geom_group,] + list(self.vt.get_panel_value(self)) +
-                [self.algorithm, self.algorithm3d, self, self])
+                [self.algorithm, self.algorithm3d, self.gen_all_phys_entity,
+                 self, self, ])
     
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
@@ -224,15 +238,21 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     
     def import_panel1_value(self, v):
         self.geom_group = str(v[0])        
-        self.vt.import_panel_value(self, v[1:-4])
+        self.vt.import_panel_value(self, v[1:-5])
 
         from .gmsh_mesher import MeshAlgorithm, MeshAlgorithm3D
 
-        self.algorithm = str(v[-4])
-        self.algorithm3d = str(v[-3])
+        self.algorithm = str(v[-5])
+        self.algorithm3d = str(v[-4])
+        self.gen_all_phys_entity = v[3]
         
     def panel1_tip(self):
-        return [None] + self.vt.panel_tip() + [None]*4
+        return ([None] +
+                self.vt.panel_tip() +
+                ["Alogirth for 2D mesh",
+                 "Algoirthm for 3D mesh",
+                 "Write lower dimensional physical entity. This may take a long time",
+                 None, None])
         
     def get_possible_child(self):
         from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface
@@ -331,7 +351,12 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 os.write(handle, "\n".join(geo_text))
                 os.close(handle)
                 gmsh.merge(geo_filename)
-                ptx, cells, cell_data = read_pts_groups(geom)
+
+                print("mesh done face/line",  self._mesh_fface, self._mesh_fline)
+                ptx, cells, cell_data = read_pts_groups(geom,
+                                                        finished_lines = self._mesh_fline,
+                                                        finished_faces = self._mesh_fface)
+                
                 ret = ptx, cells, {}, cell_data, {}
                 viewer.set_figure_data('mesh', self.name(), ret)                
             else:
@@ -428,21 +453,38 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if use_gmsh_api:
             import gmsh
             geom_root = self.geom_root
-
             geom = geom_root._gmsh4_data[-1]
+            max_dim = 0
 
-            for k, x in enumerate(geom.model.getEntities(dim=3)):
+            print("Writing Physical Group")
+            ent = geom.model.getEntities(dim=3)
+            print("Adding " + str(len(ent)) + " Volume(s)")
+            if len(ent) > 0: max_dim = 3
+            for k, x in enumerate(ent):
                 value = geom.model.addPhysicalGroup(3, [x[1]])
                 geom.model.setPhysicalName(3, value, 'volume'+str(value))
-            for k, x in enumerate(geom.model.getEntities(dim=2)):
+                  
+            ent = geom.model.getEntities(dim=2)
+            print("Adding " + str(len(ent)) + " Surface(s)")
+            if max_dim == 0 and len(ent) > 0: max_dim = 2                  
+            for k, x in enumerate(ent):
                 value = geom.model.addPhysicalGroup(2, [x[1]])
                 geom.model.setPhysicalName(2, value, 'surface'+str(value))
-            for k, x in enumerate(geom.model.getEntities(dim=1)):
-                value = geom.model.addPhysicalGroup(1, [x[1]])                
-                geom.model.setPhysicalName(1, value, 'line'+str(value))
-            for k, x in enumerate(geom.model.getEntities(dim=0)):
-                value = geom.model.addPhysicalGroup(0, [x[1]])                
-                geom.model.setPhysicalName(0, value, 'point'+str(value))
+
+            if self.gen_all_phys_entity or max_dim < 3:
+                ent = geom.model.getEntities(dim=1)
+                print("Adding " + str(len(ent)) + " Line(s)")
+                if max_dim == 0 and len(ent) > 0: max_dim = 1                                    
+                for k, x in enumerate(ent):
+                    value = geom.model.addPhysicalGroup(1, [x[1]])                
+                    geom.model.setPhysicalName(1, value, 'line'+str(value))
+                      
+            if self.gen_all_phys_entity or max_dim < 2:
+                ent = geom.model.getEntities(dim=0)
+                print("Adding " + str(len(ent)) + " Point(s)")
+                for k, x in enumerate(ent):
+                    value = geom.model.addPhysicalGroup(0, [x[1]])                
+                    geom.model.setPhysicalName(0, value, 'point'+str(value))
                 
             dlg = evt.GetEventObject().GetTopLevelParent()
             viewer = dlg.GetParent()
@@ -550,6 +592,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             
         lines, max_mdim = mesher.generate()
         if debug:
+            print(lines)
             for l in lines:
                  print(l)
         if use_gmsh_api and nochild:
@@ -557,6 +600,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if not use_gmsh_api:
             lines = geom_root._txt_rolled + lines
         self._txt_rolled = lines
+        self._mesh_fface = mesher.done['Surface'] # finished lines        
+        self._mesh_fline = mesher.done['Line'] # finished lines
         self._max_mdim = max_mdim
         
     def load_gui_figure_data(self, viewer):
