@@ -295,12 +295,15 @@ class GmshMesher(object):
         '''
         freemesh  = unstructured volume/surface/line
         '''
+        defclmax=clmax
+        defclmin=clmin     
         clmax  = self.clmax if clmax == 0 else clmax
         clmin  = self.clmin if clmin == 0 else clmin
         
         lines = []
         use_smooth=False
         write_cl = True
+        use_default_cl = False
         if meshdim == 3 and mode == 'Volume':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
@@ -336,7 +339,8 @@ class GmshMesher(object):
             if self.done['Volume']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Volume']]),
                                   mode = 'Volume', recursive = True))
-            write_cl = False
+                
+            use_default_cl = True
             llines= self.find_line("Volume", gid)
             for l in llines:
                 if not l in self.done["Line"]:
@@ -373,7 +377,8 @@ class GmshMesher(object):
             if self.done['Surface']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                   mode = 'Surface', recursive = True))
-            write_cl = False
+
+            use_default_cl = True            
             llines = self.find_line("Surface", gid)
             for l in llines:
                 if not l in self.done["Line"]:
@@ -419,11 +424,18 @@ class GmshMesher(object):
                                  embed_p=embed_p))
             return lines
 
-        lines.extend(freemesh(gid, clmax=clmax, clmin=clmin,
-                              defclmax=self.clmax,
-                              defclmin=self.clmin,
-                              use_smooth=use_smooth,
-                              write_cl = write_cl))
+        if use_default_cl:
+            lines.extend(freemesh(gid, clmax=1e20, clmin=defclmin,
+                                  defclmax=1e20,
+                                  defclmin=defclmin,
+                                  use_smooth=use_smooth,
+                                  write_cl = write_cl))
+        else:
+            lines.extend(freemesh(gid, clmax=clmax, clmin=clmin,
+                                  defclmax=self.clmax,
+                                  defclmin=self.clmin,
+                                  use_smooth=use_smooth,
+                                  write_cl = write_cl))
 
         self.record_finished(gid, mode = mode)
         return lines
