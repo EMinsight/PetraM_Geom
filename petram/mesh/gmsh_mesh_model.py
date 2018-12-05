@@ -44,10 +44,27 @@ class GMesh(Mesh):
         
         
 class GMeshTop(Mesh):
-    def attribute_set(self, v):
+    def attribute_set(self, v):s
         v = super(GMeshTop, self).attribute_set(v)
         v['geom_timestamp'] = -1        
         return v
+    
+    def onItemSelChanged(self, evt):
+        '''
+        GUI response when model object is selected in
+        the dlg_edit_model
+        '''
+        geom_root = self.geom_root
+        if not geom_root.is_finalized:
+            geom_root.onBuildAll(evt)
+        if geom_root.is_finalized:
+            if geom_root.geom_timestamp != self.geom_timestamp:
+                self.onClearMesh(evt)
+                self.geom_timestamp = geom_root.geom_timestamp
+                evt.Skip()
+                return
+        viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
+        viewer.set_view_mode('mesh', self)
     
 class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
@@ -600,7 +617,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             
         lines, max_mdim = mesher.generate()
         if debug:
-            print(lines)
             for l in lines:
                  print(l)
         if use_gmsh_api and nochild:
