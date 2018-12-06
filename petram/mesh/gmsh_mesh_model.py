@@ -44,7 +44,7 @@ class GMesh(Mesh):
         
         
 class GMeshTop(Mesh):
-    def attribute_set(self, v):s
+    def attribute_set(self, v):
         v = super(GMeshTop, self).attribute_set(v)
         v['geom_timestamp'] = -1        
         return v
