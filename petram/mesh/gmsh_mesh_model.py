@@ -278,16 +278,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def get_special_menu(self):
         from petram.geom.gmsh_geom_model import use_gmsh_api
         if use_gmsh_api:
-            return [('Build All', self.onBuildAll),
-                    ('Export .msh', self.onExportMsh),
-                    ('Clear Mesh', self.onClearMesh),
-                    ('Clear Mesh Sequense...', self.onClearMeshSq)]                         
+            return [('Build All', self.onBuildAll, None),
+                    ('Export .msh', self.onExportMsh, None),
+                    ('Clear Mesh', self.onClearMesh, None),
+                    ('Clear Mesh Sequense...', self.onClearMeshSq, None)]
         else:
-             return [('Build All', self.onBuildAll),
-                     ('Export .geo', self.onExportGeom),
-                     ('Export .msh', self.onExportMsh),
-                     ('Clear Mesh', self.onClearMesh),
-                     ('Clear Mesh Sequense...', self.onClearMeshSq)]                 
+             return [('Build All', self.onBuildAll, None),
+                     ('Export .geo', self.onExportGeom, None),
+                     ('Export .msh', self.onExportMsh, None),
+                     ('Clear Mesh', self.onClearMesh, None),
+                     ('Clear Mesh Sequense...', self.onClearMeshSq, None)] 
     
     def onSetDefSize(self, evt):
         geom_root = self.geom_root

@@ -198,7 +198,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         return -1, -1
     
     def get_special_menu(self):
-        return [('Build this step', self.onBuildAfter)]
+        return [('Build this step', self.onBuildAfter, None)]
 
     def _onBuildThis(self, evt, **kwargs):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -299,10 +299,10 @@ class GmshGeom(GeomTopBase):
                 
     def get_special_menu(self):
         if use_gmsh_api:
-            return [('Build All', self.onBuildAll),]
+            return [('Build All', self.onBuildAll, None),]
         else:
-            return [('Build All', self.onBuildAll),
-                    ('Export .geo', self.onExportGeom)]
+            return [('Build All', self.onBuildAll, None),
+                    ('Export .geo', self.onExportGeom, None)]
     
     def panel1_param(self):
         import wx
