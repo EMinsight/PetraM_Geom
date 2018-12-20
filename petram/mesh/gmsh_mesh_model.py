@@ -486,6 +486,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             print("Adding " + str(len(ent)) + " Volume(s)")
             if len(ent) > 0: max_dim = 3
             for k, x in enumerate(ent):
+                if len(geom.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
+                    continue
                 value = geom.model.addPhysicalGroup(3, [x[1]])
                 geom.model.setPhysicalName(3, value, 'volume'+str(value))
                   
@@ -493,14 +495,18 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             print("Adding " + str(len(ent)) + " Surface(s)")
             if max_dim == 0 and len(ent) > 0: max_dim = 2                  
             for k, x in enumerate(ent):
+                if len(geom.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
+                    continue
                 value = geom.model.addPhysicalGroup(2, [x[1]])
                 geom.model.setPhysicalName(2, value, 'surface'+str(value))
 
             if self.gen_all_phys_entity or max_dim < 3:
                 ent = geom.model.getEntities(dim=1)
                 print("Adding " + str(len(ent)) + " Line(s)")
-                if max_dim == 0 and len(ent) > 0: max_dim = 1                                    
+                if max_dim == 0 and len(ent) > 0: max_dim = 1              
                 for k, x in enumerate(ent):
+                    if len(geom.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
+                        continue                    
                     value = geom.model.addPhysicalGroup(1, [x[1]])                
                     geom.model.setPhysicalName(1, value, 'line'+str(value))
                       
@@ -508,6 +514,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 ent = geom.model.getEntities(dim=0)
                 print("Adding " + str(len(ent)) + " Point(s)")
                 for k, x in enumerate(ent):
+                    if len(geom.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
+                        continue                                        
                     value = geom.model.addPhysicalGroup(0, [x[1]])                
                     geom.model.setPhysicalName(0, value, 'point'+str(value))
                 
