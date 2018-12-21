@@ -488,7 +488,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             for k, x in enumerate(ent):
                 if len(geom.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
                     continue
-                value = geom.model.addPhysicalGroup(3, [x[1]])
+                value = geom.model.addPhysicalGroup(3, [x[1]], tag=k+1)
                 geom.model.setPhysicalName(3, value, 'volume'+str(value))
                   
             ent = geom.model.getEntities(dim=2)
@@ -497,7 +497,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             for k, x in enumerate(ent):
                 if len(geom.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
                     continue
-                value = geom.model.addPhysicalGroup(2, [x[1]])
+                value = geom.model.addPhysicalGroup(2, [x[1]], tag=k+1)
                 geom.model.setPhysicalName(2, value, 'surface'+str(value))
 
             if self.gen_all_phys_entity or max_dim < 3:
@@ -507,7 +507,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 for k, x in enumerate(ent):
                     if len(geom.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
                         continue                    
-                    value = geom.model.addPhysicalGroup(1, [x[1]])                
+                    value = geom.model.addPhysicalGroup(1, [x[1]], tag=k+1)                
                     geom.model.setPhysicalName(1, value, 'line'+str(value))
                       
             if self.gen_all_phys_entity or max_dim < 2:
@@ -516,7 +516,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 for k, x in enumerate(ent):
                     if len(geom.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
                         continue                                        
-                    value = geom.model.addPhysicalGroup(0, [x[1]])                
+                    value = geom.model.addPhysicalGroup(0, [x[1]], tag=k+1)                
                     geom.model.setPhysicalName(0, value, 'point'+str(value))
                 
             dlg = evt.GetEventObject().GetTopLevelParent()
