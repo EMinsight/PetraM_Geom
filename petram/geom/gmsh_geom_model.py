@@ -211,6 +211,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
                 rootg = p
             else: # work plane
                 rootg = p.parent
+            rootg._geom_finalized = False
             rootg.build_geom(**kwargs)
 
         except:
@@ -227,7 +228,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         mm = dlg.get_selected_mm()
         if mm is None: return
-        
+
         self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
@@ -237,6 +238,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         if mm is None: return
         
         self._onBuildThis(evt, stop2 = mm)
+
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
@@ -289,7 +291,7 @@ class GmshGeom(GeomTopBase):
                 ("!", Torus),
                 ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
                 ("", LineLoop), ("", SurfaceLoop),
-                ("", Extrude), ("", Revolve),
+                ("Protrude...", Extrude, "Extrude"), ("!", Revolve),
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
                 ("", Array, "Array"), ("!", ArrayRot, "ArrayR"),
@@ -335,7 +337,10 @@ class GmshGeom(GeomTopBase):
         engine.build_ns()
 
         try:
+            od = os.getcwd()
+            os.chdir(viewer.model.owndir())
             self.build_geom(finalize = True)
+            os.chdir(od)
         except:
             import ifigure.widgets.dialog as dialog               
             dialog.showtraceback(parent = dlg,
@@ -351,6 +356,7 @@ class GmshGeom(GeomTopBase):
             fid = open(filename + '.geo_unrolled', 'w')
             fid.write('\n'.join(self._txt_unrolled))
             fid.close()
+            
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
         evt.Skip()
@@ -452,7 +458,7 @@ class GmshGeom(GeomTopBase):
         if stop2 is not None: self._build_stop = (None, stop2)
     
     def build_geom4(self, stop1=None, stop2=None, filename = None,
-                    finalize = False, no_mesh=False):        
+                    finalize = False, no_mesh=False):
         '''
         filename : export geometry to a real file (for debug)
         '''
@@ -528,7 +534,12 @@ class GmshGeom(GeomTopBase):
         self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)
 
         if finalize:
-            geom.write(self.name() +  '.msh')
+            filename = self.name()
+            geom.write(filename +  '.msh')
+            geom.write(filename +  '.geo_unrolled')
+            fid = open(filename +  '.geo_unrolled', 'r')
+            self._unrolled_geom4 = fid.readlines()
+            fid.close()
 
     def build_geom3(self, stop1=None, stop2=None, filename = None,
                    finalize = False):

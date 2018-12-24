@@ -157,7 +157,7 @@ def recombine_surface(gid, max_angle):
     txt +=  " = " + str(max_angle) + ";"    
     return [txt]
 
-def embed(gid, embed_s="", embed_l="", embed_p=""):
+def embed(gid, mode, embed_s="", embed_l="", embed_p=""):
     if ((embed_s is "") and (embed_l is "") and
         (embed_p is "")): return []
 
@@ -170,17 +170,17 @@ def embed(gid, embed_s="", embed_l="", embed_p=""):
         sid = [str(x) for x in embed_s.split(',') if x]
         if sid:
             lines.append('Surface {{ {} }}'.format(','.join(sid)) +
-                      ' In Volume {{ {} }}'.format(','.join(gid))+ ';')
+                      (' In '+mode+' {{ {} }}').format(','.join(gid))+ ';')
     if embed_l is not None:
         lid = [str(x) for x in embed_l.split(',') if x]
         if lid:        
-            lines.append('Line {{ {} }}'.format(','.join(lid)) +
-                      ' In Surface {{ {} }}'.format(','.join(gid))+ ';')
+            lines.append('Curve {{ {} }}'.format(','.join(lid)) +
+                      (' In '+mode+' {{ {} }}').format(','.join(gid))+ ';')
     if embed_p is not None:
         pid = [str(x) for x in embed_p.split(',') if x]
         if pid:        
             lines.append('Point {{ {} }}'.format(','.join(pid)) +
-                      ' In Surface {{ {} }}'.format(','.join(gid))+ ';')
+                      (' In '+mode+' {{ {} }}').format(','.join(gid))+ ';')
     return lines           
 
 class GmshMesher(object):
@@ -308,12 +308,12 @@ class GmshMesher(object):
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
-            use_smooth = True            
+            use_smooth = True
+            use_default_cl = True                        
         elif meshdim == 2 and mode == 'Volume':
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
-            use_smooth = True            
             if self.done['Surface']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                  mode = 'Surface'))
@@ -321,6 +321,8 @@ class GmshMesher(object):
                 lines.extend(hide(','.join([str(x) for x in self.done['Volume']]),
                                   mode = 'Volume', recursive = True))
             surfaces = self.find_face("Volume", gid)
+            use_smooth = True                        
+            use_default_cl = True                        
             for l in surfaces:
                 if not self.check_done("Surface", l):
                     self.done["Surface"].append(l)
@@ -329,7 +331,6 @@ class GmshMesher(object):
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
-            use_smooth = True                        
             if self.done['Line']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Line']]),
                                  mode = 'Line'))
@@ -339,7 +340,7 @@ class GmshMesher(object):
             if self.done['Volume']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Volume']]),
                                   mode = 'Volume', recursive = True))
-                
+            use_smooth = True
             use_default_cl = True
             llines= self.find_line("Volume", gid)
             for l in llines:
@@ -361,6 +362,7 @@ class GmshMesher(object):
             if len(x) == 0: return lines
             lines.extend(x)
             use_smooth = True
+            use_default_cl = True                        
             surfaces = self.find_face("Surface", gid)
             for l in surfaces:
                 if not self.check_done("Surface", l):                
@@ -370,7 +372,8 @@ class GmshMesher(object):
             x = self.show_hide_gid(gid, mode = mode)
             if len(x) == 0: return lines
             lines.extend(x)
-            #use_smooth = True            
+            use_smooth = True
+            use_default_cl = True
             if self.done['Line']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Line']]),
                                  mode = 'Line'))
@@ -378,7 +381,6 @@ class GmshMesher(object):
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                   mode = 'Surface', recursive = True))
 
-            use_default_cl = True            
             llines = self.find_line("Surface", gid)
             for l in llines:
                 if not self.check_done("Line", l):
@@ -400,6 +402,7 @@ class GmshMesher(object):
             if len(x) == 0: return lines
             lines.extend(x)
             use_smooth = True
+            use_default_cl = True            
             if self.done['Surface']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                   mode = 'Surface', recursive = True))
@@ -419,15 +422,17 @@ class GmshMesher(object):
             pass
         
         if meshdim == 0:
-            lines.extend(embed(gid, embed_s=embed_s, embed_l=embed_l,
-                                 embed_p=embed_p))
+            lines.extend(embed(gid, mode,
+                               embed_s=embed_s,
+                               embed_l=embed_l,
+                               embed_p=embed_p))
             verts = [int(x) for x in embed_p.split(',') if x]
             llines = [int(x) for x in embed_l.split(',') if x]
-            for l in llines:
-                verts.extend(self.find_vertex("Line", l))
             surfaces = [int(x) for x in embed_s.split(',') if x]
-            for s in surfaces:
-                verts.extend(self.find_vertex("Surface", s))
+            if len(llines) > 0:
+                verts.extend(self.find_vertex("Line", embed_l))
+            if len(surfaces) > 0:                
+                verts.extend(self.find_vertex("Surface", embed_s))
             for v in verts:
                 if not self.check_done("Vertex", v):
                     self.done["Vertex"].append(v)
@@ -435,14 +440,14 @@ class GmshMesher(object):
 
             return lines
 
-        #if use_default_cl:
-        #    lines.extend(freemesh(gid, clmax=1e20, clmin=defclmin,
-        #                          defclmax=1e20,
-        #                          defclmin=defclmin,
-        #                          use_smooth=use_smooth,
-        #                          write_cl = write_cl))
-        #else:
-        lines.extend(freemesh(gid, clmax=clmax, clmin=clmin,
+        if use_default_cl:
+            lines.extend(freemesh(gid, clmax=1e20, clmin=defclmin,
+                                  defclmax=1e20,
+                                  defclmin=defclmin,
+                                  use_smooth=use_smooth,
+                                  write_cl = write_cl))
+        else:
+           lines.extend(freemesh(gid, clmax=clmax, clmin=clmin,
                                   defclmax=self.clmax,
                                   defclmin=self.clmin,
                                   use_smooth=use_smooth,

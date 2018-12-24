@@ -120,15 +120,24 @@ data = (('geom_id', VtableElement('geom_id', type='string',
         ('embed_s', VtableElement('embed_s', type='string',
                                    guilabel = 'Surface#',
                                    default = "", 
-                                   tip = "Surface number" )),)
+                                   tip = "Surface number" )),
+        ('embed_l', VtableElement('embed_l', type='string',
+                                   guilabel = 'Line#',
+                                   default = "", 
+                                   tip = "Line number" )),
+        ('embed_p', VtableElement('embed_p', type='string',
+                                   guilabel = 'Point#',
+                                   default = "", 
+                                   tip = "Point number" )),)
 
 
 class FreeVolume(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
-        gid, clmax, clmin, embed_s = self.vt.make_value_or_expression(self)
+        gid, clmax, clmin, embed_s, embed_l, embed_p = self.vt.make_value_or_expression(self)
         mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
-                   mode = 'Volume', embed_s = embed_s)
+                   mode = 'Volume', embed_s = embed_s,
+                   embed_l=embed_l, embed_p=embed_p)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -292,6 +301,12 @@ class RecombineSurface(GmshMeshActionBase):
     def add_meshcommand(self, mesher):
         gid, max_angle  = self.vt.make_value_or_expression(self)
         mesher.add('recombine_surface', gid, max_angle=max_angle)
-    
+
+
+class MeshExtrude(GmshMeshActionBase):
+    pass
+
+class MeshRevolve(GmshMeshActionBase):
+    pass
     
     

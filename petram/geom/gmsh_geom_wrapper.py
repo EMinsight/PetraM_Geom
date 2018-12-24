@@ -123,6 +123,9 @@ class Geometry(object):
     def set_factory(self, factory_type):
         pass
 
+    def clear(self):
+        gmsh.clear()
+        
     def getBoundingBox(self):
         xmax = -np.inf
         xmin =  np.inf

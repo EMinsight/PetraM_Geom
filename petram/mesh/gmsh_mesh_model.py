@@ -272,8 +272,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  None, None])
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface]
+        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, MeshExtrude, MeshRevolve
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, MeshExtrude, MeshRevolve]
 
     def get_special_menu(self):
         from petram.geom.gmsh_geom_model import use_gmsh_api
@@ -364,6 +364,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 geom = geom_root._gmsh4_data[-1]
 
             if len(geo_text) > 0:
+                geom.clear()
+                geom_root = self.geom_root
+                geo_text = geom_root._unrolled_geom4 + geo_text
                 handle, geo_filename = tempfile.mkstemp(suffix='.geo')
                 os.write(handle, "\n".join(geo_text))
                 os.close(handle)
