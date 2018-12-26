@@ -121,6 +121,13 @@ def characteristiclength(gid, cl = 1e20):
     c += '{{ {} }}'.format(','.join(gid)) + ' = ' +  str(cl) + ";"
     return [c,]
 
+def extrude(gid, tax, nlayer):
+    txt =  ('Extrude'+ '{{ {} }}'.format(','.join(tax)) + ' '  
+                    + '{ Surface'  + '{{{}}}'.format(','.join(gid))  + ';' 
+                    + '  Layers{'+str(nlayer) + '}; }')
+    return [txt,]
+
+
 def rotate(axis, x0, angle):
     taxis = [str(x) for x in axis]
     tx0 = [str(x) for x in x0]    
@@ -199,10 +206,15 @@ class GmshMesher(object):
 
         self.sequence = []
         self.transform = {}
-        self.done = {"Vertex":[],     #0D element
+        self.done = {"Vertex":[],    #0D element
                      "Line": [],     #1D element
-                     "Surface": [],     #2D element
+                     "Surface": [],  #2D element
                      "Volume": []}   #3D element
+        self.slaves = {"Vertex":{},
+                       "Line":{},
+                       "Surface":{},
+                       "Volume":{},}
+                       
         num_entities = entities[0]
         self.num_entities = {"Vertex": num_entities[0],
                              "Line": num_entities[1],
@@ -351,8 +363,7 @@ class GmshMesher(object):
             verts = self.find_vertex("Volume", gid)
             for v in verts:
                 if not self.check_done("Vertex", v):
-                    self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
                     
         elif meshdim == 3 and mode == 'Surface':
             return []
@@ -391,7 +402,7 @@ class GmshMesher(object):
             for v in verts:
                 if not self.check_done("Vertex", v):
                     self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
                     
         elif meshdim == 3 and mode == 'Line':
             return []
@@ -416,7 +427,7 @@ class GmshMesher(object):
             for v in verts:
                 if not self.check_done("Vertex", v):
                     self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
                     
         else:
             pass
@@ -436,7 +447,7 @@ class GmshMesher(object):
             for v in verts:
                 if not self.check_done("Vertex", v):
                     self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
 
             return lines
 
@@ -526,14 +537,37 @@ class GmshMesher(object):
         self.transform[transform] = ('translate', (a-b).flatten())
         print('translate', (a - b).flatten())
         return []
+
+    def copymesh_face_trans_txt(self, gid, src):
+        s = self.entity_relations["Surface"]
+        l = self.entity_relations["Line"]
+        ptx = self.geom_coords[0]
         
-    def copymesh(self, gid, src="", meshdim=0, transform='', mode='',
-                       etg = None):
-        etg1, etg2 = etg
-        trans = self.transform[transform]
-        f = getattr(sys.modules[__name__], trans[0])
-        trans_txt = f(*trans[1:])
-        
+        from petram.geom.geom_utils import find_translate_between_surface 
+        geom_data = ptx, l, s
+        src1 = [int(x) for x in src.split(',')]
+        dst1 = [int(x) for x in gid.split(',')]            
+        ax, an, d, affine, p_pairs, l_pairs = find_translate_between_surface(src1,
+                                                            dst1, geom_data=geom_data)
+        trans_txt = " Affine " + "{{ {} }}".format(",".join([str(x)
+                                                        for x in affine.flatten()]))
+        vv = self.slaves["Vertex"]
+        for k in p_pairs:
+            if not k in vv: vv[k] = []
+            vv[k].append(p_pairs[k])
+        vv = self.slaves["Line"]
+        for k in l_pairs:
+            if not k in vv: vv[k] = []
+            vv[k].append(l_pairs[k])
+        vv = self.slaves["Surface"]
+        for s, d in zip(src1, dst1):
+            if not s in vv: vv[s] = []
+            vv[s].append(d)
+        print("slaves...", self.slaves)
+        return trans_txt, l_pairs
+    
+    def copymesh(self, gid, src, etg1, etg2, trans_txt,  meshdim=0,  mode=''):
+        print("gid here", gid)
         x1 = self.show_hide_gid(gid, mode = mode)
         if not x1: return []
         x2 = self.show_hide_gid(src, mode = mode)
@@ -541,33 +575,59 @@ class GmshMesher(object):
         xx = self.show_hide_gid(','.join([gid, src]), mode = mode)        
         lines = []
         if meshdim == 0:
-            lines.extend(boundary(mode, etg1, gid))
-            lines.extend(boundary(mode, etg2, src))
-            mode2 = 'Line' if mode == 'Surface' else 'Point'
-            lines.extend(periodic(mode2, etg1+"()", etg2+"()", trans_txt))                
+            if mode == 'Surface':
+                for l1, l2 in zip(etg1, etg2):
+                   lines.extend(periodic("Curve", str(l1), str(l2), trans_txt))
             lines.extend(periodic(mode,  gid, src, trans_txt))
         elif meshdim == 2 and mode == 'Surface':
             lines.extend(xx)
             self.record_finished(gid, mode = mode)
             self.record_finished(src, mode = mode)                        
         elif meshdim == 1 and mode == 'Surface':
-            lines.extend(self.show_hide_gid(','.join([etg1+"()", etg2+"()"]),
+            lines.extend(self.show_hide_gid(','.join([str(x) for x in etg1+etg2]),
                                             mode = 'Line'))
-            self.record_finished(etg1+"()", mode = 'Line')
-            self.record_finished(etg2+"()", mode = 'Line')
+            self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
+            self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
         elif meshdim == 1 and mode == 'Line':
             lines.extend(xx)
             self.record_finished(gid, mode = mode)
             self.record_finished(src, mode = mode)                        
         return lines
-    
+
+    def extrude(self,  gid, tax, nlayer, meshdim=0):
+        if meshdim== 3:
+            return extrude(gid, tax, nlayer)
+        else:
+            return []
+                       
+    def call_characteristiclength(self, gid, cl):
+        '''
+        call characteristiclength with all slaves
+        '''               
+        def find_slave(vv, i, c = None):
+            if c is None: c = []
+            if i in vv:
+                for k in vv[i]:
+                    c.append(k)
+                    c = find_slave(vv, k, c=c)
+            return c
+                    
+        gid = [int(x) for x in gid.split(',')]
+        
+        all_slaves = sum([find_slave(self.slaves["Vertex"], i) for i in gid], [])
+        gid.extend(all_slaves)               
+
+        gid = ','.join([str(x) for x in gid])
+        return characteristiclength(gid, cl)
+
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):
         if meshdim == 0:
             verts = self.find_vertex("Vertex", gid)                                  
-            self.done["Vertex"].extend(verts)                                  
-            return characteristiclength(gid, cl = cl)
+            self.done["Vertex"].extend(verts)
+            return self.call_characteristiclength(gid, cl)
         else:
             return []
+
     def recombine_surface(self, gid, max_angle=45, meshdim=0):
         if meshdim == 1:
             return recombine_surface(gid, max_angle)

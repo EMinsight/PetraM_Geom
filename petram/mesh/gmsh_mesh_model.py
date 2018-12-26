@@ -110,6 +110,9 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         raise NotImplementedError(
              "you must specify this method in subclass")
     
+    def check_master_slave(self, mesher):
+        pass
+    
     def _onBuildThis(self, evt, **kwargs):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -620,9 +623,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         if not nochild:
             for child in children:
-                if not child.enabled: continue            
+                if not child.enabled: continue
+                if child is stop1: break            # for build before                
                 child.vt.preprocess_params(child)
-                if child is stop1: break            # for build before
+                child.check_master_slave(mesher)                
                 child.add_meshcommand(mesher)
                 if child is stop2: break            # for build after
             
@@ -635,8 +639,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if not use_gmsh_api:
             lines = geom_root._txt_rolled + lines
         self._txt_rolled = lines
-        self._mesh_fface = mesher.done['Surface'] # finished lines        
+        self._mesh_fface = mesher.done['Surface'] # finished surfaces
         self._mesh_fline = mesher.done['Line'] # finished lines
+        print("done data:", self._mesh_fface ,  self._mesh_fline)
         self._max_mdim = max_mdim
         
     def load_gui_figure_data(self, viewer):

@@ -1932,13 +1932,17 @@ class WorkPlane(GeomPB):
         if np.sum(ax**2) != 0.0 and an != 0.0:
             print(ax, an)
             geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
+            
+        from petram.geom.geom_utils import rotation_mat
+        R = rotation_mat(ax, an)
+        '''
         c = np.cos(an); s = np.sin(an)
         R = np.array(
             [[c + (1-c)*ax[0]**2, ax[0]*ax[1]*(1-c)-ax[2]*s, ax[0]*ax[2]*(1-c)+ax[1]*s],
              [ax[0]*ax[1]*(1-c)+ax[2]*s, c + (1-c)*ax[1]**2,  ax[1]*ax[2]*(1-c)-ax[0]*s],
              [ax[0]*ax[2]*(1-c)-ax[1]*s, ax[1]*ax[2]*(1-c)+ax[0]*s, c + (1-c)*ax[2]**2]]
             )
-
+        '''
         y2 =  np.dot(R, np.array([0, 1, 0]))
                      
         ax = np.cross(y2, a2)

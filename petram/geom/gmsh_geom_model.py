@@ -530,8 +530,8 @@ class GmshGeom(GeomTopBase):
         else:
             self.geom_finalized = False        
 
-        v, s, l = read_loops(geom)
-        self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)
+        l, s, v = read_loops(geom)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
 
         if finalize:
             filename = self.name()
