@@ -50,33 +50,50 @@ def find_translate_between_surface(src, dst, geom=None,
     n2 = normal2points(p2)
 
     ax = np.cross(n1, n2)
-    an = np.arcsin(np.linalg.norm(ax))
+    an = np.arcsin(np.linalg.norm(ax))    
+    ax = ax/np.linalg.norm(ax)
+    
+    def find_mapping(p1, p3):
+        # try all transpose
+        for i in range(len(p1)):
+            d = p3[0]- p1[i]
+            p3t = p3 - d
+            mind = np.array([np.min(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1])
+            if np.all(mind < mind_eps): 
+                 mapping = [np.argmin(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1]
+                 trans = d
+                 return d, mapping
+        return None, None
     
     if an*180./np.pi > min_angle:
-        R = rotation_mat(ax, an)
+        R = rotation_mat(ax, -an)
     else:
-        R = np.diag([1,1,1.])    
+        R = np.diag([1,1,1.])
+        an = 0.0
+
+    # check two possible orientation        
     p3 = np.dot(R, p2.transpose()).transpose()
+    d, mapping = find_mapping(p1, p3)
+    if d is None:
+        if an*180./np.pi > min_angle:
+            R = rotation_mat(ax, np.pi-an)
+        else:
+            R = np.diag([1,1,1.])
+            an = 0.0
+        p3 = np.dot(R, p2.transpose()).transpose()
+        d, mapping = find_mapping(p1, p3)
+        if d is None:        
+            assert False, "auto trans failed (no mapping between vertices)"
+    p_pairs = dict(zip(p1p, p2p[mapping]))  #point mapping
 
-    # try all transpose
-    for i in range(len(p1)):
-        d = p3[0]- p1[i]
-        p3t = p3 - d
-        mind = np.array([np.min(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1])
-        if np.all(mind < mind_eps): 
-             mapping = [np.argmin(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1]
-             trans = d
-             break
-    else:
-        assert False, "auto trans failed (no mapping between vertices)"
-    p_pairs = dict(zip(p1p[mapping], p2p))  #point mapping
-
-    
     l2dict = {tuple(sorted(l[ll])):ll for ll in l2}
     l_pairs = {ll:l2dict[tuple(sorted((p_pairs[l[ll][0]],p_pairs[l[ll][1]])))] for ll in l1}
 
     affine = np.zeros((4,4), dtype=float)
-    affine[:3,:3] = R
-    affine[:3,-1] = d
+    affine[:3,:3] = np.linalg.inv(R)
+    affine[:3,-1] = np.dot(np.linalg.inv(R), d)
     affine[-1,-1] = 1.0
-    return ax, an, d, affine, p_pairs, l_pairs
+
+    px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
+    print("px, d", px, d)
+    return ax, an, px, d, affine, p_pairs, l_pairs

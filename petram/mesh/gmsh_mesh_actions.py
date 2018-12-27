@@ -264,12 +264,18 @@ data = (('geom_id', VtableElement('geom_id', type='string',
         ('mapper', VtableElement('mapper', type='string',
                                   guilabel = 'Transform',
                                   default = "", 
-                                  tip = "Coordinate transformatin " )),)
+                                  tip = "Coordinate transformatin " )),
+        ('cp_cl', VtableElement('cp_cl', type='bool',
+                                 guilabel = 'Copy CL',
+                                 default = True,
+                                 tip = "Copy Characteristic Length")), )
+
+
 
 class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
-        gid, src_id, transform = self.vt.make_value_or_expression(self)
+        gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
         etg1 = self.l_pairs.keys()
         etg2 = self.l_pairs.values()        
         mesher.add('copymesh', gid, src_id, etg1, etg2, self.trans_txt,
@@ -277,8 +283,8 @@ class CopyFace(GmshMeshActionBase):
 
         
     def check_master_slave(self, mesher):
-        gid, src_id, transform = self.vt.make_value_or_expression(self)
-        self.trans_txt, self.l_pairs = mesher.copymesh_face_trans_txt(gid, src_id)
+        gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
+        self.trans_txt, self.l_pairs = mesher.copymesh_face_trans_txt(gid, src_id, cp_cl)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -309,36 +315,62 @@ class RecombineSurface(GmshMeshActionBase):
         mesher.add('recombine_surface', gid, max_angle=max_angle)
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
-                                      guilabel = 'Target',
+                                      guilabel = 'Volume',
                                       default = "",
                                       tip = "extrusion target")),
-          ('taxis', VtableElement('taxis', type='float',
-                                   guilabel = 'Translation Axis',
-                                   suffix =('x', 'y', 'z'),
-                                   default = [0, 0, 1],
-                                   tip = "translation axis" )),
-          ('ex_len', VtableElement('exlen', type='float',
-                             guilabel = 'Length',
-                             default = 1.0,
-                             tip = "Extrusion length" )), 
+          ('dst_id', VtableElement('dst_id', type='string',
+                                   guilabel = 'Surface# (To)',
+                                   default = "", 
+                                   tip = "Surface number" )),
+          ('src_id', VtableElement('src_id', type='string',
+                                  guilabel = 'Source # (From)',
+                                  default = "", 
+                                  tip = "Surface number" )),
           ('nlayer', VtableElement('nlayer', type='int',
                              guilabel = 'Num. Layers',
                              default = 5,
                              tip = "Number of Layers" )), )         
 
 class MeshExtrude(GmshMeshActionBase):
-    vt = Vtable(edata)    
+    vt = Vtable(edata)
     def add_meshcommand(self, mesher):
-        gid, tax, length, nlayer = self.vt.make_value_or_expression(self)
-        tax = np.array(tax)
-        tax = tax/np.sqrt(np.sum(tax**2))*length
-        tax = [str(x) for x in tax]
-        gid = gid.split(",")
-        mesher.add('extrude', gid, tax, nlayer)
+        gid, dst_id, src_id, n_layers = self.vt.make_value_or_expression(self)
+        tag = mesher.new_etg()
+        mesher.add('meshextrude', tag, gid, dst_id, src_id, n_layers, self.extrude_params)
+        
+    def check_master_slave(self, mesher):
+        gid, dst_id, src_id, n_layers = self.vt.make_value_or_expression(self)        
+        self.extrude_params = mesher.extrude_trans_txt(gid, dst_id, src_id, True)
+        
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            dest = [int(x) for x in self.dst_id.split(',')]
+            src  = [int(x) for x in self.src_id.split(',')]
+            ret['face'] = dest + src
+        except:
+            pass
+        return ret, 'face'
     
-    pass
+edata =  (('ex_target', VtableElement('ex_target', type='string',
+                                      guilabel = 'Volume',
+                                      default = "",
+                                      tip = "extrusion target")),
+          ('dst_id', VtableElement('dst_id', type='string',
+                                   guilabel = 'Surface# (To)',
+                                   default = "", 
+                                   tip = "Surface number" )),
+          ('src_id', VtableElement('src_id', type='string',
+                                  guilabel = 'Source # (From)',
+                                  default = "", 
+                                  tip = "Surface number" )),
+          ('nlayer', VtableElement('nlayer', type='int',
+                             guilabel = 'Num. Layers',
+                             default = 5,
+                             tip = "Number of Layers" )), )         
+    
+MeshRevolve = MeshExtrude
 
-class MeshRevolve(GmshMeshActionBase):
-    pass
     
     
