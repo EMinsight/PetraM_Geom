@@ -276,15 +276,13 @@ class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
         gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
-        etg1 = self.l_pairs.keys()
-        etg2 = self.l_pairs.values()        
-        mesher.add('copymesh', gid, src_id, etg1, etg2, self.trans_txt,
+        mesher.add('copymesh', gid, src_id, self.copyface_params,
                    mode = 'Surface')
 
         
     def check_master_slave(self, mesher):
         gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
-        self.trans_txt, self.l_pairs = mesher.copymesh_face_trans_txt(gid, src_id, cp_cl)
+        self.copyface_params = mesher.copymesh_face_trans_txt(gid, src_id, cp_cl)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                

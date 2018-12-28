@@ -216,6 +216,18 @@ def add_all_slaves(vv, gid):
     all_slaves = list(set(sum([find_slave(vv, i) for i in gid], [])))
     #print("all slaves", all_slaves)
     return all_slaves
+
+def check_new_slave(vv, k, item):
+    '''
+    if item can be new slave of k
+
+    '''
+    print("check_new_slave", k, item)
+    print("all slave 1", add_all_slaves(vv, [k]))
+    print("all slave 2", add_all_slaves(vv, [item]))    
+    if item in add_all_slaves(vv, [k]): return False    
+    if k in add_all_slaves(vv, [item]): return False
+    return True
                      
 class GmshMesher(object):
     def __init__(self, entities,
@@ -573,8 +585,10 @@ class GmshMesher(object):
         l = self.entity_relations["Line"]
         ptx = self.geom_coords[0]
         
-        from petram.geom.geom_utils import find_translate_between_surface 
-        geom_data = ptx, l, s
+        from petram.geom.geom_utils import find_translate_between_surface
+        X, cells, pt_data, cell_data, field_data = self.geom_coords        
+        geom_data = ptx, l, s, cell_data
+        
         src1 = [int(x) for x in src.split(',')]
         dst1 = [int(x) for x in gid.split(',')]            
         ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(src1,
@@ -587,25 +601,38 @@ class GmshMesher(object):
         if cp_cl:
              vv = self.slaves["Vertex"]
              for k in p_pairs:
-                 if p_pairs[k] in vv and k in vv[p_pairs[k]]: continue            
+                 if not check_new_slave(vv, k, p_pairs[k]): continue                 
+                 #if p_pairs[k] in vv and k in vv[p_pairs[k]]: continue            
                  if not k in vv: vv[k] = []
                  vv[k].append(p_pairs[k])
         vv = self.slaves["Line"]
+        print("l_pairs here", l_pairs)
         new_l_pairs = {}
         for k in l_pairs:
-            if l_pairs[k] in vv and k in vv[l_pairs[k]]: continue            
+            if not check_new_slave(vv, k, l_pairs[k]): continue
+            #if l_pairs[k] in vv and k in vv[l_pairs[k]]: continue            
             if not k in vv: vv[k] = []
             vv[k].append(l_pairs[k])
             new_l_pairs[k] = l_pairs[k]
         vv = self.slaves["Surface"]
+        new_dst = {}
         for s, d in zip(src1, dst1):
-            if d in vv and s in vv[d]: continue                        
+            if not check_new_slave(vv, s, d): continue
+            #if d in vv and s in vv[d]: continue                        
             if not s in vv: vv[s] = []
             vv[s].append(d)
-        print("slaves...", self.slaves)
-        return trans_txt, new_l_pairs
+            new_dst[s] = d            
+
+        return trans_txt, new_l_pairs, new_dst
     
-    def copymesh(self, gid, src, etg1, etg2, trans_txt,  meshdim=0,  mode=''):
+    def copymesh(self, gid, src, params,  meshdim=0,  mode=''):
+        trans_txt, l_pairs, new_dst = params
+        print("l_pairs", l_pairs)
+        etg1 = l_pairs.keys()
+        etg2 = l_pairs.values()        
+        src1 = new_dst.keys()
+        dst1 = new_dst.values()        
+        
         x1 = self.show_hide_gid(gid, mode = mode)
         if not x1: return []
         x2 = self.show_hide_gid(src, mode = mode)
@@ -614,9 +641,10 @@ class GmshMesher(object):
         lines = []
         if meshdim == 0:
             if mode == 'Surface':
-                for l1, l2 in zip(etg1, etg2):
-                   lines.extend(periodic("Curve", str(l2), str(l1), trans_txt))
-            lines.extend(periodic(mode,  gid, src, trans_txt))
+                for l1 in etg1:
+                   lines.extend(periodic("Curve", str(l_pairs[l1]), str(l1), trans_txt))
+            for l1 in src1:
+                lines.extend(periodic(mode,  str(new_dst[l1]), str(l1), trans_txt))
         elif meshdim == 2 and mode == 'Surface':
             #lines.extend(xx)
             self.record_finished(gid, mode = mode)
@@ -624,8 +652,10 @@ class GmshMesher(object):
         elif meshdim == 1 and mode == 'Surface':
             #lines.extend(self.show_hide_gid(','.join([str(x) for x in etg1+etg2]),
             #                                mode = 'Line'))
-            self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
-            self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
+            if len(etg1)>0:
+                self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
+            if len(etg2)>0:                
+                self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
         elif meshdim == 1 and mode == 'Line':
             #lines.extend(xx)
             self.record_finished(gid, mode = mode)
@@ -638,8 +668,10 @@ class GmshMesher(object):
         l = self.entity_relations["Line"]
         ptx = self.geom_coords[0]
 
-        from petram.geom.geom_utils import find_translate_between_surface 
-        geom_data = ptx, l, s
+        from petram.geom.geom_utils import find_translate_between_surface
+        X, cells, pt_data, cell_data, field_data = self.geom_coords        
+        geom_data = ptx, l, s, cell_data
+
         gid1 = [int(x) for x in gid.split(',')]
         src1 = [int(x) for x in src.split(',')]
         dst1 = [int(x) for x in dst.split(',')]            
@@ -660,21 +692,26 @@ class GmshMesher(object):
         if cp_cl:
              vv = self.slaves["Vertex"]
              for k in p_pairs:
-                 if p_pairs[k] in vv and k in vv[p_pairs[k]]: continue            
+                 if not check_new_slave(vv, k, p_pairs[k]): continue                 
+                 #if p_pairs[k] in vv and k in vv[p_pairs[k]]: continue            
                  if not k in vv: vv[k] = []
                  vv[k].append(p_pairs[k])
         vv = self.slaves["Line"]
         new_l_pairs = {}
         for k in l_pairs:
-            if l_pairs[k] in vv and k in vv[l_pairs[k]]: continue            
+            if not check_new_slave(vv, k, l_pairs[k]): continue
+            #if l_pairs[k] in vv and k in vv[l_pairs[k]]: continue            
             if not k in vv: vv[k] = []
             vv[k].append(l_pairs[k])
             new_l_pairs[k] = l_pairs[k]
         vv = self.slaves["Surface"]
+        new_dst = {}
         for s, d in zip(src1, dst1):
-            if d in vv and s in vv[d]: continue                        
+            if not check_new_slave(vv, s, d): continue
+            #if d in vv and s in vv[d]: continue                        
             if not s in vv: vv[s] = []
             vv[s].append(d)
+            new_dst[s] = d
 
         ll1 = self.find_line("Volume", gid1)
         fc1 = self.find_face("Volume", gid1)        
@@ -687,17 +724,20 @@ class GmshMesher(object):
         fc = {}
         for x in fc1:
             fc[x] = self.find_vertex("Surface", [x])
-        return trans_txt, ax, an, px, trans, new_l_pairs, ll1, fc
+        return trans_txt, ax, an, px, trans, new_l_pairs, ll1, fc, new_dst
     
     def meshextrude(self, tag,  gid, dst, src, nlayer, params, meshdim=0):
-        trans_txt, ax, an, px, trans,  l_pairs, ll1, fc = params
+        trans_txt, ax, an, px, trans,  l_pairs, ll1, fc, new_dst = params
         lines = []
         etg1 = l_pairs.keys()
         etg2 = l_pairs.values()        
+        src1 = new_dst.keys()
+        dst1 = new_dst.values()        
         if meshdim == 0:
-            for l1, l2 in zip(etg1, etg2):
-                lines.extend(periodic("Curve", str(l2), str(l1), trans_txt))
-            lines.extend(periodic("Surface",  dst, src, trans_txt))
+            for l1 in etg1:
+                lines.extend(periodic("Curve", str(l_pairs[l1]), str(l1), trans_txt))
+            for l1 in src1:
+                lines.extend(periodic("Surface",  str(new_dst[l1]), str(l1), trans_txt))
             lines.extend(transfiniteL(','.join([str(x) for x in ll1]),
                                       progression = 1,
                                       nseg = nlayer + 1))
@@ -722,9 +762,11 @@ class GmshMesher(object):
         elif meshdim == 1:
             xx = self.show_hide_gid(','.join([str(x) for x in ll1]),
                                     mode = 'Line')
-            lines.extend(xx)            
-            self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
-            self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
+            lines.extend(xx)
+            if len(etg1)>0:
+                 self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
+            if len(etg2)>0:                
+                 self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
             self.record_finished(','.join([str(x) for x in ll1]),  mode = 'Line')
         else:
             pass
