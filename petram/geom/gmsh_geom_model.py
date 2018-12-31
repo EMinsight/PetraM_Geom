@@ -462,6 +462,8 @@ class GmshGeom(GeomTopBase):
         '''
         filename : export geometry to a real file (for debug)
         '''
+        import gmsh
+        
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
         if self._gmsh4_data is not  None:
@@ -484,7 +486,24 @@ class GmshGeom(GeomTopBase):
         geom.factory.synchronize()
 
         if no_mesh: return geom
-        
+
+        if finalize:
+            '''
+            Save BREP for meshing.
+            We need to reload it here so that indexing is consistent
+            in meshing.
+            '''
+            import os
+
+            filename = self.name()
+            geom.write(filename +  '.msh')
+            geom.write(filename +  '.brep')            
+            self._unrolled_geom4_step = os.path.join(os.getcwd(), filename+'.brep')
+            geom.clear()
+            geom.set_factory('OpenCASCADE')                
+            gmsh.model.occ.importShapes(self._geom_brep)
+            gmsh.model.occ.synchronize()
+            
         # here we ask for 2D mesh for plotting.
         # size control is done based on geometry size.
         ss = geom.getObjSizes()
@@ -499,7 +518,7 @@ class GmshGeom(GeomTopBase):
         for tag in vcl:
            geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
 
-        import gmsh
+
         #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
 
 
@@ -522,6 +541,7 @@ class GmshGeom(GeomTopBase):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
         geom.model.mesh.generate(2)        
 
+        
         from petram.geom.read_gmsh import read_pts_groups, read_loops
         ptx, cells, cell_data = read_pts_groups(geom)
         
@@ -533,13 +553,6 @@ class GmshGeom(GeomTopBase):
         l, s, v = read_loops(geom)
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
 
-        if finalize:
-            filename = self.name()
-            geom.write(filename +  '.msh')
-            geom.write(filename +  '.geo_unrolled')
-            fid = open(filename +  '.geo_unrolled', 'r')
-            self._unrolled_geom4 = fid.readlines()
-            fid.close()
 
     def build_geom3(self, stop1=None, stop2=None, filename = None,
                    finalize = False):

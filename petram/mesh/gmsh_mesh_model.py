@@ -368,8 +368,11 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
             if len(geo_text) > 0:
                 geom.clear()
-                geom_root = self.geom_root
-                geo_text = geom_root._unrolled_geom4 + geo_text
+                geom.set_factory('OpenCASCADE')                
+                geom_root = self.geom_root                
+                gmsh.model.occ.importShapes(geom_root._geom_brep)
+                gmsh.model.occ.synchronize()
+                print("Merging step file",geom_root._geom_brep)
                 handle, geo_filename = tempfile.mkstemp(suffix='.geo')
                 os.write(handle, "\n".join(geo_text))
                 os.close(handle)
@@ -488,8 +491,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             max_dim = 0
 
             print("Writing Physical Group")
+            geom.model.geo.synchronize()
+            geom.model.geo.synchronize()            
             ent = geom.model.getEntities(dim=3)
-            print("Adding " + str(len(ent)) + " Volume(s)")
+            print("Adding " + str(len(ent)) + " Volume(s)" + str(ent))
             if len(ent) > 0: max_dim = 3
             for k, x in enumerate(ent):
                 if len(geom.model.getPhysicalGroupsForEntity(3, x[1])) > 0:

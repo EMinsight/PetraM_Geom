@@ -32,6 +32,93 @@ def normal2points(p1, eps = 1e-15):
     norm = norm / np.sqrt(np.sum(norm**2))
     return norm
 
+def map_points_in_geom_info(info1, info2, th = 1e-15):
+    '''
+    info = ptx, l, s, v
+        pts = array(:, 3)
+        p   = point -> point index
+        l   = line -> point
+        s   = surface -> line
+        v   = volume -> surface
+    '''
+    ptx1 = info1[0]
+    ptx2 = info2[0]
+    
+    dist = np.array([np.min(np.sum((ptx1 - p)**2, 1))for p in ptx2])
+    if np.any(dist > th):
+        assert False, "could not able to find vertex mapping"
+
+
+    #iverts -> p
+    iv2p1 = {info1[1][k]:k    for k in info1[1]}
+    iv2p2 = {info2[1][k]:k    for k in info2[1]}
+    
+    # {point in info2 : point in info1}
+    pmap_r = {iv2p2[k]: iv2p1[np.argmin(np.sum((ptx1 - p)**2, 1))]
+              for k,  p in enumerate(ptx2)}
+    # {point in info1 : point in info2}    
+    pmap = {pmap_r[k]:k   for k in pmap_r}
+
+    return pmap, pmap_r
+
+def map_lines_in_geom_info(info1, info2, pmap_r):
+    lmap = {}
+    lmap_r = {}
+
+    for l in info2[2]:
+        p1, p2 = pmap_r[info2[2][l][0]], pmap_r[info2[2][l][1]]
+        for x in info1[2]:
+            if (info1[2][x][0] == p1 and
+                info1[2][x][1] == p2):
+                lmap[x] = l
+                lmap_r[l] = x
+                break
+            elif (info1[2][x][0] == p2 and
+                  info1[2][x][1] == p1):
+                lmap[x] = -l
+                lmap_r[l] = -x
+                break
+            else:
+                pass
+        else:
+            assert False, "could not find line mapping for "+str(l)
+    return lmap, lmap_r
+
+def map_surfaces_in_geom_info(info1, info2, lmap_r):
+    smap = {}
+    smap_r = {}
+
+    for s in info2[3]:
+        tmp = sorted([lmap_r[x] for x in info2[3][s]])
+        for x in info1[3]:
+            if sorted(info1[3][x]) == tmp:
+                smap[x] = s
+                smap_r[s] = x
+                break
+            else:
+                pass
+        else:
+            assert False, "could not find line mapping for "+str(s)
+    return smap, smap_r
+
+def map_volumes_in_geom_info(info1, info2, smap_r):
+    vmap = {}
+    vmap_r = {}
+
+    for v in info2[4]:
+        tmp = sorted([smap_r[x] for x in info2[4][v]])
+        for x in info1[4]:
+            if sorted(info1[4][x]) == tmp:
+                vmap[x] = v
+                vmap_r[v] = x
+                break
+            else:
+                pass
+        else:
+            assert False, "could not find line mapping for "+str(s)
+    return vmap, vmap_r
+
+                
 def find_translate_between_surface(src, dst, geom=None,
                    geom_data = None,
                    min_angle = 0.1, 
@@ -47,8 +134,12 @@ def find_translate_between_surface(src, dst, geom=None,
     p1p = np.unique(np.hstack([l[k] for k in l1]).flatten())
     p2p = np.unique(np.hstack([l[k] for k in l2]).flatten())
 
-    i1 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p1p]).flatten()
-    i2 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p2p]).flatten()
+    if cell_data is None:
+        i1 = p1p-1
+        i2 = p2p-1
+    else:
+        i1 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p1p]).flatten()
+        i2 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p2p]).flatten()
     p1 = ptx[i1,:]
     p2 = ptx[i2,:]
     n1 = normal2points(p1)
@@ -62,7 +153,7 @@ def find_translate_between_surface(src, dst, geom=None,
     #an = np.arcsin(np.linalg.norm(ax))
     an = np.arctan2(yy, xx)
 
-    print("p2, axis angle", xx, yy, p2, ax, an)
+    #print("p2, axis angle", xx, yy, p2, ax, an)
     def find_mapping(ax, an, p1, p2):
         if an != 0.0:
             R = rotation_mat(ax, -an)
@@ -103,9 +194,8 @@ def find_translate_between_surface(src, dst, geom=None,
             
     p_pairs = dict(zip(p1p, p2p[mapping]))  #point mapping
 
-    print("p_pairs here", p_pairs)
-    print("l1", [(ll, l[ll]) for ll in l1])
-    print("l2", [(ll, l[ll]) for ll in l2])    
+    #print("l1", [(ll, l[ll]) for ll in l1])
+    #print("l2", [(ll, l[ll]) for ll in l2])    
     l2dict = {tuple(sorted(l[ll])):ll for ll in l2}
     l_pairs = {ll:l2dict[tuple(sorted((p_pairs[l[ll][0]],p_pairs[l[ll][1]])))] for ll in l1}
 
