@@ -187,7 +187,6 @@ class Geometry(object):
             for bdim, btag in bdimtags:
                 lcar[btag] = min((lcar[btag], s))
         return dict(lcar)
-               
        
     @staticmethod
     def write(filename):

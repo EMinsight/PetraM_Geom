@@ -301,7 +301,8 @@ class GmshGeom(GeomTopBase):
                 
     def get_special_menu(self):
         if use_gmsh_api:
-            return [('Build All', self.onBuildAll, None),]
+            return [('Build All', self.onBuildAll, None),
+                    ('Export .brep', self.onExportBrep, None)]
         else:
             return [('Build All', self.onBuildAll, None),
                     ('Export .geo', self.onExportGeom, None)]
@@ -498,7 +499,7 @@ class GmshGeom(GeomTopBase):
             filename = self.name()
             geom.write(filename +  '.msh')
             geom.write(filename +  '.brep')            
-            self._unrolled_geom4_step = os.path.join(os.getcwd(), filename+'.brep')
+            self._geom_brep = os.path.join(os.getcwd(), filename+'.brep')
             geom.clear()
             geom.set_factory('OpenCASCADE')                
             gmsh.model.occ.importShapes(self._geom_brep)
@@ -627,7 +628,6 @@ class GmshGeom(GeomTopBase):
                              finalize=finalize)
 
     def onExportGeom(self, evt):
-        print("export geom file")
         if not hasattr(self, "_txt_unrolled"):
             evt.Skip()
             return
@@ -640,6 +640,19 @@ class GmshGeom(GeomTopBase):
             fid = open(path, 'w')
             fid.write('\n'.join(self._txt_rolled))
             fid.close()
+            
+    def onExportBrep(self, evt):
+        if not hasattr(self, "_geom_brep"):
+            evt.Skip()
+            return
+        from ifigure.widgets.dialog import write
+        parent = evt.GetEventObject()
+        path = write(parent,
+                     message = 'Enter .brep file name',
+                     wildcard = '*.brep')
+        if path != '':
+            from shutil import copyfile
+            copyfile(self._geom_brep, path)
          
     def load_gui_figure_data(self, viewer):
         import meshio
