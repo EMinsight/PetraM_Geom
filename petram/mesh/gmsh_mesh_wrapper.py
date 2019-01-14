@@ -81,6 +81,26 @@ def process_text_tags_sd(dim=1):
         return method2
     return func2
 
+def process_text_tags_vsd(dim=3):
+    '''
+    convert two text tags input to dimtags
+    tags = '1,2,3'
+    '''
+    def func2(method):
+        def method2(self, done, params, vtags, tags, tags2, *args, **kwargs):
+            vtags = [int(x) for x in vtags.split(',')]
+            vdimtags = [(dim, x) for x in vtags]
+            
+            tags = [int(x) for x in tags.split(',')]
+            dimtags = [(dim-1, x) for x in tags]
+                
+            tags2 = [int(x) for x in tags2.split(',')]
+            dimtags2 = [(dim-1, x) for x in tags2]
+            
+            return method(self, done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
+        return method2
+    return func2
+
 class GMSHMeshWrapper(object):
     workspace_base = 1
     gmsh_init = False    
@@ -117,6 +137,8 @@ class GMSHMeshWrapper(object):
         '''
         add mesh command
         '''
+        if name == 'extrude_face':
+            self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         self.mesh_sequence.append([name, gids, kwargs])
         
     def clear(self):
@@ -271,7 +293,7 @@ class GMSHMeshWrapper(object):
         current = self.current
         self.switch_model(ws)
         gmsh.write(filename)
-        self.switch_model(self.current)
+        self.switch_model(current)
         
     def save_mesh_all(self, filename_base):
         '''
@@ -556,7 +578,6 @@ class GMSHMeshWrapper(object):
             dd = np.array([1.]*nseg)
 
         dists = dd/np.sum(dd) # normalized goemetrical distance of nodes
-        print("dist")
         cdists = np.hstack([[0], np.cumsum(dists)])
         
         p = list(np.linspace(0, 1., np.max([nseg*3, 300])))
@@ -644,7 +665,7 @@ class GMSHMeshWrapper(object):
         pass
 
     # copy face
-    @process_text_tags2(dim=2)        
+    @process_text_tags_sd(dim=2)        
     def copyface_0D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
         from petram.geom.geom_utils import find_translate_between_surface
         ptx, p, l, s, v = self.geom_info
@@ -793,13 +814,19 @@ class GMSHMeshWrapper(object):
         return done, params            
         
 
-    @process_text_tags2(dim=2)        
+    @process_text_tags_sd(dim=2)        
     def copyface_3D(self,  done, params, dimtags, dimgtag2, *args, **kwargs):
         return done, params                            
     
     # extrudeface
-    @process_text_tags2(dim=2)            
-    def extrude_face_0D(self,  done, params, dimtags, dimgtag2, *args, **kwargs):
+    @process_text_tags_vsd(dim=3)            
+    def extrude_face_0D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
+        from petram.geom.geom_utils import find_translate_between_surface
+        from petram.geom.geom_utils import map_points_in_geom_info
+        from petram.geom.geom_utils import map_lines_in_geom_info
+        from petram.geom.geom_utils import map_surfaces_in_geom_info
+        from petram.geom.geom_utils import map_volumes_in_geom_info        
+        
         nlayers = kwargs.get('nlayers', 5)
         
         ptx, p, l, s, v = self.geom_info
@@ -813,12 +840,16 @@ class GMSHMeshWrapper(object):
         ws = self.prep_workspace()
 
         self.delete_all_except(2, tag1)
-        ret = gmsh.model.occ.extrude(((2,tag1),), d[0], d[1], d[2],
+        ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
                                      numElements=[nlayers])
+
+        print("extrude result", ret)
+        ex_info = ([(2, x) for x in tag1], ret)
         gmsh.model.occ.synchronize()        
 
         info1 = self.geom_info
         info2 = self.read_geom_info()
+        gmsh.model.getEntities
 
         pmap, pmap_r = map_points_in_geom_info(info1, info2)
         lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r)
@@ -829,24 +860,288 @@ class GMSHMeshWrapper(object):
         self.show_all()
         gmsh.model.mesh.generate(0)
 
-        params = (ax, an, px, d, affine, p_pairs, l_pairs, maps, ws)
+        params = (ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info)
         self.switch_model('main1')
         
-        return done, params                                    
-        
-    def extrude_face_1D(self, vtag, tag1, tag2, nlayers):
+        return done, params
+    
+    @process_text_tags_vsd(dim=3)                    
+    def extrude_face_1D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         # mesh lateral edges. copy destination edges
         # and bring them back to main1
-        pass
-    def extrude_face_2D(self, vtag, tag1, tag2, nlayers):
+        ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info = params
+        pmap, pmap_r, lmap, lmap_r, smap, smap_r, vmap, vmap_r = maps
+
+        ents1 = gmsh.model.getBoundary(dimtags, oriented=False)
+        ents2 = gmsh.model.getBoundary(dimtags2, oriented=False)        
+        mdata = []
+        for dim, tag in ents1+ents2:
+            ndata = gmsh.model.mesh.getNodes(dim, tag)
+            edata = gmsh.model.mesh.getElements(dim, tag)
+            mdata.append((dim, tag, ndata, edata))
+
+        self.switch_model(ws)
+
+        self.show_all()
+        gmsh.model.mesh.generate(1)
+        
+        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}        
+        noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+
+        # copy 1D elements on the source and dest surface
+        copied_line = []
+        for d in mdata:
+            dim, tag, ndata, edata = d 
+            if dim == 2: break
+            tag = abs(lmap[tag])
+            ntag, pos, ppos = ndata
+            ntag2 = range(noffset, noffset+len(ntag))
+            noffset = noffset+len(ntag)
+            for i, j in zip(ntag, ntag2): node_map1[i] = j
+
+            vtags = [x for xx, x in gmsh.model.getBoundary(((1, tag),))]
+            
+            etypes, etags, nodes = edata
+
+            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+            eoffset = eoffset+len(etags[0])
+            nodes2 = [[node_map1[x] for x in item] for item in nodes]
+
+            # do I need to pay attetion the direction on parametricCoords here???
+
+            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
+            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            copied_line.append(tag)
+
+        # gather data to transfer
+        ents = gmsh.model.getEntities(1)
+        ents = [x for x in ents if not x[1] in copied_line]
+        mdata = []
+        for dim, tag in ents:
+            ndata = gmsh.model.mesh.getNodes(dim, tag)
+            edata = gmsh.model.mesh.getElements(dim, tag)
+            mdata.append((dim, tag, ndata, edata))
+            
+        # send back 1D data
+        self.switch_model('main1')
+        noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+
+        node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
+        node_map3 = {node_map3[x]:x for x in node_map3}
+
+        for d in mdata:
+            dim, tag0, ndata, edata = d
+            if dim != 1: continue
+
+            tag = abs(lmap_r[tag0])
+            #print("copy from ", dim, tag0, "to", tag)
+            
+            ntag, pos, ppos = ndata
+            etypes, etags, nodes = edata
+            
+            ntag2 = range(noffset, noffset+len(ntag))
+            noffset = noffset+len(ntag)
+            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+            eoffset = eoffset+len(etags[0])
+            
+
+            nodes2 = [node_map3[nodes[0][0]], node_map3[nodes[0][-1]]]
+
+            p1_0 = gmsh.model.getValue(1, tag, [0])
+            p1_1 = gmsh.model.getValue(1, tag, [1])            
+            p2_0 = info1[0][info1[1][nodes2[0]]]
+            p2_1 = info1[0][info1[1][nodes2[1]]]            
+
+            def get_dist(p1, p2):
+                d = np.array(p1) - np.array(p2)
+                return np.sum(d**2)
+            if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
+                print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
+                ppos = [abs(1-x) for x in ppos]
+                ntag2 = list(reversed(ntag2))
+                
+            #print("setting nodes", dim, tag, ntag2, ndata[1], ndata[2])
+            for i, j in zip(ntag, ntag2): node_map3[i] = j                        
+            nodes2 = [[node_map3[x] for x in item] for item in nodes]
+            #print("setting elements", dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ppos)
+            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            
+            done[1].append(tag)            
+        return done, params
+    
+    @process_text_tags_vsd(dim=3)
+    def extrude_face_2D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         # mesh lateral face. copy destination face
         # and bring them back to main1
+        ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info = params
+        pmap, pmap_r, lmap, lmap_r, smap, smap_r, vmap, vmap_r = maps
+
+        # gather source/dest info
+        mdata = []
+        for dim, tag in list(dimtags)+list(dimtags2):
+            ndata = gmsh.model.mesh.getNodes(dim, tag)
+            edata = gmsh.model.mesh.getElements(dim, tag)
+            mdata.append((dim, tag, ndata, edata))
+
+        ## add edge mapping from main1   
+        ents_1D = self.expand_dimtags(list(dimtags)+list(dimtags2), return_dim = 1)
+        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
+        ntags_s = sum([x[0] for x in tmp], [])
+        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
         
-        pass
-    def extrude_face_3D(self, vtag, tag1, tag2, nlayers):
+        self.switch_model(ws)
+        src_dst = ex_info[0]+ ex_info[1][:len(ex_info[0])]
+        self.show_all()
+        self.hide(src_dst)
+        # this mesh sides....
+        gmsh.model.mesh.generate(2)
+
+        ents_1D = gmsh.model.getBoundary(src_dst, oriented=False)
+        print("ents_1D", ents_1D)
+        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
+        ntags_d = sum([x[0] for x in tmp], [])
+        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+
+        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}                
+        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        for i, nt in zip(idx, ntags_s):
+            node_map1[nt] = ntags_d[i]
+        noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+
+        # copy 2D elements on the source/destination surface
+        for d in mdata:
+            dim, tag, ndata, edata = d 
+            if dim != 2: break
+            tag = smap[tag]
+            ntag, pos, ppos = ndata
+            ntag2 = range(noffset, noffset+len(ntag))
+            noffset = noffset+len(ntag)
+            for i, j in zip(ntag, ntag2): node_map1[i] = j
+
+            etypes, etags, nodes = edata
+
+            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+            eoffset = eoffset+len(etags[0])
+            nodes2 = [[node_map1[x] for x in item] for item in nodes]
+
+            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
+            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+
+        self.show_all()
+        gmsh.model.mesh.generate(3)
+
+        tmp = gmsh.model.getEntities(3)
+        mdata3D = []
+        for dim, tag in tmp:
+            ndata = gmsh.model.mesh.getNodes(dim, tag) 
+            edata = gmsh.model.mesh.getElements(dim, tag)
+            mdata3D.append((dim, tag, ndata, edata))
+
+        # copy back lateral mesh on surfaces
+        tmp = gmsh.model.getEntities(2)
+        tmp = [x for x in tmp if not x in src_dst]
+        #print("gather info from ", tmp)
+        mdata = []
+        for dim, tag in tmp:
+            ndata = gmsh.model.mesh.getNodes(dim, tag) 
+            edata = gmsh.model.mesh.getElements(dim, tag)
+            mdata.append((dim, tag, ndata, edata))
+        
+        ents_1D = gmsh.model.getEntities(1)
+        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
+        ntags_s = sum([x[0] for x in tmp], [])
+        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+
+        self.switch_model('main1')
+        noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+
+        ents_1D = self.expand_dimtags(vdimtags, return_dim = 1)
+        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
+        ntags_d = sum([x[0] for x in tmp], [])
+        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        
+        node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
+        node_map3 = {node_map3[x]:x for x in node_map3}
+        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        for i, nt in zip(idx, ntags_s):
+            node_map3[nt] = ntags_d[i]
+
+        for d in mdata:
+            dim, tag, ndata, edata = d 
+            if dim != 2: break
+            tag = smap_r[tag]
+            ntag, pos, ppos = ndata
+            ntag2 = range(noffset, noffset+len(ntag))
+            noffset = noffset+len(ntag)
+            for i, j in zip(ntag, ntag2): node_map3[i] = j
+
+            etypes, etags, nodes = edata
+
+            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+            eoffset = eoffset+len(etags[0])
+            nodes2 = [[node_map3[x] for x in item] for item in nodes]
+
+            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], [])#ndata[2])            
+            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            done[2].append(tag)
+            
+        params = ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info, mdata3D            
+        return done, params        
+
+    @process_text_tags_vsd(dim=3)
+    def extrude_face_3D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         # mesh volume and bring them back to main1
+        ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info, mdata = params
+        pmap, pmap_r, lmap, lmap_r, smap, smap_r, vmap, vmap_r = maps
+
+        #return done, params
+    
+        self.switch_model(ws)
+
+        ents_1D = list(gmsh.model.getEntities(1))+list(gmsh.model.getEntities(2))
+        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
+        ntags_s = sum([x[0] for x in tmp], [])
+        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+
+        self.switch_model('main1')
+        noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+
+        ents_1D = self.expand_dimtags(vdimtags, return_dim = 1)+self.expand_dimtags(vdimtags, return_dim = 2)
+        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
+        ntags_d = sum([x[0] for x in tmp], [])
+        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
         
-        pass
+        node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
+        node_map3 = {node_map3[x]:x for x in node_map3}
+        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        for i, nt in zip(idx, ntags_s):
+            node_map3[nt] = ntags_d[i]
+
+        for d in mdata:
+            dim, tag, ndata, edata = d 
+            if dim != 3: break
+            tag = vmap_r[tag]
+            ntag, pos, ppos = ndata
+            ntag2 = range(noffset, noffset+len(ntag))
+            noffset = noffset+len(ntag)
+            for i, j in zip(ntag, ntag2): node_map3[i] = j
+
+            etypes, etags, nodes = edata
+
+            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+            eoffset = eoffset+len(etags[0])
+            nodes2 = [[node_map3[x] for x in item] for item in nodes]
+
+            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
+            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            done[3].append(tag)            
+        return done, params                
         
     '''
     High-level interface test codes

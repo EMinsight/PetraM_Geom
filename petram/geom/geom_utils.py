@@ -89,7 +89,7 @@ def map_surfaces_in_geom_info(info1, info2, lmap_r):
     smap_r = {}
 
     for s in info2[3]:
-        tmp = sorted([lmap_r[x] for x in info2[3][s]])
+        tmp = sorted([abs(lmap_r[x]) for x in info2[3][s]])
         for x in info1[3]:
             if sorted(info1[3][x]) == tmp:
                 smap[x] = s
@@ -98,7 +98,7 @@ def map_surfaces_in_geom_info(info1, info2, lmap_r):
             else:
                 pass
         else:
-            assert False, "could not find line mapping for "+str(s)
+            assert False, "could not find surface mapping for "+str(s)
     return smap, smap_r
 
 def map_volumes_in_geom_info(info1, info2, smap_r):
@@ -115,7 +115,7 @@ def map_volumes_in_geom_info(info1, info2, smap_r):
             else:
                 pass
         else:
-            assert False, "could not find line mapping for "+str(s)
+            assert False, "could not find volume mapping for "+str(s)
     return vmap, vmap_r
 
                 
