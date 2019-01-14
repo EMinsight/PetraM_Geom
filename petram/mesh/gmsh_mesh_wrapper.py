@@ -139,6 +139,10 @@ class GMSHMeshWrapper(object):
         '''
         if name == 'extrude_face':
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
+        elif name == 'revolve_face':
+            self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
+        else:
+            pass
         self.mesh_sequence.append([name, gids, kwargs])
         
     def clear(self):
@@ -684,7 +688,7 @@ class GMSHMeshWrapper(object):
         
         ax, an, px, d, affine, p_pairs, l_pairs = params
         
-        ents = gmsh.model.getBoundary(dimtags, oriented=False)
+        ents = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
         mdata = []
         for dim, tag in ents:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
@@ -776,11 +780,14 @@ class GMSHMeshWrapper(object):
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
         ntags_s = sum([x[0] for x in tmp], [])
         pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        pos_s = (np.dot(R, pos_s.transpose()).transpose() + D)
         
         ents_1D = self.expand_dimtags(dimtags2, return_dim = 1)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
         ntags_d = sum([x[0] for x in tmp], [])
         pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+
+        
         idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
         for i, nt in zip(idx, ntags_s):
             node_map2[nt] = ntags_d[i]
@@ -825,8 +832,9 @@ class GMSHMeshWrapper(object):
         from petram.geom.geom_utils import map_points_in_geom_info
         from petram.geom.geom_utils import map_lines_in_geom_info
         from petram.geom.geom_utils import map_surfaces_in_geom_info
-        from petram.geom.geom_utils import map_volumes_in_geom_info        
+        from petram.geom.geom_utils import map_volumes_in_geom_info
         
+        revolve = kwargs.pop('revolve', True)
         nlayers = kwargs.get('nlayers', 5)
         
         ptx, p, l, s, v = self.geom_info
@@ -840,12 +848,26 @@ class GMSHMeshWrapper(object):
         ws = self.prep_workspace()
 
         self.delete_all_except(2, tag1)
-        ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
-                                     numElements=[nlayers])
+        if (not revolve and an == 0):
+            ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
+                                         numElements=[nlayers])
+        elif (revolve and an != 0):
+            ret = gmsh.model.occ.revolve(dimtags, px[0], px[1], px[2],
+                                         ax[0], ax[1], ax[2], an, 
+                                         numElements=[nlayers])
+        else:
+            assert False, "extrude/revolve mesh error. Inconsistent imput"
 
-        print("extrude result", ret)
-        ex_info = ([(2, x) for x in tag1], ret)
-        gmsh.model.occ.synchronize()        
+        # split dimtags to src, dst, lateral
+        idx3 = np.where(np.array([x[0] for x in ret]) == 3)[0]
+        vol = [ret[x] for x in idx3]
+        dst = [ret[x-1] for x in idx3]
+        laterals = [x for x in ret if not x in dst and x[0] == 2] 
+        ex_info = ([(2, x) for x in tag1], dst, laterals,  vol)
+        gmsh.model.occ.synchronize()
+        
+        # for debug the intermediate geometry
+        gmsh.write('tmp_'+ws +  '.brep')            
 
         info1 = self.geom_info
         info2 = self.read_geom_info()
@@ -872,8 +894,8 @@ class GMSHMeshWrapper(object):
         ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info = params
         pmap, pmap_r, lmap, lmap_r, smap, smap_r, vmap, vmap_r = maps
 
-        ents1 = gmsh.model.getBoundary(dimtags, oriented=False)
-        ents2 = gmsh.model.getBoundary(dimtags2, oriented=False)        
+        ents1 = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
+        ents2 = list(set(gmsh.model.getBoundary(dimtags2, combined = False, oriented=False)))
         mdata = []
         for dim, tag in ents1+ents2:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
@@ -988,18 +1010,20 @@ class GMSHMeshWrapper(object):
 
         ## add edge mapping from main1   
         ents_1D = self.expand_dimtags(list(dimtags)+list(dimtags2), return_dim = 1)
+        print("ents_1D_here", ents_1D)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
         ntags_s = sum([x[0] for x in tmp], [])
         pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
         
         self.switch_model(ws)
-        src_dst = ex_info[0]+ ex_info[1][:len(ex_info[0])]
+        src_dst = ex_info[0]+ ex_info[1]
+        src_dst_side = ex_info[0]+ ex_info[1]+ex_info[2]        
         self.show_all()
         self.hide(src_dst)
         # this mesh sides....
         gmsh.model.mesh.generate(2)
-
-        ents_1D = gmsh.model.getBoundary(src_dst, oriented=False)
+        print("src_dst", src_dst)
+        ents_1D = list(set(gmsh.model.getBoundary(src_dst, combined=False, oriented=False)))
         print("ents_1D", ents_1D)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
         ntags_d = sum([x[0] for x in tmp], [])
@@ -1141,7 +1165,22 @@ class GMSHMeshWrapper(object):
             gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
             gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
             done[3].append(tag)            
-        return done, params                
+        return done, params
+
+    # revolve
+    # internally it is the same as extrude face
+    def revolve_face_0D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
+        kwargs['revolve']=True
+        return self.extrude_face_0D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)  
+    def revolve_face_1D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
+        kwargs['revolve']=True
+        return self.extrude_face_1D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)        
+    def revolve_face_2D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
+        kwargs['revolve']=True
+        return self.extrude_face_2D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)        
+    def revolve_face_3D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
+        kwargs['revolve']=True
+        return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)        
         
     '''
     High-level interface test codes
