@@ -101,6 +101,36 @@ def process_text_tags_vsd(dim=3):
         return method2
     return func2
 
+def check_line_orientation(ltag, vtags, pcoord):
+    p1 = np.array(gmsh.model.getValue(0, vtags[0], [0]))
+    p2 = np.array(gmsh.model.getValue(0, vtags[1], [0]))
+    p3 = np.array(gmsh.model.getValue(1, ltag, [pcoord]))
+
+    d1 = np.sqrt(np.sum((p1-p3)**2))
+    d2 = np.sqrt(np.sum((p2-p3)**2))    
+    
+    if d1 > 1e-10 and d2 > 1e-10:
+        print("Line endes does not agree with Vertex")
+        return 0
+    if d1 < d2:
+        return 1
+    if d2 < d1:
+        return 2
+
+def get_nodes_elements(ents, normalize=False):
+    mdata = []
+    for dim, tag in ents:
+
+        if normalize:
+            ndata = gmsh.model.mesh.getNodes(dim, tag, includeBoundary=True)
+            pc = np.array(ndata[2])
+            ndata = ndata[0], ndata[1], (pc[:-2]-pc[-2])/(pc[-1]-pc[-2])
+        else:
+            ndata = gmsh.model.mesh.getNodes(dim, tag)
+        edata = gmsh.model.mesh.getElements(dim, tag)
+        mdata.append((dim, tag, ndata, edata))
+    return mdata
+        
 class GMSHMeshWrapper(object):
     workspace_base = 1
     gmsh_init = False    
@@ -561,7 +591,7 @@ class GMSHMeshWrapper(object):
     def transfinite_edge_0D(self, done, params, dimtags, *args, **kwargs):
         #meher.add('transfinite_line', gid, nseg=nseg, progression = p,  bump = b)
         self.show_only(dimtags)
-        nseg = kwargs.get('nseg', 100)
+        nseg = kwargs.get('nseg', 100)-1
         progression = kwargs.get('progression', 1)
         bump = kwargs.get('bump', 1)
 
@@ -584,28 +614,46 @@ class GMSHMeshWrapper(object):
         dists = dd/np.sum(dd) # normalized goemetrical distance of nodes
         cdists = np.hstack([[0], np.cumsum(dists)])
         
-        p = list(np.linspace(0, 1., np.max([nseg*3, 300])))
+
         params = {}
         for dim, tag in dimtags:
+            ntags, nodes, pcoords = gmsh.model.mesh.getNodes(1, tag, includeBoundary=True)
+            p = list(np.linspace(pcoords[-2], pcoords[-1], np.max([nseg*3, 300])))            
             ptx = np.array(gmsh.model.getValue(1, tag, p)).reshape(-1, 3)
-            dd = np.cumsum(np.sqrt(np.sum((ptx[:-1]- ptx[1:])**2, 1)))
-            dd = np.hstack([[0], dd])
+            dd = np.sqrt(np.sum((ptx[:-1]- ptx[1:])**2, 1))
+            ddd = np.hstack([[0], np.cumsum(dd)])
+            ddd = ddd/ddd[-1]
 
-            pcoords = np.interp(cdists[1:-1], dd, p) #parametric Coords to realized the distancs
-            nodepos = gmsh.model.getValue(1, tag, pcoords)
-            
-            dimtags2 = self.expand_dimtags(((dim, tag),), return_dim = 0)
-            if not dimtags2[0][1] in done[0]:
-                vtag = dimtags2[0][1]
-                size = dd[-1]*dists[0]            
-                gmsh.model.mesh.setSize(((0, vtag),), size)
-                done[0].append(vtag)            
-            if not dimtags2[1][1] in done[0]:
-                vtag = dimtags2[1][1]
-                size = dd[-1]*dists[-1]            
-                gmsh.model.mesh.setSize(((0, vtag),), size)
-                done[0].append(vtag)
+            pcoords = np.interp(cdists, ddd, p) #parametric Coords to realized the distancs
+            nodepos = gmsh.model.getValue(1, tag, pcoords[1:-1])
+
+            size = np.array(gmsh.model.getValue(1, tag, pcoords[:2])).reshape(-1, 3)
+            size1 = np.sqrt(np.sum((size[1]- size[0])**2))
+            size = np.array(gmsh.model.getValue(1, tag, pcoords[-2:])).reshape(-1, 3)
+            size2 = np.sqrt(np.sum((size[1]- size[0])**2))
                 
+            vtags = [x for xx, x in gmsh.model.getBoundary(((dim, tag),))]
+            flag = check_line_orientation(tag, vtags, pcoords[0])            
+            if flag == 1:
+                if not vtags[0] in done[0]:                
+                    gmsh.model.mesh.setSize(((0, vtags[0]),), size1)
+                    done[0].append(vtags[0])                                
+                if not vtags[1] in done[0]:                                    
+                    gmsh.model.mesh.setSize(((0, vtags[1]),), size2)
+                    done[0].append(vtags[1])
+                    
+            elif flag == 2:
+                if not vtags[0] in done[0]:
+                    gmsh.model.mesh.setSize(((0, vtags[0]),), size2)
+                    done[0].append(vtags[0])                                                    
+                if not vtags[1] in done[0]:                    
+                    gmsh.model.mesh.setSize(((0, vtags[1]),), size1)
+                    done[0].append(vtags[1])                    
+            else:
+                print(gmsh.model.getValue(0, vtags[0], [0]), gmsh.model.getValue(0, vtags[1], [0]),
+                      gmsh.model.getValue(1, tag, pcoords[:1]), gmsh.model.getValue(1, tag, pcoords[-1:]))
+                assert False, "Something is wrong"
+            
             params[tag] = (nodepos, pcoords)
         gmsh.model.mesh.generate(0)
         return done, params
@@ -618,24 +666,26 @@ class GMSHMeshWrapper(object):
         for dim, tag in dimtags:
             nodepos, pcoords = params[tag]
             
-            ntags = range(noffset, noffset+len(pcoords))
+            ntags = range(noffset, noffset+len(pcoords)-2)
             noffset = noffset+len(ntags)
             
             etags = [range(eoffset, eoffset+len(ntags)+1)]
             eoffset = eoffset+len(etags[0])
 
             vtags = [x for xx, x in gmsh.model.getBoundary(((dim, tag),))]
+            flag = check_line_orientation(tag, vtags, pcoords[0])
+            
             info1 = self.geom_info
             tmp = np.vstack([ntags, ntags]).transpose().flatten()
-            if gmsh.model.getValue(0, vtags[0], [0]) == gmsh.model.getValue(1, tag, [0]):
+            if flag == 1:
                 nodes2 = np.hstack([[info1[1][vtags[0]]+1], tmp, [info1[1][vtags[1]]+1]])
-            elif gmsh.model.getValue(0, vtags[1], [0]) == gmsh.model.getValue(1, tag, [0]):
+            elif flag == 2:
                 nodes2 = np.hstack([[info1[1][vtags[1]]+1], tmp, [info1[1][vtags[0]]+1]])                
             else:
                 assert False, "Something is wrong"
 
             #print("setting", dim, tag, ntags, nodepos, pcoords)
-            gmsh.model.mesh.setNodes(dim, tag, ntags, nodepos, pcoords)
+            gmsh.model.mesh.setNodes(dim, tag, ntags, nodepos, pcoords[1:-1])
             #print("setting", dim, tag, [1], etags, [list(nodes2)])     
             gmsh.model.mesh.setElements(dim, tag, [1], etags, [list(nodes2)])        
             done[1].append(tag)
@@ -689,12 +739,8 @@ class GMSHMeshWrapper(object):
         ax, an, px, d, affine, p_pairs, l_pairs = params
         
         ents = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
-        mdata = []
-        for dim, tag in ents:
-            ndata = gmsh.model.mesh.getNodes(dim, tag)
-            edata = gmsh.model.mesh.getElements(dim, tag)
-            mdata.append((dim, tag, ndata, edata))
-            
+        mdata = get_nodes_elements(ents, normalize=True)
+        
         noffset = max(gmsh.model.mesh.getNodes()[0])+1
         eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
 
@@ -716,13 +762,14 @@ class GMSHMeshWrapper(object):
                 
             ntag, pos, ppos = ndata            
             etypes, etags, nodes = edata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
+            ntag2 = range(noffset, noffset+len(ntag)-2)
+            noffset = noffset+len(ntag)-2
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
             
             pos = np.array(pos).reshape(-1,3).transpose()
-            pos = (np.dot(R, pos).transpose() + D).flatten()
+            pos = (np.dot(R, pos).transpose() + D)
+            pos = pos[:-2,:].flatten()            
 
             #if node_map2[nodes[0][0]] == ptags2[0]:
             #    pass
@@ -732,8 +779,9 @@ class GMSHMeshWrapper(object):
             # map start and end and check its parametricCoords
             nodes2 = [node_map2[nodes[0][0]], node_map2[nodes[0][-1]]]
 
-            p1_0 = gmsh.model.getValue(1, tag, [0])
-            p1_1 = gmsh.model.getValue(1, tag, [1])            
+            tmp = gmsh.model.mesh.getNodes(1, tag, includeBoundary=True)[2][-2:]
+            p1_0 = gmsh.model.getValue(1, tag, [tmp[0]])
+            p1_1 = gmsh.model.getValue(1, tag, [tmp[1]])            
             p2_0 = info1[0][info1[1][nodes2[0]]]
             p2_1 = info1[0][info1[1][nodes2[1]]]            
 
@@ -743,8 +791,10 @@ class GMSHMeshWrapper(object):
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
                 print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
                 ppos = [abs(1-x) for x in ppos]
-                ntag2 = list(reversed(ntag2))
-                
+                #ntag2 = list(reversed(ntag2))
+
+            ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
+          
             for i, j in zip(ntag, ntag2): node_map2[i] = j
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
             
@@ -939,12 +989,14 @@ class GMSHMeshWrapper(object):
         # gather data to transfer
         ents = gmsh.model.getEntities(1)
         ents = [x for x in ents if not x[1] in copied_line]
+        mdata = get_nodes_elements(ents, normalize=True)
+        '''
         mdata = []
         for dim, tag in ents:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
             edata = gmsh.model.mesh.getElements(dim, tag)
             mdata.append((dim, tag, ndata, edata))
-            
+        '''    
         # send back 1D data
         self.switch_model('main1')
         noffset = max(gmsh.model.mesh.getNodes()[0])+1
@@ -963,16 +1015,20 @@ class GMSHMeshWrapper(object):
             ntag, pos, ppos = ndata
             etypes, etags, nodes = edata
             
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
+            ntag2 = range(noffset, noffset+len(ntag)-2)
+            noffset = noffset+len(ntag)-2
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
-            
+
+            # omit edges
+            pos = np.array(pos).reshape(-1,3)
+            pos = pos[:-2,:].flatten()            
 
             nodes2 = [node_map3[nodes[0][0]], node_map3[nodes[0][-1]]]
-
-            p1_0 = gmsh.model.getValue(1, tag, [0])
-            p1_1 = gmsh.model.getValue(1, tag, [1])            
+            
+            tmp = gmsh.model.mesh.getNodes(1, tag, includeBoundary=True)[2][-2:]
+            p1_0 = gmsh.model.getValue(1, tag, [tmp[0]])
+            p1_1 = gmsh.model.getValue(1, tag, [tmp[1]])            
             p2_0 = info1[0][info1[1][nodes2[0]]]
             p2_1 = info1[0][info1[1][nodes2[1]]]            
 
@@ -982,16 +1038,17 @@ class GMSHMeshWrapper(object):
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
                 print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
                 ppos = [abs(1-x) for x in ppos]
-                ntag2 = list(reversed(ntag2))
+                #ntag2 = list(reversed(ntag2))
                 
-            #print("setting nodes", dim, tag, ntag2, ndata[1], ndata[2])
+            ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
+            
             for i, j in zip(ntag, ntag2): node_map3[i] = j                        
             nodes2 = [[node_map3[x] for x in item] for item in nodes]
-            #print("setting elements", dim, tag, etypes, etags2, nodes2)
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ppos)
+            gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ppos)
             gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
             
-            done[1].append(tag)            
+            done[1].append(tag)
+            
         return done, params
     
     @process_text_tags_vsd(dim=3)
@@ -1010,7 +1067,6 @@ class GMSHMeshWrapper(object):
 
         ## add edge mapping from main1   
         ents_1D = self.expand_dimtags(list(dimtags)+list(dimtags2), return_dim = 1)
-        print("ents_1D_here", ents_1D)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
         ntags_s = sum([x[0] for x in tmp], [])
         pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
@@ -1022,9 +1078,8 @@ class GMSHMeshWrapper(object):
         self.hide(src_dst)
         # this mesh sides....
         gmsh.model.mesh.generate(2)
-        print("src_dst", src_dst)
+        
         ents_1D = list(set(gmsh.model.getBoundary(src_dst, combined=False, oriented=False)))
-        print("ents_1D", ents_1D)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
         ntags_d = sum([x[0] for x in tmp], [])
         pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)

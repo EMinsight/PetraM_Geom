@@ -14,7 +14,7 @@ def rotation_mat(ax, an):
 
     return R
 
-def normal2points(p1, eps = 1e-15):
+def normal2points(p1, eps = 1e-13):
     '''
     normal vector defined by a surface made from the group of
     points
@@ -23,10 +23,10 @@ def normal2points(p1, eps = 1e-15):
     '''
     p1 = np.hstack([p1, np.atleast_2d(np.array([1]*len(p1))).transpose()])
     u, s, vh = np.linalg.svd(p1)
-
+ 
     null_mask = (s <= eps)
     if sum(null_mask) == 0:
-        print("no null space??", p1)
+        print("no null space??", p1, s)
     null_space = scipy.compress(null_mask, vh, axis=0)
     norm = null_space[0, :3]
     norm = norm / np.sqrt(np.sum(norm**2))
