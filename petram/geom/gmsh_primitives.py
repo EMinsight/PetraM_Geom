@@ -311,22 +311,38 @@ class Box(GeomPB):
         l2 = geom.add_line(p2, p5)
         l3 = geom.add_line(p5, p3)
         l4 = geom.add_line(p3, p1)
+        ll1 = geom.add_line_loop([l1, l2, l3, l4])
         
         l5 = geom.add_line(p1, p4)
+        l9  = geom.add_line(p4, p7)
         l6 = geom.add_line(p2, p7)
-        l7 = geom.add_line(p5, p8)
-        l8 = geom.add_line(p3, p6)
+        l1 = geom.add_line(p1, p2)        
+        ll2 = geom.add_line_loop([l5, l9, l6, l1])
         
+        l6 = geom.add_line(p2, p7)
+        l10 = geom.add_line(p7, p8)
+        l7 = geom.add_line(p5, p8)
+        l2 = geom.add_line(p2, p5)        
+        ll3 = geom.add_line_loop([l6, l10, l7, l2])
+        
+        l7 = geom.add_line(p5, p8)
+        l11 = geom.add_line(p8, p6)
+        l8 = geom.add_line(p3, p6)
+        l3 = geom.add_line(p5, p3)        
+        ll4 = geom.add_line_loop([l7, l11, l8, l3])
+        
+
+        l8 = geom.add_line(p3, p6)        
+        l12 = geom.add_line(p6, p4)
+        l5 = geom.add_line(p1, p4)
+        l4 = geom.add_line(p3, p1)        
+        ll5 = geom.add_line_loop([l8, l12, l5, l4])
+
+
         l9  = geom.add_line(p4, p7)
         l10 = geom.add_line(p7, p8)
-        l11 = geom.add_line(p8, p6)
-        l12 = geom.add_line(p6, p4)        
-        
-        ll1 = geom.add_line_loop([l1, l2, l3, l4])
-        ll2 = geom.add_line_loop([l5, l9, l6, l1])
-        ll3 = geom.add_line_loop([l6, l10, l7, l2])
-        ll4 = geom.add_line_loop([l7, l11, l8, l3])
-        ll5 = geom.add_line_loop([l8, l12, l5, l4])
+        l11 = geom.add_line(p8, p6)        
+        l12 = geom.add_line(p6, p4)
         ll6 = geom.add_line_loop([l9, l10, l11, l12])
         
         rec1 = geom.add_plane_surface(ll1)
