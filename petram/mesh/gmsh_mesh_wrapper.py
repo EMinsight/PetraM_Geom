@@ -434,29 +434,34 @@ class GMSHMeshWrapper(object):
     '''
     Low-level implementation at each mesh dim
     '''
-    # characteristic length
-    def cl_0D(self, done, params, tags, size, overwrite = True):
+    @process_text_tags(dim=0)            
+    def cl_0D(self, done, params, dimtags, size, overwrite = True):
         '''
         Set Charcteristic length of points
         By default, it overwrite whatever it is set
         '''
         
-        if overwrite:
+        if not overwrite:
             dimtags = [(0, x) for x in tags]        
         else:
-            dimtags = [(0, x) for x in tags if not x in done[0]]        
+            dimtags = [x for x in dimtags if not x[0] in done[0]]
         if len(dimtags) == 0: return
         self.show_only(dimtags)
         gmsh.model.mesh.setSize(dimtags, size)
         for dim, tag in dimtags:
-            if not tag in done[0]:  done[0].append(x)
+            if not tag in done[0]:  done[0].append(tag)
         gmsh.model.mesh.generate(0)        
         return done, params
     
+    @process_text_tags(dim=0)                
     def cl_1D(self, done, params, *args, **kwargs):
-        return done, params        
+        return done, params
+    
+    @process_text_tags(dim=0)                    
     def cl_2D(self, done, params, *args, **kwargs):
-        return done, params        
+        return done, params
+    
+    @process_text_tags(dim=0)                        
     def cl_3D(self, done, params, *args, **kwargs):
         return done, params        
     
@@ -723,12 +728,14 @@ class GMSHMeshWrapper(object):
     def copyface_0D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
         from petram.geom.geom_utils import find_translate_between_surface
         ptx, p, l, s, v = self.geom_info
+        axan = kwargs.pop('axan', None)        
         geom_data = (ptx, l, s, None)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]        
         ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
                                                             tag1, tag2,
-                                                            geom_data=geom_data)
+                                                            geom_data=geom_data,
+                                                            axan = axan)
         
         params = (ax, an, px, d, affine, p_pairs, l_pairs)
         return done, params
@@ -790,7 +797,7 @@ class GMSHMeshWrapper(object):
                 return np.sum(d**2)
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
                 print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
-                ppos = [abs(1-x) for x in ppos]
+                ppos = np.array([abs(1-x) for x in ppos])
                 #ntag2 = list(reversed(ntag2))
 
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
@@ -884,8 +891,9 @@ class GMSHMeshWrapper(object):
         from petram.geom.geom_utils import map_surfaces_in_geom_info
         from petram.geom.geom_utils import map_volumes_in_geom_info
         
-        revolve = kwargs.pop('revolve', True)
+        revolve = kwargs.pop('revolve', False)
         nlayers = kwargs.get('nlayers', 5)
+        axan = kwargs.pop('axan', None)
         
         ptx, p, l, s, v = self.geom_info
         geom_data = (ptx, l, s, None)
@@ -893,7 +901,8 @@ class GMSHMeshWrapper(object):
         tag2 = [x for dim, x in dimtags2]        
         ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
                                                             tag1, tag2,
-                                                            geom_data=geom_data)
+                                                            geom_data=geom_data,
+                                                            axan = axan)
         
         ws = self.prep_workspace()
 
@@ -906,6 +915,7 @@ class GMSHMeshWrapper(object):
                                          ax[0], ax[1], ax[2], an, 
                                          numElements=[nlayers])
         else:
+            print(revolve, an)
             assert False, "extrude/revolve mesh error. Inconsistent imput"
 
         # split dimtags to src, dst, lateral
@@ -1037,7 +1047,7 @@ class GMSHMeshWrapper(object):
                 return np.sum(d**2)
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
                 print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
-                ppos = [abs(1-x) for x in ppos]
+                ppos = np.array([abs(1-x) for x in ppos])
                 #ntag2 = list(reversed(ntag2))
                 
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]

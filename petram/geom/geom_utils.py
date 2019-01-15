@@ -120,9 +120,10 @@ def map_volumes_in_geom_info(info1, info2, smap_r):
 
                 
 def find_translate_between_surface(src, dst, geom=None,
-                   geom_data = None,
-                   min_angle = 0.1, 
-                   mind_eps = 1e-10):
+                                   geom_data = None,
+                                   min_angle = 0.1,
+                                   mind_eps = 1e-10,
+                                   axan = None):
     
     if geom is not None:
         ptx, cells, cell_data, l, s, v, geom = geom._gmsh4_data
@@ -145,15 +146,22 @@ def find_translate_between_surface(src, dst, geom=None,
     n1 = normal2points(p1)
     n2 = normal2points(p2)
 
-    ax = np.cross(n1, n2)
-    ax = ax/np.linalg.norm(ax)    
-    n3 = np.cross(ax, n1)
-    xx = np.sum(n2*n1)
-    yy = np.sum(n2*n3)
-    #an = np.arcsin(np.linalg.norm(ax))
-    an = np.arctan2(yy, xx)
+    if axan is None:
+        ax = np.cross(n1, n2)
+        ax = ax/np.linalg.norm(ax)    
+        n3 = np.cross(ax, n1)
+        xx = np.sum(n2*n1)
+        yy = np.sum(n2*n3)
+        #an = np.arcsin(np.linalg.norm(ax))
+        an = np.arctan2(yy, xx)
+        #print("p2, axis angle", xx, yy, p2, ax, an)        
+    else:
+        ax, an = axan
+        ax = np.array(ax, dtype=float)
+        ax = ax/np.linalg.norm(ax)            
+        an = np.pi/180.*an
+        
 
-    #print("p2, axis angle", xx, yy, p2, ax, an)
     def find_mapping(ax, an, p1, p2):
         if an != 0.0:
             R = rotation_mat(ax, -an)
@@ -169,7 +177,6 @@ def find_translate_between_surface(src, dst, geom=None,
             d = p3[0]- p1[i]
             p3t = p3 - d
             mind = np.array([np.min(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1])
-
             if np.all(mind < mind_eps): 
                  mapping = [np.argmin(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1]
                  trans = d
@@ -191,7 +198,7 @@ def find_translate_between_surface(src, dst, geom=None,
         d, mapping, R = find_mapping(ax, an, p1, p2)        
         if d is None:        
             assert False, "auto trans failed (no mapping between vertices)"
-            
+
     p_pairs = dict(zip(p1p, p2p[mapping]))  #point mapping
 
     #print("l1", [(ll, l[ll]) for ll in l1])
