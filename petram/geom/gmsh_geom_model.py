@@ -393,6 +393,13 @@ class GmshGeom(GeomTopBase):
         viewer = dlg.GetParent()
         ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
         ret = ptx, cells, {}, cell_data, {}
+
+        # set clmax guess from geometry size
+        xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
+        l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        clmax = l/3.
+        clmin = l/300.
+        self._clmax_guess = (clmax, clmin)
         
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)

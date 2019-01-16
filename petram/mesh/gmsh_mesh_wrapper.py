@@ -50,7 +50,7 @@ def process_text_tags(dim=1):
             else:
                 tags = [int(x) for x in tags.split(',')]
                 dimtags = [(dim, x) for x in tags if not x in done[dim]]
-            dprint2("calling", method, dimtags)
+            #dprint("calling", method, dimtags, args, kwargs)
             return method(self, done, params, dimtags, *args, **kwargs)
         return method2
     return func2
@@ -175,6 +175,9 @@ class GMSHMeshWrapper(object):
             pass
         self.mesh_sequence.append([name, gids, kwargs])
         
+    def count_sequence(self):
+        return len(self.mesh_sequence)
+    
     def clear(self):
         ''''
         clear mesh sequence
@@ -230,7 +233,7 @@ class GMSHMeshWrapper(object):
         if finalize:
             self.add_sequential_physicals()
 
-        return
+        return maxdim, done
     
     def load_brep(self, filename):
         self.switch_model('main1')
@@ -465,7 +468,7 @@ class GMSHMeshWrapper(object):
     def cl_3D(self, done, params, *args, **kwargs):
         return done, params        
     
-    # freeface
+    # freevolume
     @process_text_tags(dim=3)        
     def freevolume_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -765,7 +768,8 @@ class GMSHMeshWrapper(object):
 
             tag = l_pairs[tag]
             if tag in done[1]:
-                assert False, "Line is already meshed (CopyFace failed)"
+                print("Line is already meshed (CopyFace failed): "+str(tag)+ "... continuing")
+                continue
                 
             ntag, pos, ppos = ndata            
             etypes, etags, nodes = edata
@@ -855,7 +859,9 @@ class GMSHMeshWrapper(object):
             if dim != 2: continue
             tag = dimtags2[kk][1]
             if tag in done[2]:
-                assert False, "Face is already meshed (CopyFace failed)"
+                print("Face is already meshed (CopyFace): "+str(tag) + "... continuing")
+                continue                
+                
             ntag, pos, ppos = ndata
             ntag2 = range(noffset, noffset+len(ntag))
             noffset = noffset+len(ntag)

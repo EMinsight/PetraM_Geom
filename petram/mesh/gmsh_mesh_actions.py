@@ -117,6 +117,10 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                 default_txt = '',                                
                                 default = 0.0, 
                                 tip = "CharacteristicLengthMin" )),
+        ('resolution', VtableElement('resolution', type='int',
+                                guilabel = 'Resolution',
+                                default = 5., 
+                                tip = "Edge Resolution" )),
         ('embed_s', VtableElement('embed_s', type='string',
                                    guilabel = 'Surface#',
                                    default = "", 
@@ -134,11 +138,15 @@ data = (('geom_id', VtableElement('geom_id', type='string',
 class FreeVolume(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
-        gid, clmax, clmin, embed_s, embed_l, embed_p = self.vt.make_value_or_expression(self)
-        mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
-                   mode = 'Volume', embed_s = embed_s,
+        values = self.vt.make_value_or_expression(self)
+        gid, clmax, clmin, res, embed_s, embed_l, embed_p = values
+        mesher.add('freevolume', gid,
+                   maxsize = clmax,
+                   minsize = clmin,
+                   resolution = res,
+                   embed_s = embed_s,                   
                    embed_l=embed_l, embed_p=embed_p)
-
+        
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
@@ -159,9 +167,12 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                 tip = "CharacteristicLengthMax" )),
         ('clmin', VtableElement('clmin', type='float',
                                 guilabel = 'Min size',
-                                default_txt = '',                                
                                 default = 0., 
                                 tip = "CharacteristicLengthMin" )),
+        ('resolution', VtableElement('resolution', type='int',
+                                guilabel = 'Resolution',
+                                default = 5., 
+                                tip = "Edge Resolution" )),
         ('embed_l', VtableElement('embed_l', type='string',
                                    guilabel = 'Line#',
                                    default = "", 
@@ -174,9 +185,12 @@ data = (('geom_id', VtableElement('geom_id', type='string',
 class FreeFace(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
-        gid, clmax, clmin, embed_l, embed_p= self.vt.make_value_or_expression(self)
-        mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
-                   mode = 'Surface', embed_l=embed_l, embed_p=embed_p)
+        gid, clmax, clmin, res, embed_l, embed_p= self.vt.make_value_or_expression(self)
+        mesher.add('freeface', gid,
+                   maxsize = clmax,
+                   minsize = clmin,
+                   resolution = res,
+                   embed_l=embed_l, embed_p=embed_p)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -199,21 +213,28 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                    default = "remaining", 
                                    tip = "Line number" )),
         ('clmax', VtableElement('clmax', type='float',
-                                guilabel = 'Max size)',
+                                guilabel = 'Max size',
                                 default_txt = '',                                 
                                 default = 0.0,
                                 tip = "CharacteristicLengthMax" )),
         ('clmin', VtableElement('clmin', type='float',
                                 guilabel = 'Min size',
-                                default_txt = '',
-                                default = 0.0,
-                                tip = "CharacteristicLengthMin" )),)
+                                default_txt = '', default = 0.0,
+                                tip = "CharacteristicLengthMin" )),
+        ('resolution', VtableElement('resolution', type='int',
+                                guilabel = 'Resolution',
+                                default_txt = '5',                                     
+                                default = 5., 
+                                tip = "Edge Resolution" )),)
+
 class FreeEdge(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
-        gid, clmax, clmin = self.vt.make_value_or_expression(self)
-        mesher.add('freemesh', gid, clmax = clmax, clmin = clmin,
-                   mode = 'Line')
+        gid, clmax, clmin, res = self.vt.make_value_or_expression(self)
+        mesher.add('freeedge', gid,
+                   maxsize = clmax,
+                   minsize = clmin,
+                   resolution = res)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
