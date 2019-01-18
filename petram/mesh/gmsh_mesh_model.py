@@ -110,9 +110,6 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         raise NotImplementedError(
              "you must specify this method in subclass")
     
-    def check_master_slave(self, mesher):
-        pass
-    
     def _onBuildThis(self, evt, **kwargs):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -120,6 +117,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         engine.build_ns()
         geom_root = self.root()['Geometry'][self.parent.geom_group]
 
+        do_clear = False
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
             
@@ -208,13 +206,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     has_2nd_panel = False
     isMeshGroup = True
     vt = Vtable(data)    
-#    def __init__(self, *args, **kwargs):
-#        super(GmshMesh, self).__init__(*args, **kwargs)
-#        NS_mixin.__init__(self, *args, **kwargs)
+
     @property
     def geom_root(self):
         return self.root()['Geometry'][self.geom_group]
-        
+    @property
+    def mesher_data(self):
+        if hasattr(self, "_mesher_data"):
+            return self._mesher_data
+        return Noen
+    
     def attribute_set(self, v):
         v['geom_group'] = 'GmshGeom1'
         v['algorithm'] = 'default'
@@ -260,7 +261,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return
     
     def import_panel1_value(self, v):
-        self.geom_group = str(v[0])        
+        self.geom_group = str(v[0])
         self.vt.import_panel_value(self, v[1:-5])
 
         self.algorithm = str(v[-5])
@@ -276,8 +277,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  None, None])
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, MeshExtrude
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, MeshExtrude]
+        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, ExtrudeMesh, RevolveMesh
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh]
 
     def get_special_menu(self):
         from petram.geom.gmsh_geom_model import use_gmsh_api
@@ -288,7 +289,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                     ('Clear Mesh Sequense...', self.onClearMeshSq, None)]
         else:
              return [('Build All', self.onBuildAll, None),
-                     ('Export .geo', self.onExportGeom, None),
+#                     ('Export .geo', self.onExportGeom, None),
                      ('Export .msh', self.onExportMsh, None),
                      ('Clear Mesh', self.onClearMesh, None),
                      ('Clear Mesh Sequense...', self.onClearMeshSq, None)] 
@@ -300,9 +301,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.clmin_txt = str(clmin_root)        
         dlg = evt.GetEventObject().GetTopLevelParent()        
         dlg.OnItemSelChanged()
-        
+
+    '''
     def onExportGeom(self, evt):
-        print("export geom file")
         if not hasattr(self, "_txt_rolled"):
             evt.Skip()
             return
@@ -322,7 +323,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             fid = open(path, 'w')
             fid.write('\n'.join(geo_text))
             fid.close()
-            
+    '''        
     def onExportMsh(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -352,14 +353,11 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
         if clear:
             viewer.del_figure_data('mesh', self.name())
+        elif self.mesher_data is None:
+            viewer.del_figure_data('mesh', self.name())            
         else:
             print("mesh done face/line",  self._mesh_fface, self._mesh_fline)
-            ptx, cells, cell_data = read_pts_groups(gmsh,
-                                                    finished_lines = self._mesh_fline,
-                                                    finished_faces = self._mesh_fface)
-                
-            ret = ptx, cells, {}, cell_data, {}
-            viewer.set_figure_data('mesh', self.name(), ret)                
+            viewer.set_figure_data('mesh', self.name(), self.mesher_data)                
 
         if 'geom' in viewer._s_v_loop:
             viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
@@ -581,7 +579,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return embed
 
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None,
-                         nochild = False):
+                         nochild = False, finalize=False):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops
         
@@ -601,7 +599,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                             EdgeResolution = 3,                             
                             MeshAlgorithm = self.algorithm,
                             MeshAlgorithm3D = self.algorithm3d)
-        mesher.load_brep(geom_root._geom_brep)
+        #mesher.load_brep(geom_root._geom_brep)
         
         children = [x for x in self.walk()]
         children = children[1:]
@@ -611,12 +609,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 if not child.enabled: continue
                 if child is stop1: break            # for build before                
                 child.vt.preprocess_params(child)
-                child.check_master_slave(mesher)                
+                #child.check_master_slave(mesher)                
                 child.add_meshcommand(mesher)
                 if child is stop2: break            # for build after
 
-        if mesher.count_sequence() > 0:        
-            max_mdim, done = mesher.generate()
+        if mesher.count_sequence() > 0:
+            self._mesher_data = None                # set None since mesher may die...            
+            max_mdim, done, data = mesher.run_generater(brep_input = geom_root._geom_brep, finalize=finalize)
+            self._mesher_data = data         
             self._max_mdim = max_mdim
         else:
             self._max_mdim = 0

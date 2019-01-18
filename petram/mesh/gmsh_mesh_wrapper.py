@@ -1,8 +1,9 @@
 from __future__ import print_function
 import numpy as np
 import gmsh
-
-
+import time
+import multiprocessing as mp
+from Queue import Empty as QueueEmpty
 
 from collections import OrderedDict
 Algorithm2D= OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 3),
@@ -184,13 +185,16 @@ class GMSHMeshWrapper(object):
         '''
         self.mesh_sequence = []
         
-    def generate(self, dim=3, finalize=False):
+    def generate(self, dim=3, brep_input = '', finalize=False):
         '''
         generate mesh based on  meshing job sequence.
         brep must be loaed 
         '''
+        if brep_input != '':
+            self.load_brep(brep_input)
         if not self._new_brep:
             assert False, "new BREP must be loaded"
+
         self._new_brep = False            
         GMSHMeshWrapper.workspace_base = 1
         self.switch_model('main1')
@@ -1551,4 +1555,49 @@ class GMSHMeshWrapper(object):
         self.hide(((3, 2),), recursive=True)
         gmsh.model.mesh.generate(3)
             
-            
+    def run_generater(self, brep_input='', finalize=False, dim=3):
+        if brep_input != '':
+            filename = brep_input
+        else:
+            filename = self.target
+
+        kwargs = {'CharacteristicLengthMax':self.clmax,
+                  'CharacteristicLengthMin':self.clmin,
+                  'EdgeResolution' : self.res,
+                  'MeshAlgorithm'  : self.algorithm,
+                  'MeshAlgorithm3D': self.algorithm3d}
+
+        q = mp.Queue()
+        p = mp.Process(target = generator,
+                       args = (q, filename, self.mesh_sequence, dim, finalize, kwargs))
+        p.start()
+        while True:
+            try:
+                ret = q.get(True, 1)
+                break
+            except QueueEmpty:
+                if not p.is_alive():
+                    assert False, "Child Process Died"
+                    break
+            time.sleep(1)
+        return ret
+
+def generator(q, filename, sequence, dim, finalize, kwargs):
+    mw = GMSHMeshWrapper(**kwargs)
+    mw.mesh_sequence = sequence
+    max_dim, done = mw.generate(dim=dim, brep_input = filename, finalize=finalize)
+
+    from petram.geom.read_gmsh import read_pts_groups, read_loops
+        
+    ptx, cells, cell_data = read_pts_groups(gmsh,
+                                             finished_lines = done[1],
+                                             finished_faces = done[2])
+                
+    data = ptx, cells, {}, cell_data, {}
+    q.put((max_dim, done, data))
+    
+    
+
+                   
+
+        

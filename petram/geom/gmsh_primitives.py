@@ -2035,3 +2035,47 @@ class CADImport(GeomPB):
            self._newobjs.append(newkey)
         self._objkeys = objs.keys()
 
+# we make BREP import separately so that we can add Brep specific
+# interface later....
+class BrepImport(GeomPB):
+    vt = Vtable(tuple())
+    def panel1_param(self):
+        from wx import BU_EXACTFIT
+        b1 = {"label": "S", "func": self.onBuildBefore,
+              "noexpand": True, "style": BU_EXACTFIT}
+        b2 = {"label": "R", "func": self.onBuildAfter,
+              "noexpand": True, "style": BU_EXACTFIT}
+        wc = "ANY|*|Brep|*.brep"
+        ll = [[None, None, 241, {'buttons':[b1,b2],
+                                 'alignright':True,
+                                 'noexpand': True},],
+              ["File(.brep)", None, 45, {'wildcard':wc}],]
+        return ll
+      
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        v["cad_file"] = ""
+        return v
+        
+    def get_panel1_value(self):
+        return [None, self.cad_file, None]
+
+    def preprocess_params(self, engine):
+        return
+
+    def import_panel1_value(self, v):
+        self.cad_file = str(v[1])
+
+    def panel1_tip(self):
+        return [None, None, None]
+  
+    def build_geom(self, geom, objs):
+        PTs = geom.import_shapes(self.cad_file)
+        # apparently I should use this object (poly.surface)...?
+        self._newobjs = []        
+        #for p in PTs:
+        #   newkey = objs.addobj(p, 'cd')
+        #   self._newobjs.append(newkey)
+        self._objkeys = objs.keys()
+        
+

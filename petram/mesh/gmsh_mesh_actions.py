@@ -297,13 +297,11 @@ class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
         gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
-        mesher.add('copymesh', gid, src_id, self.copyface_params,
-                   mode = 'Surface')
-
-        
-    def check_master_slave(self, mesher):
-        gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
-        self.copyface_params = mesher.copymesh_face_trans_txt(gid, src_id, cp_cl)
+        mesher.add('copyface',
+                   src_id,                   
+                   gid,
+                   transfomr = transform,
+                   copy_cl = cp_cl)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -348,19 +346,61 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
           ('nlayer', VtableElement('nlayer', type='int',
                              guilabel = 'Num. Layers',
                              default = 5,
-                             tip = "Number of Layers" )), )         
-
-class MeshExtrude(GmshMeshActionBase):
+                             tip = "Number of Layers" )),
+          ('mapper', VtableElement('mapper', type='string',
+                                   guilabel = 'Transform Hint',
+                                   default = "", 
+                                   tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),)
+# Transform Hint (extrude)
+#    d     : dx, dy, dz : 3 float
+#    l1, l2,,,,: set of edges : end points determines d (N.I.)
+def process_hint(text):
+    try:
+        values = [float(x) for x in text.split(',')]
+        if len(values) == 3:
+            return {'d': values}
+    except:
+        pass
+    return {}
+    
+class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, n_layers = self.vt.make_value_or_expression(self)
-        tag = mesher.new_etg()
-        mesher.add('meshextrude', tag, gid, dst_id, src_id, n_layers, self.extrude_params)
-        
-    def check_master_slave(self, mesher):
-        gid, dst_id, src_id, n_layers = self.vt.make_value_or_expression(self)        
-        self.extrude_params = mesher.extrude_trans_txt(gid, dst_id, src_id, True)
-        
+        gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        kwargs = process_hint(hint)
+        mesher.add('extrude_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            dest = [int(x) for x in self.dst_id.split(',')]
+            src  = [int(x) for x in self.src_id.split(',')]
+            ret['face'] = dest + src
+        except:
+            pass
+        return ret, 'face'
+
+# Transform Hint (revolve)
+#    ax an : ax_x, ax_y, ax_z, angle(deg): 4 float
+#    l1, angle  : l1 direction of axis, angle (deg) (N.I.)
+#    s1, angle  : normal to face s1, angle (deg) (N.I.)
+def process_hint(text):
+    try:
+        values = [float(x) for x in text.split(',')]
+        if len(values) == 4:
+            return {'axan': (values[0:3], values[-1])}
+    except:
+        pass
+    return {}
+    
+class RevolveMesh(GmshMeshActionBase):
+    vt = Vtable(edata)
+    def add_meshcommand(self, mesher):
+        gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        kwargs = process_hint(hint)
+        mesher.add('revolve_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)        
+
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
@@ -372,24 +412,8 @@ class MeshExtrude(GmshMeshActionBase):
             pass
         return ret, 'face'
     
-edata =  (('ex_target', VtableElement('ex_target', type='string',
-                                      guilabel = 'Volume',
-                                      default = "",
-                                      tip = "extrusion target")),
-          ('dst_id', VtableElement('dst_id', type='string',
-                                   guilabel = 'Surface# (To)',
-                                   default = "", 
-                                   tip = "Surface number" )),
-          ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Source # (From)',
-                                  default = "", 
-                                  tip = "Surface number" )),
-          ('nlayer', VtableElement('nlayer', type='int',
-                             guilabel = 'Num. Layers',
-                             default = 5,
-                             tip = "Number of Layers" )), )         
     
-MeshRevolve = MeshExtrude
+
 
     
     
