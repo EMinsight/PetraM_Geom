@@ -36,7 +36,7 @@ def get_vertex_geom_zie():
             lcar[btag] = min((lcar[btag], s))
     return dict(lcar)
 
-def process_text_tags(dim=1):
+def process_text_tags(dim=1, check = True):
     '''
     convert text tags input to dimtags
     tags = '1,2,3', 'all', or 'remaining'
@@ -44,14 +44,20 @@ def process_text_tags(dim=1):
     def func2(method):
         def method2(self, done, params, tags, *args, **kwargs):
             if tags == 'remaining':
-                dimtags = gmsh.model.getEntities(dim)                        
-                dimtags = [(dim, x) for xx, x in dimtags if not x in done[dim]]
+                dimtags = gmsh.model.getEntities(dim)
+                if check:
+                    dimtags = [(dim, x) for xx, x in dimtags if not x in done[dim]]
+                else:
+                    pass
             elif tags == 'all':
                 dimtags = gmsh.model.getEntities(dim)                        
             else:
                 tags = [int(x) for x in tags.split(',')]
-                dimtags = [(dim, x) for x in tags if not x in done[dim]]
-            #dprint("calling", method, dimtags, args, kwargs)
+                if check:
+                    dimtags = [(dim, x) for x in tags if not x in done[dim]]
+                else:
+                    dimtags = [(dim, x) for x in tags]
+
             return method(self, done, params, dimtags, *args, **kwargs)
         return method2
     return func2
@@ -185,7 +191,8 @@ class GMSHMeshWrapper(object):
         '''
         self.mesh_sequence = []
         
-    def generate(self, dim=3, brep_input = '', finalize=False):
+    def generate(self, dim=3, brep_input = '',
+                 finalize=False, msh_file=''):
         '''
         generate mesh based on  meshing job sequence.
         brep must be loaed 
@@ -236,6 +243,7 @@ class GMSHMeshWrapper(object):
             
         if finalize:
             self.add_sequential_physicals()
+            if msh_file != '': gmsh.write(msh_file)
 
         return maxdim, done
     
@@ -470,8 +478,27 @@ class GMSHMeshWrapper(object):
     
     @process_text_tags(dim=0)                        
     def cl_3D(self, done, params, *args, **kwargs):
-        return done, params        
+        return done, params
     
+    @process_text_tags(dim=2, check=False)
+    def recombine_face_0D(self, done, params, dimtags):
+        for dim, tag in dimtags:
+            if dim != 2: continue
+            gmsh.model.mesh.setRecombine(2, tag)
+        return done, params
+    
+    @process_text_tags(dim=2, check=False)
+    def recombine_face_1D(self, done, params, dimtags):
+        return done, params
+    
+    @process_text_tags(dim=2, check=False)
+    def recombine_face_2D(self, done, params, dimtags):
+        return done, params
+    
+    @process_text_tags(dim=2, check=False)
+    def recombine_face_3D(self, done, params, dimtags):
+        return done, params        
+
     # freevolume
     @process_text_tags(dim=3)        
     def freevolume_0D(self, done, params, dimtags, *args, **kwargs):
@@ -493,6 +520,11 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=3)    
     def freevolume_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+
+        done[3].extend([x for dim, x in dimtags])
+        sdimtags = self.expand_dimtags(dimtags, return_dim = 2)
+        done[2].extend([x for dim, x in sdimtags if not x in doen[2]])        
+        
         dimtags = self.expand_dimtags(dimtags, return_dim = 1)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]        
@@ -504,6 +536,11 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=3)    
     def freevolume_2D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+
+        done[3].extend([x for dim, x in dimtags])
+        sdimtags = self.expand_dimtags(dimtags, return_dim = 2)
+        done[2].extend([x for dim, x in sdimtags if not x in doen[2]])        
+        
         dimtags = self.expand_dimtags(dimtags, return_dim = 2)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]        
@@ -542,6 +579,9 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=2)                
     def freeface_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+
+        done[2].extend([x for dim, x in dimtags])
+        
         dimtags = self.expand_dimtags(dimtags, return_dim = 1)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]        
@@ -569,6 +609,9 @@ class GMSHMeshWrapper(object):
         maxsize=kwargs.pop("maxsize", 1e20)
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution", np.inf)
+        
+        done[1].extend([x for dim, x in dimtags])
+        
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
@@ -602,13 +645,26 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=1)        
     def transfinite_edge_0D(self, done, params, dimtags, *args, **kwargs):
         #meher.add('transfinite_line', gid, nseg=nseg, progression = p,  bump = b)
-        self.show_only(dimtags)
         nseg = kwargs.get('nseg', 100)-1
-        progression = kwargs.get('progression', 1)
+        
+        meshType = 'Progression'
+        coef = kwargs.get('progression', 1.0)
+        
         bump = kwargs.get('bump', 1)
+        if bump  != 1:
+            meshType = 'Bump'
+            coef = bump
 
+        for dim, tag in dimtags:
+            if tag in done[1]: continue
+            gmsh.model.mesh.setTransfiniteCurve(tag, nseg, 
+                                                meshType = meshType,
+                                                coef = coef)
+            done[1].append(tag)
+        return done, params
 
-            # odd
+        '''
+        # A test to understand transfinite meshing...
         if bump != 1:
             if nseg % 2 == 1:            
                 tmp = np.logspace(0, np.log10(bump), (nseg+1)/2)
@@ -669,9 +725,15 @@ class GMSHMeshWrapper(object):
             params[tag] = (nodepos, pcoords)
         gmsh.model.mesh.generate(0)
         return done, params
-
+        '''
     @process_text_tags(dim=1)            
     def transfinite_edge_1D(self, done, params, dimtags, *args, **kwargs):
+        self.show_only(dimtags)
+        gmsh.model.mesh.generate(1)
+        done[1].extend([x for dim, x in dimtags])         
+        return done, params
+        
+        '''
         noffset = max(gmsh.model.mesh.getNodes()[0])+1
         eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
         
@@ -703,7 +765,7 @@ class GMSHMeshWrapper(object):
             done[1].append(tag)
             
         return done, params                        
-    
+        '''
     def transfinite_edge_2D(self, done, params, dimtags, *args, **kwargs):
         return done, params                
     
@@ -711,15 +773,80 @@ class GMSHMeshWrapper(object):
         return done, params        
     
     # transfinite_face
-    def transfinite_face_0D(self, vtag, tag1, tag2, nlayers):
-        pass
-    def transfinite_face_1D(self, vtag, tag1, tag2, nlayers):
-        pass
-    def transfinite_face_2D(self, vtag, tag1, tag2, nlayers):
-        pass
-    def transfinite_face_3D(self, vtag, tag1, tag2, nlayers):
-        pass
+    @process_text_tags(dim=2)                
+    def transfinite_surface_0D(self, done, params, dimtags, *args, **kwargs):
+        return done, params
 
+    @process_text_tags(dim=2)                    
+    def transfinite_surface_1D(self, done, params, dimtags, *args, **kwargs):
+        arrangement = kwargs.get('arrangement', 'Left')
+        cornerTags = kwargs.get('corner', [])
+
+        # for now, we don't do anything
+        # we could add a process to try trasnsfinite un-meshed edges...
+        return done, params
+
+    @process_text_tags(dim=2)                    
+    def transfinite_surface_2D(self, done, params, dimtags, *args, **kwargs):
+        arrangement = kwargs.get('arrangement', 'Left')
+        cornerTags = kwargs.get('corner', [])
+
+        for dim, tag in dimtags:
+            if tag in done[2]:
+                print("Surface "+ str(tag) + " is already meshed (skipping)")
+                continue
+            gmsh.model.mesh.setTransfiniteSurface(tag,
+                                                  arrangement=arrangement,
+                                                  cornerTags=cornerTags)
+            
+        dimtags = [x for x in dimtags if not x[1] in done[2]]                    
+        self.show_only(dimtags)
+        gmsh.model.mesh.generate(2)
+        done[2].extend([x for dim, x in dimtags])         
+        return done, params
+    
+    @process_text_tags(dim=2)                
+    def transfinite_surface_3D(self, done, params, dimtags, *args, **kwargs):
+        return done, params
+
+    transfinite_face_0D = transfinite_surface_0D
+    transfinite_face_1D = transfinite_surface_1D
+    transfinite_face_2D = transfinite_surface_2D
+    transfinite_face_3D = transfinite_surface_3D    
+
+    # transfinite_volume
+    @process_text_tags(dim=2)                
+    def transfinite_volume_0D(self, done, params, dimtags, *args, **kwargs):
+        return done, params                
+
+    @process_text_tags(dim=2)                    
+    def transfinite_volume_1D(self, done, params, dimtags, *args, **kwargs):
+        return done, params
+
+    @process_text_tags(dim=2)                    
+    def transfinite_volume_2D(self, done, params, dimtags, *args, **kwargs):
+        return done, params
+    
+    @process_text_tags(dim=2)                
+    def transfinite_volume_3D(self, done, params, dimtags, *args, **kwargs):
+        arrangement = kwargs.get('arrangement', 'Left')
+        cornerTags = kwargs.get('cornerTags', [])
+
+
+        for dim, tag in dimtags:
+            if tag in done[2]:
+                print("Surface "+ str(tag) + " is already meshed (skipping)")
+                continue
+            gmsh.model.mesh.setTransfiniteVolume(tag,
+                                                  arrangement=arrangement,
+                                                  cornerTags=cornerTags)
+            
+        dimtags = [x for x in dimtags if not x[1] in done[2]]                    
+        self.show_only(dimtags)
+        gmsh.model.mesh.generate(3)
+        done[3].extend([x for dim, x in dimtags])
+        return done, params        
+        
     # copy edge    
     def copy_edge_0D(self, vtag, tag1, tag2, nlayers):
         pass
@@ -1555,7 +1682,7 @@ class GMSHMeshWrapper(object):
         self.hide(((3, 2),), recursive=True)
         gmsh.model.mesh.generate(3)
             
-    def run_generater(self, brep_input='', finalize=False, dim=3):
+    def run_generater(self, brep_input='', finalize=False, dim=3, msh_file=''):
         if brep_input != '':
             filename = brep_input
         else:
@@ -1569,7 +1696,8 @@ class GMSHMeshWrapper(object):
 
         q = mp.Queue()
         p = mp.Process(target = generator,
-                       args = (q, filename, self.mesh_sequence, dim, finalize, kwargs))
+                       args = (q, filename, self.mesh_sequence,
+                               dim, finalize, msh_file, kwargs))
         p.start()
         while True:
             try:
@@ -1582,10 +1710,11 @@ class GMSHMeshWrapper(object):
             time.sleep(1)
         return ret
 
-def generator(q, filename, sequence, dim, finalize, kwargs):
+def generator(q, filename, sequence, dim, finalize, msh_file, kwargs):
     mw = GMSHMeshWrapper(**kwargs)
     mw.mesh_sequence = sequence
-    max_dim, done = mw.generate(dim=dim, brep_input = filename, finalize=finalize)
+    max_dim, done = mw.generate(dim=dim, brep_input = filename,
+                                finalize=finalize, msh_file=msh_file)
 
     from petram.geom.read_gmsh import read_pts_groups, read_loops
         

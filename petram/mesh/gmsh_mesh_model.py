@@ -192,13 +192,13 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel = 'Max size(def)',
-                                default_txt = '',
-                                default = 1.0, 
+                                default_txt = '1e20',
+                                default = 1.0e20, 
                                 tip = "CharacteristicLengthMax" )),
         ('clmin', VtableElement('clmin', type='float',
                                 guilabel = 'Min size(def)',
-                                default_txt = '',                                
-                                default = 1.0, 
+                                default_txt = '0.0',                                
+                                default = 0.0, 
                                 tip = "CharacteristicLengthMin" )),)
         
                 
@@ -278,7 +278,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
     def get_possible_child(self):
         from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, ExtrudeMesh, RevolveMesh
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh]
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh]
 
     def get_special_menu(self):
         from petram.geom.gmsh_geom_model import use_gmsh_api
@@ -489,7 +489,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
         try:
-            count = self.build_mesh(geom_root, finalize=True)
+            filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'                    
+            count = self.build_mesh(geom_root, finalize=True, filename=filename)
             do_clear = count == 0
         except:
             import ifigure.widgets.dialog as dialog               
@@ -578,7 +579,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         print("embed", embed)
         return embed
 
-    def build_mesh(self, geom_root, stop1=None, stop2=None, filename = None,
+    def build_mesh(self, geom_root, stop1=None, stop2=None, filename = '', 
                          nochild = False, finalize=False):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops
@@ -614,8 +615,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 if child is stop2: break            # for build after
 
         if mesher.count_sequence() > 0:
-            self._mesher_data = None                # set None since mesher may die...            
-            max_mdim, done, data = mesher.run_generater(brep_input = geom_root._geom_brep, finalize=finalize)
+            self._mesher_data = None                # set None since mesher may die...
+            max_mdim, done, data = mesher.run_generater(brep_input = geom_root._geom_brep,
+                                                        finalize=finalize,
+                                                        msh_file=filename)
             self._mesher_data = data         
             self._max_mdim = max_mdim
         else:
