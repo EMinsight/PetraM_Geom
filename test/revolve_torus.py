@@ -13,9 +13,9 @@ model1 = mw.load_brep('brep/torus2.brep')
 
 mw.add('freeface', '8, 17', resolution=3)
 
-mw.add('extrude_face', '2, 3', '8, 17', '10, 18', nlayers=10)
-mw.add('extrude_face', '4, 6', '10, 18', '25, 40', nlayers=4)
-mw.add('extrude_face', '5, 7', '25, 40', '33, 45', nlayers=10)
+mw.add('revolve_face', '2, 3', '8, 17', '10, 18', nlayers=10)
+mw.add('revolve_face', '4, 6', '10, 18', '25, 40', nlayers=4)
+mw.add('revolve_face', '5, 7', '25, 40', '33, 45', nlayers=10)
 '''
 #mw.add('freevolume', 'remaining', resolution=7)
 #mw.add('freeface', '6', resolution=3)

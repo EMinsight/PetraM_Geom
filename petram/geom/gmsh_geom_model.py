@@ -30,8 +30,7 @@ try:
 except ImportError:
     from queue import Queue, Empty  # python 3.x
 
-
-
+import petram.geom.gmsh_config
 from petram.geom.geom_model import GeomBase, GeomTopBase
 from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
@@ -327,7 +326,7 @@ class BrepFile(GeomTopBase):
         
         import gmsh
         geom.clear()        
-        gmsh.model.occ.importShapes(self.brep_file_path)
+        gmsh.model.occ.importShapes(self.brep_file_path, highestDimOnly=False)
         gmsh.model.occ.synchronize()
 
             
@@ -351,7 +350,7 @@ class BrepFile(GeomTopBase):
         #dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", maxsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1) 
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         geom.model.mesh.generate(1)
         
         gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
@@ -656,9 +655,9 @@ class GmshGeom(GeomTopBase):
             self._geom_brep = os.path.join(os.getcwd(), filename+'.brep')
             geom.clear()
             geom.set_factory('OpenCASCADE')                
-            gmsh.model.occ.importShapes(self._geom_brep)
+            gmsh.model.occ.importShapes(self._geom_brep, highestDimOnly=False)
             gmsh.model.occ.synchronize()
-            
+            print("hoge",  gmsh.model.getEntities())            
         # here we ask for 2D mesh for plotting.
         # size control is done based on geometry size.
         ss = geom.getObjSizes()
@@ -673,7 +672,7 @@ class GmshGeom(GeomTopBase):
         for tag in vcl:
            geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
 
-
+        print("hoge",  gmsh.model.getEntities())
         #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
 
 

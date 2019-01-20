@@ -117,7 +117,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         engine.build_ns()
         geom_root = self.root()['Geometry'][self.parent.geom_group]
 
-        do_clear = False
+        do_clear = True
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
             
@@ -489,7 +489,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
         try:
-            filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'                    
+            filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'
+            do_clear = True
             count = self.build_mesh(geom_root, finalize=True, filename=filename)
             do_clear = count == 0
         except:

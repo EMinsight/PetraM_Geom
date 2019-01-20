@@ -13,6 +13,9 @@ Algorithm3D= OrderedDict((("Delaunay",1), ("New Delaunay",2),
                               ("Frontal", 4), 
                               ("Frontal Hex", 6), ("MMG3D", 7),
                               ("R-tree", 9), ("default", 1)))
+
+import petram.geom.gmsh_config as gmsh_config
+
 debug  = True
 debug2 = False
 
@@ -146,11 +149,9 @@ class GMSHMeshWrapper(object):
                        CharacteristicLengthMin = 0,
                        EdgeResolution = 3, 
                        MeshAlgorithm = "Automatic",
-                       MeshAlgorithm3D = "Delaunay"):
+                       MeshAlgorithm3D = "Delaunay",
+                       MaxThreads = [1,1,1,1]):
         
-        if not GMSHMeshWrapper.gmsh_init:
-            gmsh.initialize()
-            GMSHMeshWrapper.gmsh_init = True
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", format)
@@ -167,6 +168,8 @@ class GMSHMeshWrapper(object):
         self.res = EdgeResolution 
         self.algorithm = MeshAlgorithm
         self.algorithm3d = MeshAlgorithm3D
+        self.maxthreads= MaxThreads    # general, 1D, 2D, 3D: defualt = 1,1,1,1
+        
 
         self._new_brep = True        
         
@@ -218,6 +221,11 @@ class GMSHMeshWrapper(object):
                               self.clmin)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
 
+        gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])        
+        gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
+        gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
+        gmsh.option.setNumber("Mesh.MaxNumThreads3D", self.maxthreads[3])
+
         # 
         self.vertex_geom_size = get_vertex_geom_zie()
         # set default vertex mesh size
@@ -251,7 +259,7 @@ class GMSHMeshWrapper(object):
         self.switch_model('main1')
         self.target = filename
         
-        gmsh.model.occ.importShapes(filename)
+        gmsh.model.occ.importShapes(filename, highestDimOnly=False)
         gmsh.model.occ.synchronize()
 
         self.geom_info = self.read_geom_info()
@@ -283,7 +291,7 @@ class GMSHMeshWrapper(object):
         
         self.add_model(name)
         gmsh.model.setCurrent(name)        
-        gmsh.model.occ.importShapes(self.target)
+        gmsh.model.occ.importShapes(self.target, highestDimOnly=False)
         self.hide_all()        
         gmsh.model.mesh.generate(1)
         gmsh.model.occ.synchronize()
@@ -505,6 +513,29 @@ class GMSHMeshWrapper(object):
         maxsize=kwargs.pop("maxsize", 1e20)
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution",  np.inf)
+
+        embeds = [x for x in kwargs.pop("embeds",  '').split(',')]
+        embeds = [x for x in embeds if len(x) > 0]                        
+        if len(embeds) > 0:
+            if len(dimtags) > 1:
+                assert False, "Embed works only when there is one target"
+            for x in embeds:
+                gmsh.mesh.embed(2, x, dimtags[0][0], dimtags[0][1])
+        embedl=[x for x in kwargs.pop("embedl",  '').split(',')]
+        embedl = [x for x in embedl if len(x) > 0]                
+        if len(embedl) > 0:
+            if len(dimtags) > 1:
+                assert False, "Embed works only when there is one target"
+            for x in embedl:
+                gmsh.mesh.embed(2, x, dimtags[0][0], dimtags[0][1])
+        embedp = [x for x in kwargs.pop("embedp",  '').split(',')]
+        embedp = [x for x in embedp if len(x) > 0]                                
+        if len(embedp) > 0:
+            if len(dimtags) > 1:
+                assert False, "Embed works only when there is one target"
+            for x in embedp:
+                gmsh.mesh.embed(1, x, dimtags[0][0], dimtags[0][1])
+
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
@@ -523,7 +554,7 @@ class GMSHMeshWrapper(object):
 
         done[3].extend([x for dim, x in dimtags])
         sdimtags = self.expand_dimtags(dimtags, return_dim = 2)
-        done[2].extend([x for dim, x in sdimtags if not x in doen[2]])        
+        done[2].extend([x for dim, x in sdimtags if not x in done[2]])        
         
         dimtags = self.expand_dimtags(dimtags, return_dim = 1)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
@@ -538,12 +569,11 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
 
         done[3].extend([x for dim, x in dimtags])
-        sdimtags = self.expand_dimtags(dimtags, return_dim = 2)
-        done[2].extend([x for dim, x in sdimtags if not x in doen[2]])        
         
         dimtags = self.expand_dimtags(dimtags, return_dim = 2)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
-        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]        
+        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
+
         self.show_only(dimtags)
         gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in tags])                
@@ -564,6 +594,22 @@ class GMSHMeshWrapper(object):
         maxsize=kwargs.pop("maxsize", 1e20)
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution", np.inf)
+
+        embedl=[x for x in kwargs.pop("embedl",  '').split(',')]
+        embedl = [x for x in embedl if len(x) > 0]        
+        if len(embedl) > 0:
+            if len(dimtags) > 1:
+                assert False, "Embed works only when there is one target"
+            for x in embedl:
+                gmsh.mesh.embed(2, x, dimtags[0][0], dimtags[0][1])
+        embedp=[x for x in kwargs.pop("embedp",  '').split(',')]
+        embedp = [x for x in embedp if len(x) > 0]        
+        if len(embedp) > 0:
+            if len(dimtags) > 1:
+                assert False, "Embed works only when there is one target"
+            for x in embedp:
+                gmsh.mesh.embed(1, x, dimtags[0][0], dimtags[0][1])
+                
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
@@ -609,7 +655,15 @@ class GMSHMeshWrapper(object):
         maxsize=kwargs.pop("maxsize", 1e20)
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution", np.inf)
-        
+
+        embedp=[x for x in kwargs.pop("embedp",  '').split(',')]
+        embedp = [x for x in embedp if len(x) > 0]
+        if len(embedp) > 0:
+            if len(dimtags) > 1:
+                assert False, "Embed works only when there is one target"
+            for x in embedp:
+                gmsh.mesh.embed(1, x, dimtags[0][0], dimtags[0][1])
+                
         done[1].extend([x for dim, x in dimtags])
         
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
@@ -783,7 +837,8 @@ class GMSHMeshWrapper(object):
         cornerTags = kwargs.get('corner', [])
 
         # for now, we don't do anything
-        # we could add a process to try trasnsfinite un-meshed edges...
+        # we could add a step to try trasnsfinite remaining (not-yet-meshed)
+        # edeges
         return done, params
 
     @process_text_tags(dim=2)                    
@@ -1692,7 +1747,8 @@ class GMSHMeshWrapper(object):
                   'CharacteristicLengthMin':self.clmin,
                   'EdgeResolution' : self.res,
                   'MeshAlgorithm'  : self.algorithm,
-                  'MeshAlgorithm3D': self.algorithm3d}
+                  'MeshAlgorithm3D': self.algorithm3d,
+                  'MaxThreads' : self.maxthreads}
 
         q = mp.Queue()
         p = mp.Process(target = generator,

@@ -15,7 +15,7 @@ mw.add('freeface', '6', resolution=3)
 #mw.add('extrude_face', '1', '6', '5', nlayers=5)
 #mw.add('copyface', '6', '5', axan = ([0, 1., 1], -60))
 #mw.add('freevolume', 'remaining', resolution=4)
-mw.add('extrude_face', '1', '6', '5', axan = ([0, 1., 1], -60))
+mw.add('revolve_face', '1', '6', '5', axan = ([0, 1., 1], -60))
 '''
 #mw.add('freevolume', 'remaining', resolution=7)
 #mw.add('freeface', '6', resolution=3)

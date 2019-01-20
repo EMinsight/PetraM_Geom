@@ -3,21 +3,16 @@ from __future__ import print_function
 
 import numpy as np
 
+
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomWrapper')
+
+import petram.geom.gmsh_config as gmsh_config
+import gmsh
 
 from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
-
-
-
-try:
-   import gmsh
-   has_gmsh = True   
-except ImportError:
-   has_gmsh = False
-   assert False, "gmsh api is not found"
 
 class Polygon(object):
     def __init__(self, s, ll, lcar):
@@ -99,10 +94,8 @@ def dimtag2id(dimtags):
 class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
-        gmsh.initialize()
-
-        gmsh.option.setNumber("General.Terminal", 1)
         
+        gmsh.option.setNumber("General.Terminal", 1)
         modelname = kwargs.pop("modelname", "model1")
         gmsh.model.add(modelname)
 
