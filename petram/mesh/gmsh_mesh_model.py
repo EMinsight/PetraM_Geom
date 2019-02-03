@@ -619,9 +619,23 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         if mesher.count_sequence() > 0:
             self._mesher_data = None                # set None since mesher may die...
+            
+            import wx
+            app = wx.GetApp().TopWindow
+            L = mesher.count_sequence()*4 + 3
+            pgb = wx.ProgressDialog("Generating mesh...",
+                                "", L, parent = app,
+                                style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
+            def close_dlg(evt, dlg=pgb):
+                pgb.Destroy()
+            pgb.Bind(wx.EVT_CLOSE, close_dlg)
+            
             max_mdim, done, data = mesher.run_generater(brep_input = geom_root._geom_brep,
                                                         finalize=finalize,
-                                                        msh_file=filename)
+                                                        msh_file=filename,
+                                                        progressbar = pgb)            
+            pgb.Destroy()
+            
             self._mesher_data = data         
             self._max_mdim = max_mdim
         else:

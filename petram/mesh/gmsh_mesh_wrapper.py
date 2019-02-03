@@ -151,7 +151,10 @@ class GMSHMeshWrapper(object):
                        EdgeResolution = 3, 
                        MeshAlgorithm = "Automatic",
                        MeshAlgorithm3D = "Delaunay",
-                       MaxThreads = [1,1,1,1]):
+                       MaxThreads = [1,1,1,1],
+                       **kwargs):
+        
+        self.queue = kwargs.pop("queue", None)
         
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -173,6 +176,7 @@ class GMSHMeshWrapper(object):
         
 
         self._new_brep = True        
+
         
     def add(self, name, *gids, **kwargs):
         '''
@@ -245,6 +249,11 @@ class GMSHMeshWrapper(object):
             for idx, sq in enumerate(self.mesh_sequence):
                 proc, args, kwargs = sq
                 f = getattr(self, proc+"_"+str(mdim)+"D")
+                
+                if self.queue is not None:
+                    self.queue.put((False,
+                                    "Processing " + proc+"_"+str(mdim)+"D"))
+                
                 done, params[idx] = f(done, params[idx],
                                       *args, **kwargs)
                 
@@ -410,6 +419,9 @@ class GMSHMeshWrapper(object):
         '''
         add sequencial physical entity numbers
         '''
+        if self.queue is not None:
+            self.queue.put((False, "Adding Physicals..."))
+            
         ent = gmsh.model.getEntities(dim=3)
         max_dim = 0
         
@@ -1738,7 +1750,9 @@ class GMSHMeshWrapper(object):
         self.hide(((3, 2),), recursive=True)
         gmsh.model.mesh.generate(3)
             
-    def run_generater(self, brep_input='', finalize=False, dim=3, msh_file=''):
+    def run_generater(self, brep_input='', finalize=False, dim=3, msh_file='',
+                      progressbar = None):
+        
         if brep_input != '':
             filename = brep_input
         else:
@@ -1756,19 +1770,38 @@ class GMSHMeshWrapper(object):
                        args = (q, filename, self.mesh_sequence,
                                dim, finalize, msh_file, kwargs))
         p.start()
+        istep = 0
+        
         while True:
             try:
                 ret = q.get(True, 1)
-                break
+                if ret[0]: break
+                if progressbar is not None:
+                    istep += 1
+                    progressbar.Update(istep, newmsg=ret[1])                    
+
             except QueueEmpty:
                 if not p.is_alive():
                     assert False, "Child Process Died"
                     break
-            time.sleep(1)
-        return ret
+                time.sleep(1.)
+                if progressbar is not None:
+                    import wx
+                    wx.Yield()
+                    if progressbar.WasCancelled():
+                       if p.is_alive():
+                           p.terminate()
+                       progressbar.Destroy()
+                       assert False, "Mesh Generation Aborted"
+                           
+            time.sleep(0.01)
+        return ret[1]
 
 def generator(q, filename, sequence, dim, finalize, msh_file, kwargs):
+    
+    kwargs['queue'] = q
     mw = GMSHMeshWrapper(**kwargs)
+    
     mw.mesh_sequence = sequence
     max_dim, done = mw.generate(dim=dim, brep_input = filename,
                                 finalize=finalize, msh_file=msh_file)
@@ -1780,7 +1813,7 @@ def generator(q, filename, sequence, dim, finalize, msh_file, kwargs):
                                              finished_faces = done[2])
                 
     data = ptx, cells, {}, cell_data, {}
-    q.put((max_dim, done, data))
+    q.put((True, (max_dim, done, data)))
     
     
 

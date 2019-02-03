@@ -941,7 +941,7 @@ class Geometry(object):
                 if not p.is_alive():
                     assert False, "Child Process Died"
                     break
-                    
+                time.sleep(1.)                    
                 if progressbar is not None:
                     import wx
                     wx.Yield()
@@ -951,7 +951,7 @@ class Geometry(object):
                        progressbar.Destroy()
                        assert False, "Geometry Generation Aborted"
                     
-            time.sleep(1)
+            time.sleep(0.1)
         return ret[1]
         
 
