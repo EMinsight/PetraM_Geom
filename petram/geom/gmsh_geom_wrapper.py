@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import numpy as np
+import time
 import tempfile
 import multiprocessing as mp
 from Queue import Empty as QueueEmpty
@@ -147,6 +148,7 @@ class Geometry(object):
             self.logfile = tempfile.NamedTemporaryFile('w', delete = True)
         else:
             self.logfile = None
+        self.queue = kwargs.pop("queue", None)
             
     def set_factory(self, factory_type):
         pass
@@ -804,6 +806,8 @@ class Geometry(object):
             if self.logfile is not None:
                 self.logfile.write("processing " + gui_name + "\n")
                 self.logfile.write("data " + str(geom_name) + ":" + str(gui_param) + "\n")
+            if self.queue is not None:
+                self.queue.put((False, "processing " + gui_name + "\n"))
             
             if geom_name == "WP_Start":
                 tmp = objs.duplicate()
@@ -831,6 +835,9 @@ class Geometry(object):
         return gui_data, objs
      
     def generate_preview_mesh(self):
+        
+        if self.queue is not None:
+            self.queue.put((False, "generating preview"))
 
         ss = self.getObjSizes()
         
@@ -873,6 +880,9 @@ class Geometry(object):
             print("finalize is on : computing  fragments")
             if self.logfile is not None:
                 self.logfile.write("finalize is on : computing  fragments\n")
+            if self.queue is not None:
+                self.queue.put((False, "finalize is on : computing  fragments\n"))
+                
             self.apply_fragments()
             
         self.factory.synchronize()
@@ -900,7 +910,8 @@ class Geometry(object):
             gmsh.model.occ.synchronize()
         return geom_brep            
         
-    def run_generator(self, no_mesh=False, finalize=False, filename = ''):
+    def run_generator(self, no_mesh=False, finalize=False, filename = '',
+                      progressbar = None):
         
         kwargs = {'PreviewResolutio': self.geom_prev_res,
                   'PreviewAlgorithm': self.geom_prev_algorithm}
@@ -912,36 +923,58 @@ class Geometry(object):
         p.start()
         logfile = q.get(True)
         dprint1("log file: ", logfile)
+
+        istep = 0
         
         while True:
             try:
                 ret = q.get(True, 1)
-                break
+                if ret[0]: break
+                else:
+                    dprint1(ret[1])
+                    
+                if progressbar is not None:
+                    istep += 1
+                    progressbar.Update(istep, newmsg=ret[1])                    
+                
             except QueueEmpty:
                 if not p.is_alive():
                     assert False, "Child Process Died"
                     break
+                    
+                if progressbar is not None:
+                    import wx
+                    wx.Yield()
+                    if progressbar.WasCancelled():
+                       if p.is_alive():
+                           p.terminate()
+                       progressbar.Destroy()
+                       assert False, "Geometry Generation Aborted"
+                    
             time.sleep(1)
-        return ret
+        return ret[1]
         
 
 def generator(q, sequence, no_mesh, finalize, filename, kwargs):
  
     
     kwargs['write_log'] = True
+    kwargs['queue'] = q
+    
     mw = Geometry(**kwargs)
     
     logfile = mw.logfile
     q.put((logfile.name))
 
     mw.geom_sequence = sequence
-
+    mw.out_queue = q
+    
     gui_data, objs = mw.run_sequence()
     
     brep_file = mw.generate_brep(filename = filename, finalize = finalize)
 
     if no_mesh:
-        q.put((gui_data, objs, brep_file, None))        
+        q.put((True, (gui_data, objs, brep_file, None)))
 
     else:
         mw.generate_preview_mesh()
@@ -951,7 +984,7 @@ def generator(q, sequence, no_mesh, finalize, filename, kwargs):
         l, s, v = read_loops(gmsh)
     
         data = ptx, cells, cell_data, l, s, v
-        q.put((gui_data, objs, brep_file, data))
+        q.put((True, (gui_data, objs, brep_file, data)))
 
 
     

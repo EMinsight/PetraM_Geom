@@ -658,9 +658,21 @@ class GmshGeom(GeomTopBase):
         
         self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
 
+        import wx
+        app = wx.GetApp().TopWindow
+        L = len(geom.geom_sequence) + 3
+        pgb = wx.ProgressDialog("Generating geometry...",
+                                "", L, parent = app,
+                                style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
+        def close_dlg(evt, dlg=pgb):
+            pgb.Destroy()
+        pgb.Bind(wx.EVT_CLOSE, close_dlg)
+        
         gui_data, objs, brep_file, data = geom.run_generator(no_mesh = no_mesh,
-                                                  finalize=finalize,
-                                                  filename = self.name())
+                                                             finalize=finalize,
+                                                             filename = self.name(),
+                                                             progressbar = pgb)
+        pgb.Destroy()        
         self._geom_brep = brep_file
         self.update_GUI_after_geom(gui_data, objs)
 
