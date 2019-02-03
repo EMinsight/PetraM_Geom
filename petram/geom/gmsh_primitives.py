@@ -10,6 +10,8 @@ from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 from petram.geom.gmsh_geom_model import use_gmsh_api
 
+from petram.geom.gmsh_config import has_gmsh
+'''
 try:
     if use_gmsh_api:
         has_gmsh = True            
@@ -83,6 +85,7 @@ try:
         has_gmsh = True
 except:
     has_gmsh = False
+'''
 
 '''
 object created from givn coordinates
@@ -114,31 +117,6 @@ boolean operation
    Fragments
 
 '''
-def get_target1(objs, targets, cls):
-    from petram.geom.gmsh_geom_wrapper import LineID, VertexID, SurfaceID, VolumeID  
-    # this is when target type is given
-    if cls == 'l': cc = LineID
-    if cls == 'v': cc = VolumeID
-    if cls == 'f': cc = SurfaceID
-    if cls == 'p': cc = VertexID    
-    
-    return [objs[t] if t in objs else cc(t)  for t in targets]
-  
-def get_target2(objs, targets):
-    # this is when target type is given
-    from petram.geom.gmsh_geom_wrapper import LineID, VertexID, SurfaceID, VolumeID
-    ret = []
-    for t in targets:
-        if t in objs:
-           ret.append(objs[t])
-        else:
-           if t.startswith("p"): ret.append(VertexID(int(t[1:])))
-           if t.startswith("l"): ret.append(LineID(int(t[1:])))
-           if t.startswith("f"): ret.append(SurfaceID(int(t[1:])))
-           if t.startswith("v"): ret.append(VolumeID(int(t[1:])))         
-    return ret 
-  
-  
 invalid_pdata = (('NotUsedValue', VtableElement('NotUsedValue', type='array',
                                   guilabel = 'not_implemented',
                                   default = '0.0',
@@ -154,30 +132,13 @@ pdata = (('xarr', VtableElement('xarr', type='array',
           ('zarr', VtableElement('zarr', type='array',
                               guilabel = 'Z',
                               default = '0.0',
-                              tip = "Z" )),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                              tip = "characteristc length from point" )),)
+                              tip = "Z" )),)
+
 def get_numbers(objs, targets):
     return  [objs[t] if t in objs else int(t) for t in targets]
   
 class Point(GeomPB):
     vt = Vtable(pdata)
-    def build_geom(self, geom, objs):
-        xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)
-        try:
-           pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except:
-           print("can not make proper input array")
-           return
-        PTs = [geom.add_point(p, lcar=lcar) for p in pos]
-        # apparently I should use this object (poly.surface)...?
-        self._newobjs = []        
-        for p in PTs:
-           newkey = objs.addobj(p, 'pt')
-           self._newobjs.append(newkey)
-        self._objkeys = objs.keys()
 
 cdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
@@ -201,30 +162,7 @@ cdata =  (('center', VtableElement('center', type='float',
 
 class Circle(GeomPB):
     vt = Vtable(cdata)
-    def build_geom(self, geom, objs):
-        center, ax1, ax2, radius = self.vt.make_value_or_expression(self)
-        lcar = 0.0
-        a1 = np.array(ax1);  a2 = np.array(ax2)
-        a2 = np.cross(np.cross(a1, a2), a1)
-        a1 = a1/np.sqrt(np.sum(a1**2))*radius
-        a2 = a2/np.sqrt(np.sum(a2**2))*radius                      
-
-        c =np.array(center)
-        p1 = geom.add_point(c+a1, lcar)
-        p2 = geom.add_point(c+a2, lcar)
-        p3 = geom.add_point(c-a1, lcar)
-        p4 = geom.add_point(c-a2, lcar)                      
-        pc = geom.add_point(c, lcar)
-        ca1 = geom.add_circle_arc(p1, pc, p2)
-        ca2 = geom.add_circle_arc(p2, pc, p3)
-        ca3 = geom.add_circle_arc(p3, pc, p4)
-        ca4 = geom.add_circle_arc(p4, pc, p1)
-        ll1 = geom.add_line_loop([ca1, ca2, ca3, ca4])
-        ps1 = geom.add_plane_surface(ll1)
-        newkey = objs.addobj(ps1, 'ps')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
+    
 rdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Corner',
                              suffix =('x', 'y', 'z'),
@@ -239,33 +177,11 @@ rdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Edge(2)',
                              suffix =('x', 'y', 'z'),
                              default = [0,1,0],
-                             tip = "Edge of rectangle" )),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                              tip = "characteristc length from point" )),)
+                             tip = "Edge of rectangle" )),)
 
 class Rect(GeomPB):
     vt = Vtable(rdata)
-    
-    def build_geom(self, geom, objs):
-        c1,  e1,  e2,  lcar = self.vt.make_value_or_expression(self)
-        c1 = np.array(c1);
-        e1 = np.array(e1);        e2 = np.array(e2);
-        p1 = geom.add_point(c1, lcar)
-        p2 = geom.add_point(c1+e1, lcar)
-        p3 = geom.add_point(c1+e1+e2, lcar)
-        p4 = geom.add_point(c1+e2, lcar)
-        l1 = geom.add_line(p1, p2)
-        l2 = geom.add_line(p2, p3)
-        l3 = geom.add_line(p3, p4)
-        l4 = geom.add_line(p4, p1)        
-        ll1 = geom.add_line_loop([l1, l2, l3, l4])
-        rec1 = geom.add_plane_surface(ll1)
-        newkey = objs.addobj(rec1, 'rec')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-        
+
 rdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Corner',
                              suffix =('x', 'y', 'z'),
@@ -285,80 +201,11 @@ rdata =  (('corner', VtableElement('corner', type='float',
                                   guilabel = 'Edge(3)',
                              suffix =('x', 'y', 'z'),
                              default = [0,0,1],
-                             tip = "Edge of rectangle" )),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                              tip = "characteristc length from point" )),)
+                             tip = "Edge of rectangle" )),)
 
 class Box(GeomPB):
     vt = Vtable(rdata)
     
-    def build_geom(self, geom, objs):
-        c1,  e1,  e2,  e3, lcar = self.vt.make_value_or_expression(self)
-        c1 = np.array(c1);
-        e1 = np.array(e1);        e2 = np.array(e2);
-        p1 = geom.add_point(c1, lcar)
-        p2 = geom.add_point(c1+e1, lcar)
-        p3 = geom.add_point(c1+e2, lcar)
-        p4 = geom.add_point(c1+e3, lcar)
-        p5 = geom.add_point(c1+e1+e2, lcar)        
-        p6 = geom.add_point(c1+e2+e3, lcar)
-        p7 = geom.add_point(c1+e3+e1, lcar)
-        p8 = geom.add_point(c1+e3+e2+e1, lcar)
-        
-        l1 = geom.add_line(p1, p2)
-        l2 = geom.add_line(p2, p5)
-        l3 = geom.add_line(p5, p3)
-        l4 = geom.add_line(p3, p1)
-        ll1 = geom.add_line_loop([l1, l2, l3, l4])
-        
-        l5 = geom.add_line(p1, p4)
-        l9  = geom.add_line(p4, p7)
-        l6 = geom.add_line(p2, p7)
-        l1 = geom.add_line(p1, p2)        
-        ll2 = geom.add_line_loop([l5, l9, l6, l1])
-        
-        l6 = geom.add_line(p2, p7)
-        l10 = geom.add_line(p7, p8)
-        l7 = geom.add_line(p5, p8)
-        l2 = geom.add_line(p2, p5)        
-        ll3 = geom.add_line_loop([l6, l10, l7, l2])
-        
-        l7 = geom.add_line(p5, p8)
-        l11 = geom.add_line(p8, p6)
-        l8 = geom.add_line(p3, p6)
-        l3 = geom.add_line(p5, p3)        
-        ll4 = geom.add_line_loop([l7, l11, l8, l3])
-        
-
-        l8 = geom.add_line(p3, p6)        
-        l12 = geom.add_line(p6, p4)
-        l5 = geom.add_line(p1, p4)
-        l4 = geom.add_line(p3, p1)        
-        ll5 = geom.add_line_loop([l8, l12, l5, l4])
-
-
-        l9  = geom.add_line(p4, p7)
-        l10 = geom.add_line(p7, p8)
-        l11 = geom.add_line(p8, p6)        
-        l12 = geom.add_line(p6, p4)
-        ll6 = geom.add_line_loop([l9, l10, l11, l12])
-        
-        rec1 = geom.add_plane_surface(ll1)
-        rec2 = geom.add_plane_surface(ll2)
-        rec3 = geom.add_plane_surface(ll3)
-        rec4 = geom.add_plane_surface(ll4)
-        rec5 = geom.add_plane_surface(ll5)
-        rec5 = geom.add_plane_surface(ll6)
-
-        sl = geom.add_surface_loop([ll1, ll2, ll3, ll4, ll5, ll6])
-        v1 = geom.add_volume(sl)
-        
-        newkey = objs.addobj(v1, 'bx')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
 
 vtdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
@@ -503,7 +350,6 @@ class Cylinder(GeomPB):
     vt = Vtable(vtdata)
     def build_geom(self, geom, objs):
         x0,  d0,  r1,  angle = self.vt.make_value_or_expression(self)
-
         
         lcar = 0.0
         d0 = np.array(d0)
@@ -870,29 +716,6 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
 class Extrude(GeomPB):    
     vt = Vtable(edata)
 
-    def build_geom(self, geom, objs):
-        targets,  tax, len = self.vt.make_value_or_expression(self)
-        targets = [x.strip() for x in targets.split(',')]
-        targetID = get_target2(objs, targets)
-        tax = tax/np.sqrt(np.sum(np.array(tax)**2))*len          
-        newkeys = []
-        for t, idd in zip(targets, targetID):
-             #if not t in objs:
-             #    assert False, t + " does not exist"
-             ret = geom.extrude(idd,
-                          translation_axis=tax,)
-                          #rotation_axis=rax,
-                          #point_on_axis=pax
-             from petram.geom.gmsh_geom_model import use_gmsh_api
-             if use_gmsh_api:
-                 newkeys.append(objs.addobj(ret[1], t))
-                 newkeys.append(objs.addobj(ret[0], 'ex'))             
-             else:
-                 newkeys.append(objs.addobj(ret[0], t))
-                 newkeys.append(objs.addobj(ret[1], 'ex'))             
-                               
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Target',
@@ -915,33 +738,6 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
         
 class Revolve(GeomPB):    
     vt = Vtable(edata)
-
-    def build_geom(self, geom, objs):
-        targets, pax, rax, angle = self.vt.make_value_or_expression(self)
-        targets = [x.strip() for x in targets.split(',')]
-        targetID = get_target2(objs, targets)
-
-        newkeys = []
-        for t, idd in zip(targets, targetID):        
-             #if not t in objs:
-             #    assert False, t + " does not exist"
-             ret = geom.extrude(idd,
-                                rotation_axis=rax,
-                                point_on_axis=pax,
-                                angle = angle*np.pi/180.)
-             
-             from petram.geom.gmsh_geom_model import use_gmsh_api
-             if use_gmsh_api:
-                 newkeys.append(objs.addobj(ret[1], t))
-                 newkeys.append(objs.addobj(ret[0], 'ex'))             
-             else:
-                 newkeys.append(objs.addobj(ret[0], t))
-                 newkeys.append(objs.addobj(ret[1], 'ex'))             
-             #for o in ret[2:]:
-             #   newkeys.append(objs.addobj(o,  get_geom_key(o))
-                               
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 
 '''

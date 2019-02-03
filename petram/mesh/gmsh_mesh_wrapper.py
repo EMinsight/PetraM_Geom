@@ -2,6 +2,7 @@ from __future__ import print_function
 import numpy as np
 import gmsh
 import time
+import tempfile
 import multiprocessing as mp
 from Queue import Empty as QueueEmpty
 

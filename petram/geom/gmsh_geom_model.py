@@ -186,9 +186,9 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
     def panel1_tip(self):
         return [None]+list(self.vt.panel_tip())
 
-    def build_geom(self, geom, objs):
-        self._newobjs = []
-        warnings.warn("Not implemented: " + self.__class__.__name__, Warning)        
+    #def build_geom(self, geom, objs):
+    #    self._newobjs = []
+    #    warnings.warn("Not implemented: " + self.__class__.__name__, Warning)        
 
     def gsize_hint(self, geom, objs):
         '''
@@ -242,6 +242,12 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
+
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = self.vt.make_value_or_expression(self)
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
         
 class BrepFile(GeomTopBase):
     has_2nd_panel = False
@@ -554,8 +560,6 @@ class GmshGeom(GeomTopBase):
         
         viewer._s_v_loop['geom'] = s, v
         viewer._s_v_loop['mesh'] = s, v
-        #geom.finalize()
-        #self._gmsh4_data = None
         
     def onUpdateGeoView(self, evt, filename = None):       
         if globals()['gmsh_Major']==4 and use_gmsh_api:
@@ -563,7 +567,7 @@ class GmshGeom(GeomTopBase):
         else:
             assert False, "GMSH 3 is not supported"
 
-    def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
+    def walk_over_geom_chidlren(self, geom, stop1=None, stop2=None):
         self._build_stop = (None, None)
         
         children = [x for x in self.walk()]
@@ -578,39 +582,62 @@ class GmshGeom(GeomTopBase):
             if len(child.get_children())==0:
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before
-                child.build_geom(geom, objs)
+                child.add_geom_sequence(geom)
+                #child.build_geom(geom, objs)
                 if child is stop2: break            # for build after
                 
             else:  # workplane
                 children2 = child.get_children()
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before                
-                objs2 = objs.duplicate()
-                org_keys = objs.keys()
+                #objs2 = objs.duplicate()
+                #org_keys = objs.keys()
                 do_break = False
+                
+                geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
                 for child2 in children2:
                     if not child2.enabled: continue                    
                     child2.vt.preprocess_params(child2)
                     if child2 is stop1:
                         do_break = True
                         break            # for build before
-                    child2.build_geom(geom, objs2)
+                    child2.add_geom_sequence(geom)                    
+                    #child2.build_geom(geom, objs2)
                     if child2 is stop2:
                         do_break = True                        
                         break            # for build after
 
                 # translate 2D objects in 3D space
-                for x in org_keys: del objs2[x]
-                child.build_geom(geom, objs2)
+                #for x in org_keys: del objs2[x]
+                child.add_geom_sequence(geom)
+                geom.add_sequence('WP_End', 'WP_End', 'WP_End')
+                
+                #child.build_geom(geom, objs2)
 
                 # copy new objects to objs
-                for x in objs2: objs[x] = objs2[x]
+                #for x in objs2: objs[x] = objs2[x]
                 
                 if do_break: break
                 if child is stop2: break            # for build after
         if stop1 is not None: self._build_stop = (stop1, None)
         if stop2 is not None: self._build_stop = (None, stop2)
-    
+
+    def update_GUI_after_geom(self, data, objs):
+        children = [x for x in self.walk()]
+        children = children[1:]
+        
+        for child in children:
+            if hasattr(child, "_newobjs"): del child._newobjs
+
+        for child in children:
+            if child.fullname() in data:
+                dd = data[child.fullname()]
+                child._objkeys = dd[0]
+                child._newobjs = dd[1]  
+                
+        self._objs = objs        
+
+                   
     def build_geom4(self, stop1=None, stop2=None, filename = None,
                     finalize = False, no_mesh=False):
         '''
@@ -620,20 +647,33 @@ class GmshGeom(GeomTopBase):
         
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
-        if self._gmsh4_data is not  None:
-            self._gmsh4_data[-1].finalize()
-            
-        objs = GeomObjs()
-        self._objs = objs
+        #if self._gmsh4_data is not  None:
+        #    self._gmsh4_data[-1].finalize()
 
         from petram.geom.gmsh_geom_wrapper import Geometry
-        geom = Geometry()
+        geom = Geometry(PreviewResolution = self.geom_prev_res,
+                        PreviewAlgorithm = self.geom_prev_algorithm)
         
         geom.set_factory('OpenCASCADE')
         
-        self.walk_over_geom_chidlren(geom, objs,
-                                     stop1=stop1, stop2=stop2)
-        
+        self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
+
+        gui_data, objs, brep_file, data = geom.run_generator(no_mesh = no_mesh,
+                                                  finalize=finalize,
+                                                  filename = self.name())
+        self._geom_brep = brep_file
+        self.update_GUI_after_geom(gui_data, objs)
+
+        if data is None:  # if no_mesh = True
+            return   
+        # for the readablity I expend data here, do we need geom?        
+        ptx, cells, cell_data, l, s, v = data
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+
+        return
+
+        '''
+                   
         if finalize:
             print("finalize is on : computing  fragments")
             geom.apply_fragments()
@@ -642,11 +682,6 @@ class GmshGeom(GeomTopBase):
         if no_mesh: return geom
 
         if finalize:
-            '''
-            Save BREP for meshing.
-            We need to reload it here so that indexing is consistent
-            in meshing.
-            '''
             import os
 
             filename = self.name()
@@ -672,7 +707,6 @@ class GmshGeom(GeomTopBase):
         for tag in vcl:
            geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
 
-        print("hoge",  gmsh.model.getEntities())
         #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
 
 
@@ -706,6 +740,7 @@ class GmshGeom(GeomTopBase):
 
         l, s, v = read_loops(geom)
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+        '''
 
     '''
     def build_geom3(self, stop1=None, stop2=None, filename = None,

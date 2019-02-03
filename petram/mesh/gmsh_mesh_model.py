@@ -589,10 +589,12 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         clmax, clmin = self.vt.make_value_or_expression(self)        
 
         geom_root = self.geom_root
+        
         if not geom_root.is_finalized:
-            geom = geom_root.build_geom4(no_mesh=True, finalize=True)
-        else:
-            geom = geom_root._gmsh4_data[-1]
+            geom_root.build_geom4(no_mesh=True, finalize=True)
+            
+        #else:
+        #    geom = geom_root._gmsh4_data[-1]
 
         from petram.mesh.gmsh_mesh_wrapper import GMSHMeshWrapper as GmshMesher
         mesher = GmshMesher(format=2.2,

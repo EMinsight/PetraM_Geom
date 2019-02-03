@@ -2,7 +2,9 @@
 from __future__ import print_function
 
 import numpy as np
-
+import tempfile
+import multiprocessing as mp
+from Queue import Empty as QueueEmpty
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomWrapper')
@@ -91,12 +93,38 @@ def dimtag2id(dimtags):
            out0.append(VertexID(tag))
     return out3 + out2 + out1 + out0
 
+def get_target1(objs, targets, cls):
+    # this is when target type is given
+    if cls == 'l': cc = LineID
+    if cls == 'v': cc = VolumeID
+    if cls == 'f': cc = SurfaceID
+    if cls == 'p': cc = VertexID    
+    
+    return [objs[t] if t in objs else cc(t)  for t in targets]
+  
+def get_target2(objs, targets):
+    # this is when target type is given
+    ret = []
+    for t in targets:
+        if t in objs:
+           ret.append(objs[t])
+        else:
+           if t.startswith("p"): ret.append(VertexID(int(t[1:])))
+           if t.startswith("l"): ret.append(LineID(int(t[1:])))
+           if t.startswith("f"): ret.append(SurfaceID(int(t[1:])))
+           if t.startswith("v"): ret.append(VolumeID(int(t[1:])))         
+    return ret 
+
 class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
+
+        self.geom_prev_res = kwargs.pop('PreviewResolutio', 30)
+        self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
         
         gmsh.option.setNumber("General.Terminal", 1)
         modelname = kwargs.pop("modelname", "model1")
+        gmsh.clear()
         gmsh.model.add(modelname)
 
         self.model = gmsh.model
@@ -108,11 +136,18 @@ class Geometry(object):
         #self.s = SurfaceID(0)   
         #self.sl = SurfaceLoopID(0)
         #self.v = VolumeID(0)      
-
+        self.geom_sequence = []
+        
         self._point = {}
         self._point_mask = []
         gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
-        
+
+        write_log = kwargs.pop('write_log', False)
+        if write_log:
+            self.logfile = tempfile.NamedTemporaryFile('w', delete = True)
+        else:
+            self.logfile = None
+            
     def set_factory(self, factory_type):
         pass
 
@@ -186,7 +221,7 @@ class Geometry(object):
         gmsh.write(filename)
         
     @staticmethod        
-    def finalize():        
+    def finalize():
         gmsh.finalize()
 
     @property
@@ -568,6 +603,503 @@ class Geometry(object):
                    del outdimtags[idx]
         print('output', outdimtags)                                                     
         return dimtag2id(outdimtags)
+
+    '''
+    high level interface: 
+      methods below directroy corresponds to GUI interface
+    '''
+    def add_sequence(self, gui_name, gui_param, geom_name):
+        self.geom_sequence.append((gui_name, gui_param, geom_name))
+
+    def Point_build_geom(self, objs, *args):
+        xarr, yarr, zarr = args
+        lcar = 0.0
+        try:
+           pos = np.vstack((xarr, yarr, zarr)).transpose()
+        except:
+           print("can not make proper input array")
+           return
+        PTs = [self.add_point(p, lcar=lcar) for p in pos]
+        # apparently I should use this object (poly.surface)...?
+        _newobjs = []        
+        for p in PTs:
+           newkey = objs.addobj(p, 'pt')
+           _newobjs.append(newkey)
+           
+        return  objs.keys(), _newobjs
+        
+    def Rect_build_geom(self, objs, *args):
+        c1,  e1,  e2 = args
+        lcar = 0.0
+        
+        c1 = np.array(c1);
+        e1 = np.array(e1);
+        e2 = np.array(e2);
+        p1 = self.add_point(c1, lcar)
+        p2 = self.add_point(c1+e1, lcar)
+        p3 = self.add_point(c1+e1+e2, lcar)
+        p4 = self.add_point(c1+e2, lcar)
+        l1 = self.add_line(p1, p2)
+        l2 = self.add_line(p2, p3)
+        l3 = self.add_line(p3, p4)
+        l4 = self.add_line(p4, p1)        
+        ll1 = self.add_line_loop([l1, l2, l3, l4])
+        rec1 = self.add_plane_surface(ll1)
+        newkey = objs.addobj(rec1, 'rec')
+        return  objs.keys(), [newkey]
+    
+        #self._objkeys = objs.keys()
+        #self._newobjs = newkeys
+        
+    def Circle_build_geom(self, objs, *args):
+        center, ax1, ax2, radius = args
+        lcar = 0.0
+        a1 = np.array(ax1);  a2 = np.array(ax2)
+        a2 = np.cross(np.cross(a1, a2), a1)
+        a1 = a1/np.sqrt(np.sum(a1**2))*radius
+        a2 = a2/np.sqrt(np.sum(a2**2))*radius                      
+
+        c =np.array(center)
+        p1 = self.add_point(c+a1, lcar)
+        p2 = self.add_point(c+a2, lcar)
+        p3 = self.add_point(c-a1, lcar)
+        p4 = self.add_point(c-a2, lcar)                      
+        pc = self.add_point(c, lcar)
+        ca1 = self.add_circle_arc(p1, pc, p2)
+        ca2 = self.add_circle_arc(p2, pc, p3)
+        ca3 = self.add_circle_arc(p3, pc, p4)
+        ca4 = self.add_circle_arc(p4, pc, p1)
+        ll1 = self.add_line_loop([ca1, ca2, ca3, ca4])
+        ps1 = self.add_plane_surface(ll1)
+        newkey = objs.addobj(ps1, 'ps')
+        return  objs.keys(), [newkey]
+    
+        #self._objkeys = objs.keys()
+        #self._newobjs = [newkey]        
+
+    def Box_build_geom(self, objs, *args):
+        c1,  e1,  e2,  e3 = args
+        lcar = 0.0
+        c1 = np.array(c1);
+        e1 = np.array(e1);
+        e2 = np.array(e2);
+        p1 = self.add_point(c1, lcar)
+        p2 = self.add_point(c1+e1, lcar)
+        p3 = self.add_point(c1+e2, lcar)
+        p4 = self.add_point(c1+e3, lcar)
+        p5 = self.add_point(c1+e1+e2, lcar)        
+        p6 = self.add_point(c1+e2+e3, lcar)
+        p7 = self.add_point(c1+e3+e1, lcar)
+        p8 = self.add_point(c1+e3+e2+e1, lcar)
+        
+        l1 = self.add_line(p1, p2)
+        l2 = self.add_line(p2, p5)
+        l3 = self.add_line(p5, p3)
+        l4 = self.add_line(p3, p1)
+        ll1 = self.add_line_loop([l1, l2, l3, l4])
+        
+        l5 = self.add_line(p1, p4)
+        l9  = self.add_line(p4, p7)
+        l6 = self.add_line(p2, p7)
+        l1 = self.add_line(p1, p2)        
+        ll2 = self.add_line_loop([l5, l9, l6, l1])
+        
+        l6 = self.add_line(p2, p7)
+        l10 = self.add_line(p7, p8)
+        l7 = self.add_line(p5, p8)
+        l2 = self.add_line(p2, p5)        
+        ll3 = self.add_line_loop([l6, l10, l7, l2])
+        
+        l7 = self.add_line(p5, p8)
+        l11 = self.add_line(p8, p6)
+        l8 = self.add_line(p3, p6)
+        l3 = self.add_line(p5, p3)        
+        ll4 = self.add_line_loop([l7, l11, l8, l3])
+        
+
+        l8 = self.add_line(p3, p6)        
+        l12 = self.add_line(p6, p4)
+        l5 = self.add_line(p1, p4)
+        l4 = self.add_line(p3, p1)        
+        ll5 = self.add_line_loop([l8, l12, l5, l4])
+
+
+        l9  = self.add_line(p4, p7)
+        l10 = self.add_line(p7, p8)
+        l11 = self.add_line(p8, p6)        
+        l12 = self.add_line(p6, p4)
+        ll6 = self.add_line_loop([l9, l10, l11, l12])
+        
+        rec1 = self.add_plane_surface(ll1)
+        rec2 = self.add_plane_surface(ll2)
+        rec3 = self.add_plane_surface(ll3)
+        rec4 = self.add_plane_surface(ll4)
+        rec5 = self.add_plane_surface(ll5)
+        rec5 = self.add_plane_surface(ll6)
+
+        sl = self.add_surface_loop([ll1, ll2, ll3, ll4, ll5, ll6])
+        v1 = self.add_volume(sl)
+        
+        newkey = objs.addobj(v1, 'bx')
+        
+        return  objs.keys(), [newkey]
+    
+    def Extrude_build_geom(self, objs, *args):
+        targets,  tax, len = args
+        targets = [x.strip() for x in targets.split(',')]
+        targetID = get_target2(objs, targets)
+        tax = tax/np.sqrt(np.sum(np.array(tax)**2))*len          
+        newkeys = []
+        for t, idd in zip(targets, targetID):
+             #if not t in objs:
+             #    assert False, t + " does not exist"
+             ret = self.extrude(idd,
+                          translation_axis=tax,)
+                          #rotation_axis=rax,
+                          #point_on_axis=pax
+             from petram.geom.gmsh_geom_model import use_gmsh_api
+             if use_gmsh_api:
+                 newkeys.append(objs.addobj(ret[1], t))
+                 newkeys.append(objs.addobj(ret[0], 'ex'))             
+             else:
+                 newkeys.append(objs.addobj(ret[0], t))
+                 newkeys.append(objs.addobj(ret[1], 'ex'))             
+
+        return  objs.keys(), newkeys
+    
+    def Revolve_build_geom(self, objs, *args):
+        
+        targets, pax, rax, angle = args
+        targets = [x.strip() for x in targets.split(',')]
+        targetID = get_target2(objs, targets)
+
+        newkeys = []
+        for t, idd in zip(targets, targetID):        
+             #if not t in objs:
+             #    assert False, t + " does not exist"
+             ret = self.extrude(idd,
+                                rotation_axis=rax,
+                                point_on_axis=pax,
+                                angle = angle*np.pi/180.)
+             
+             from petram.geom.gmsh_geom_model import use_gmsh_api
+             if use_gmsh_api:
+                 newkeys.append(objs.addobj(ret[1], t))
+                 newkeys.append(objs.addobj(ret[0], 'ex'))             
+             else:
+                 newkeys.append(objs.addobj(ret[0], t))
+                 newkeys.append(objs.addobj(ret[1], 'ex'))
+                 
+        return  objs.keys(), newkeys
+    
+    '''
+    sequence/preview/brep generator
+    '''
+    def run_sequence(self):
+        from petram.geom.gmsh_geom_model import GeomObjs
+        objs = GeomObjs()
+        gui_data = dict()
+        
+        for gui_name, gui_param, geom_name in self.geom_sequence:
+            if self.logfile is not None:
+                self.logfile.write("processing " + gui_name + "\n")
+                self.logfile.write("data " + str(geom_name) + ":" + str(gui_param) + "\n")
+            
+            if geom_name == "WP_Start":
+                tmp = objs.duplicate()
+                org_keys = objs.keys()
+
+                for x in org_keys: del tmp[x]
+                
+                org_objs = objs
+                objs = tmp
+                
+            elif geom_name == "WP_End":
+                for x in objs: org_objs[x] = objs[x]
+                objs = org_objs
+
+            else:
+                try:
+                    method = getattr(self, geom_name+'_build_geom')
+                    objkeys, newobjs = method(objs, *gui_param)
+                    gui_data[gui_name] = (objkeys, newobjs)
+                except:
+                    import traceback
+                    if self.logfile is not None:                    
+                        self.logfile.write("failed " + traceback.format_exc())
+                    assert False, traceback.format_exc()
+        return gui_data, objs
+     
+    def generate_preview_mesh(self):
+
+        ss = self.getObjSizes()
+        
+        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
+        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
+
+        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+
+        vcl = self.getVertexCL()
+        #print("vertec cl", vcl)
+        for tag in vcl:
+           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
+
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
+
+
+        #print(geom.model.getEntities())
+        #geom.model.setVisibility(((3,7), ), False, True)
+
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
+        gmsh.model.mesh.generate(1)
+        
+        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
+        gmsh.model.mesh.generate(2)        
+    
+    def generate_brep(self, filename = '', finalize=False):
+        
+        if finalize:
+            print("finalize is on : computing  fragments")
+            if self.logfile is not None:
+                self.logfile.write("finalize is on : computing  fragments\n")
+            self.apply_fragments()
+            
+        self.factory.synchronize()
+
+        if finalize:
+            filename = filename
+        else:
+            filenmae = self.geom_sequence[-1][0]
+            
+        '''
+        Save BREP for meshing.
+        '''
+        import os
+        #geom.write(filename +  '.msh')
+        gmsh.write(filename +  '.brep')            
+        geom_brep = os.path.join(os.getcwd(), filename+'.brep')
+        
+        if finalize:
+            '''
+            We need to reload it here so that indexing is consistent
+            in meshing.
+            '''
+            gmsh.clear()
+            gmsh.model.occ.importShapes(geom_brep, highestDimOnly=False)
+            gmsh.model.occ.synchronize()
+        return geom_brep            
+        
+    def run_generator(self, no_mesh=False, finalize=False, filename = ''):
+        
+        kwargs = {'PreviewResolutio': self.geom_prev_res,
+                  'PreviewAlgorithm': self.geom_prev_algorithm}
+                 
+        q = mp.Queue()
+        p = mp.Process(target = generator,
+                       args = (q, self.geom_sequence, no_mesh,
+                               finalize, filename, kwargs))
+        p.start()
+        logfile = q.get(True)
+        dprint1("log file: ", logfile)
+        
+        while True:
+            try:
+                ret = q.get(True, 1)
+                break
+            except QueueEmpty:
+                if not p.is_alive():
+                    assert False, "Child Process Died"
+                    break
+            time.sleep(1)
+        return ret
+        
+
+def generator(q, sequence, no_mesh, finalize, filename, kwargs):
+ 
+    
+    kwargs['write_log'] = True
+    mw = Geometry(**kwargs)
+    
+    logfile = mw.logfile
+    q.put((logfile.name))
+
+    mw.geom_sequence = sequence
+
+    gui_data, objs = mw.run_sequence()
+    
+    brep_file = mw.generate_brep(filename = filename, finalize = finalize)
+
+    if no_mesh:
+        q.put((gui_data, objs, brep_file, None))        
+
+    else:
+        mw.generate_preview_mesh()
+
+        from petram.geom.read_gmsh import read_pts_groups, read_loops        
+        ptx, cells, cell_data = read_pts_groups(gmsh)
+        l, s, v = read_loops(gmsh)
+    
+        data = ptx, cells, cell_data, l, s, v
+        q.put((gui_data, objs, brep_file, data))
+
+
+    
+    '''
+    def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
+        self._build_stop = (None, None)
+        
+        children = [x for x in self.walk()]
+        children = children[1:]
+        for child in children:
+            if hasattr(child, "_newobjs"): del child._newobjs
+            
+        children = self.get_children()
+        for child in children:
+            if not child.enabled: continue
+            
+            if len(child.get_children())==0:
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before
+                child.build_geom(geom, objs)
+                if child is stop2: break            # for build after
+                
+            else:  # workplane
+                children2 = child.get_children()
+                child.vt.preprocess_params(child)
+                if child is stop1: break            # for build before                
+                objs2 = objs.duplicate()
+                org_keys = objs.keys()
+                do_break = False
+                for child2 in children2:
+                    if not child2.enabled: continue                    
+                    child2.vt.preprocess_params(child2)
+                    if child2 is stop1:
+                        do_break = True
+                        break            # for build before
+                    child2.build_geom(geom, objs2)
+                    if child2 is stop2:
+                        do_break = True                        
+                        break            # for build after
+
+                # translate 2D objects in 3D space
+                for x in org_keys: del objs2[x]
+                child.build_geom(geom, objs2)
+
+                # copy new objects to objs
+                for x in objs2: objs[x] = objs2[x]
+                
+                if do_break: break
+                if child is stop2: break            # for build after
+        if stop1 is not None: self._build_stop = (stop1, None)
+        if stop2 is not None: self._build_stop = (None, stop2)
+    '''
+
+
+'''
+    def build_geom4(self, stop1=None, stop2=None, filename = None,
+                    finalize = False, no_mesh=False):
+        import gmsh
+        
+        if not hasattr(self, "_gmsh4_data"):
+            self._gmsh4_data = None
+        #if self._gmsh4_data is not  None:
+        #    self._gmsh4_data[-1].finalize()
+            
+        objs = GeomObjs()
+        self._objs = objs
+
+        from petram.geom.gmsh_geom_wrapper import Geometry
+        geom = Geometry()
+        
+        geom.set_factory('OpenCASCADE')
+        
+        self.walk_over_geom_chidlren(geom, objs,
+                                     stop1=stop1, stop2=stop2)
+        
+        if finalize:
+            print("finalize is on : computing  fragments")
+            geom.apply_fragments()
+        geom.factory.synchronize()
+
+        if no_mesh: return geom
+
+        if finalize:
+            import os
+
+            filename = self.name()
+            geom.write(filename +  '.msh')
+            geom.write(filename +  '.brep')            
+            self._geom_brep = os.path.join(os.getcwd(), filename+'.brep')
+            geom.clear()
+            geom.set_factory('OpenCASCADE')                
+            gmsh.model.occ.importShapes(self._geom_brep, highestDimOnly=False)
+            gmsh.model.occ.synchronize()
+            print("hoge",  gmsh.model.getEntities())            
+        # here we ask for 2D mesh for plotting.
+        # size control is done based on geometry size.
+        ss = geom.getObjSizes()
+        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
+        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
+
+        xmin, xmax, ymin, ymax, zmin,zmax = geom.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+
+        vcl = geom.getVertexCL()
+        #print("vertec cl", vcl)
+        for tag in vcl:
+           geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
+
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
+
+
+        #print(geom.model.getEntities())
+        #geom.model.setVisibility(((3,7), ), False, True)
+
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
+        geom.model.mesh.generate(1)
+        
+        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
+        geom.model.mesh.generate(2)        
+
+        
+        from petram.geom.read_gmsh import read_pts_groups, read_loops
+        ptx, cells, cell_data = read_pts_groups(geom)
+        
+        if finalize:
+            self.geom_finalized = True
+        else:
+            self.geom_finalized = False        
+
+        l, s, v = read_loops(geom)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+'''
+    
+        
+
+
+
+    
 '''
    def addEllipse(x, y, z, r1, r2, tag=-1, angle1=0., angle2=2*pi):
    def addEllipseArc(startTag, centerTag, majorTag, endTag, tag=-1, nx=0., ny=0., nz=0.)
