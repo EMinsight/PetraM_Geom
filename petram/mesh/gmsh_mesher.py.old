@@ -121,6 +121,25 @@ def characteristiclength(gid, cl = 1e20):
     c += '{{ {} }}'.format(','.join(gid)) + ' = ' +  str(cl) + ";"
     return [c,]
 
+def extrude(gid, tax, nlayer, ax, an, px):
+    tax = [str(x) for x in list(tax)]
+    ax = [str(x) for x in list(ax)]
+    px = [str(x) for x in list(px)]
+    gid = [str(x) for x in gid.split(',')]
+    if an == 0.0:
+         txt =  ('Extrude'+ '{{ {} }}'.format(','.join(tax)) + ' '  
+                    + '{ Surface'  + '{{{}}}'.format(','.join(gid))  + ';' 
+                    + '  Layers{'+str(nlayer) + '}; }')
+    else:
+         txt =  ('Extrude'+ '{' + '{{ {} }}'.format(','.join(ax)) + ', '
+                 '{{ {} }}'.format(','.join(px)) + ', ' +
+                 str(an) + '} ' + 
+                 '{ Surface'  + '{{{}}}'.format(','.join(gid))  + ';' +
+                 '  Layers{'+str(nlayer) + '}; }')
+        
+    return [txt,]
+
+
 def rotate(axis, x0, angle):
     taxis = [str(x) for x in axis]
     tx0 = [str(x) for x in x0]    
@@ -181,8 +200,35 @@ def embed(gid, mode, embed_s="", embed_l="", embed_p=""):
         if pid:        
             lines.append('Point {{ {} }}'.format(','.join(pid)) +
                       (' In '+mode+' {{ {} }}').format(','.join(gid))+ ';')
-    return lines           
+    return lines
 
+def find_slave(vv, i, c = None):
+    if c is None: c = [i]
+    if i in vv:
+        for k in vv[i]:
+            if k in c: continue
+            c.append(k)
+            c = find_slave(vv, k, c=c)
+    return c
+
+def add_all_slaves(vv, gid):
+    #print("calling find slave", vv, gid)
+    all_slaves = list(set(sum([find_slave(vv, i) for i in gid], [])))
+    #print("all slaves", all_slaves)
+    return all_slaves
+
+def check_new_slave(vv, k, item):
+    '''
+    if item can be new slave of k
+
+    '''
+    print("check_new_slave", k, item)
+    print("all slave 1", add_all_slaves(vv, [k]))
+    print("all slave 2", add_all_slaves(vv, [item]))    
+    if item in add_all_slaves(vv, [k]): return False    
+    if k in add_all_slaves(vv, [item]): return False
+    return True
+                     
 class GmshMesher(object):
     def __init__(self, entities,
                        geom_coords,
@@ -199,10 +245,15 @@ class GmshMesher(object):
 
         self.sequence = []
         self.transform = {}
-        self.done = {"Vertex":[],     #0D element
+        self.done = {"Vertex":[],    #0D element
                      "Line": [],     #1D element
-                     "Surface": [],     #2D element
+                     "Surface": [],  #2D element
                      "Volume": []}   #3D element
+        self.slaves = {"Vertex":{},
+                       "Line":{},
+                       "Surface":{},
+                       "Volume":{},}
+                       
         num_entities = entities[0]
         self.num_entities = {"Vertex": num_entities[0],
                              "Line": num_entities[1],
@@ -311,7 +362,7 @@ class GmshMesher(object):
             use_smooth = True
             use_default_cl = True                        
         elif meshdim == 2 and mode == 'Volume':
-            x = self.show_hide_gid(gid, mode = mode)
+            x = self.show_hide_gid(gid, mode = mode, mdim = "Surface")
             if len(x) == 0: return lines
             lines.extend(x)
             if self.done['Surface']:
@@ -320,15 +371,16 @@ class GmshMesher(object):
             if self.done['Volume']:
                 lines.extend(hide(','.join([str(x) for x in self.done['Volume']]),
                                   mode = 'Volume', recursive = True))
-            surfaces = self.find_face("Volume", gid)
             use_smooth = True                        
             use_default_cl = True                        
+            surfaces = self.find_face("Volume", gid)
+            surfaces = add_all_slaves(self.slaves["Surface"], surfaces)
             for l in surfaces:
                 if not self.check_done("Surface", l):
                     self.done["Surface"].append(l)
 
         elif meshdim == 1 and mode == 'Volume':
-            x = self.show_hide_gid(gid, mode = mode)
+            x = self.show_hide_gid(gid, mode = mode, mdim = "Line")
             if len(x) == 0: return lines
             lines.extend(x)
             if self.done['Line']:
@@ -343,6 +395,7 @@ class GmshMesher(object):
             use_smooth = True
             use_default_cl = True
             llines= self.find_line("Volume", gid)
+            llines = add_all_slaves(self.slaves["Line"], llines)            
             for l in llines:
                 if not self.check_done("Line", l):                
                     self.done["Line"].append(l)
@@ -351,8 +404,7 @@ class GmshMesher(object):
             verts = self.find_vertex("Volume", gid)
             for v in verts:
                 if not self.check_done("Vertex", v):
-                    self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
                     
         elif meshdim == 3 and mode == 'Surface':
             return []
@@ -364,12 +416,13 @@ class GmshMesher(object):
             use_smooth = True
             use_default_cl = True                        
             surfaces = self.find_face("Surface", gid)
+            surfaces = add_all_slaves(self.slaves["Surface"], surfaces)            
             for l in surfaces:
                 if not self.check_done("Surface", l):                
                     self.done["Surface"].append(l)
                                   
         elif meshdim == 1 and mode == 'Surface':
-            x = self.show_hide_gid(gid, mode = mode)
+            x = self.show_hide_gid(gid, mode = mode, mdim = "Line")
             if len(x) == 0: return lines
             lines.extend(x)
             use_smooth = True
@@ -382,6 +435,7 @@ class GmshMesher(object):
                                   mode = 'Surface', recursive = True))
 
             llines = self.find_line("Surface", gid)
+            llines = add_all_slaves(self.slaves["Line"], llines)            
             for l in llines:
                 if not self.check_done("Line", l):
                     self.done["Line"].append(l)
@@ -390,8 +444,7 @@ class GmshMesher(object):
             verts = self.find_vertex("Surface", gid)
             for v in verts:
                 if not self.check_done("Vertex", v):
-                    self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
                     
         elif meshdim == 3 and mode == 'Line':
             return []
@@ -407,6 +460,7 @@ class GmshMesher(object):
                 lines.extend(hide(','.join([str(x) for x in self.done['Surface']]),
                                   mode = 'Surface', recursive = True))
             llines = self.find_line("Line", gid)
+            llines = add_all_slaves(self.slaves["Line"], llines)
             for l in llines:
                 if not self.check_done("Line", l):                
                     self.done["Line"].append(l)
@@ -415,8 +469,7 @@ class GmshMesher(object):
             verts = self.find_vertex("Line", gid)
             for v in verts:
                 if not self.check_done("Vertex", v):
-                    self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
                     
         else:
             pass
@@ -436,7 +489,7 @@ class GmshMesher(object):
             for v in verts:
                 if not self.check_done("Vertex", v):
                     self.done["Vertex"].append(v)
-                    lines.extend(characteristiclength(str(v), cl = clmax))
+                    lines.extend(self.call_characteristiclength(str(v), clmax))
 
             return lines
 
@@ -526,13 +579,59 @@ class GmshMesher(object):
         self.transform[transform] = ('translate', (a-b).flatten())
         print('translate', (a - b).flatten())
         return []
+
+    def copymesh_face_trans_txt(self, gid, src, cp_cl):
+        s = self.entity_relations["Surface"]
+        l = self.entity_relations["Line"]
+        ptx = self.geom_coords[0]
         
-    def copymesh(self, gid, src="", meshdim=0, transform='', mode='',
-                       etg = None):
-        etg1, etg2 = etg
-        trans = self.transform[transform]
-        f = getattr(sys.modules[__name__], trans[0])
-        trans_txt = f(*trans[1:])
+        from petram.geom.geom_utils import find_translate_between_surface
+        X, cells, pt_data, cell_data, field_data = self.geom_coords        
+        geom_data = ptx, l, s, cell_data
+        
+        src1 = [int(x) for x in src.split(',')]
+        dst1 = [int(x) for x in gid.split(',')]            
+        ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(src1,
+                                                            dst1, geom_data=geom_data)
+        trans_txt = " Affine " + "{{ {} }}".format(",".join([str(x)
+                                                        for x in affine.flatten()]))
+
+        # record master-slave relations
+        # if it is reversely recorded. we skip it to avoid making a loop
+        if cp_cl:
+             vv = self.slaves["Vertex"]
+             for k in p_pairs:
+                 if not check_new_slave(vv, k, p_pairs[k]): continue                 
+                 #if p_pairs[k] in vv and k in vv[p_pairs[k]]: continue            
+                 if not k in vv: vv[k] = []
+                 vv[k].append(p_pairs[k])
+        vv = self.slaves["Line"]
+        print("l_pairs here", l_pairs)
+        new_l_pairs = {}
+        for k in l_pairs:
+            if not check_new_slave(vv, k, l_pairs[k]): continue
+            #if l_pairs[k] in vv and k in vv[l_pairs[k]]: continue            
+            if not k in vv: vv[k] = []
+            vv[k].append(l_pairs[k])
+            new_l_pairs[k] = l_pairs[k]
+        vv = self.slaves["Surface"]
+        new_dst = {}
+        for s, d in zip(src1, dst1):
+            if not check_new_slave(vv, s, d): continue
+            #if d in vv and s in vv[d]: continue                        
+            if not s in vv: vv[s] = []
+            vv[s].append(d)
+            new_dst[s] = d            
+
+        return trans_txt, new_l_pairs, new_dst
+    
+    def copymesh(self, gid, src, params,  meshdim=0,  mode=''):
+        trans_txt, l_pairs, new_dst = params
+        print("l_pairs", l_pairs)
+        etg1 = l_pairs.keys()
+        etg2 = l_pairs.values()        
+        src1 = new_dst.keys()
+        dst1 = new_dst.values()        
         
         x1 = self.show_hide_gid(gid, mode = mode)
         if not x1: return []
@@ -541,33 +640,159 @@ class GmshMesher(object):
         xx = self.show_hide_gid(','.join([gid, src]), mode = mode)        
         lines = []
         if meshdim == 0:
-            lines.extend(boundary(mode, etg1, gid))
-            lines.extend(boundary(mode, etg2, src))
-            mode2 = 'Line' if mode == 'Surface' else 'Point'
-            lines.extend(periodic(mode2, etg1+"()", etg2+"()", trans_txt))                
-            lines.extend(periodic(mode,  gid, src, trans_txt))
+            if mode == 'Surface':
+                for l1 in etg1:
+                   lines.extend(periodic("Curve", str(l_pairs[l1]), str(l1), trans_txt))
+            for l1 in src1:
+                lines.extend(periodic(mode,  str(new_dst[l1]), str(l1), trans_txt))
         elif meshdim == 2 and mode == 'Surface':
-            lines.extend(xx)
+            #lines.extend(xx)
             self.record_finished(gid, mode = mode)
             self.record_finished(src, mode = mode)                        
         elif meshdim == 1 and mode == 'Surface':
-            lines.extend(self.show_hide_gid(','.join([etg1+"()", etg2+"()"]),
-                                            mode = 'Line'))
-            self.record_finished(etg1+"()", mode = 'Line')
-            self.record_finished(etg2+"()", mode = 'Line')
+            #lines.extend(self.show_hide_gid(','.join([str(x) for x in etg1+etg2]),
+            #                                mode = 'Line'))
+            if len(etg1)>0:
+                self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
+            if len(etg2)>0:                
+                self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
         elif meshdim == 1 and mode == 'Line':
-            lines.extend(xx)
+            #lines.extend(xx)
             self.record_finished(gid, mode = mode)
             self.record_finished(src, mode = mode)                        
         return lines
+
+    def extrude_trans_txt(self, gid, dst, src, cp_cl):
+        v = self.entity_relations["Volume"]        
+        s = self.entity_relations["Surface"]
+        l = self.entity_relations["Line"]
+        ptx = self.geom_coords[0]
+
+        from petram.geom.geom_utils import find_translate_between_surface
+        X, cells, pt_data, cell_data, field_data = self.geom_coords        
+        geom_data = ptx, l, s, cell_data
+
+        gid1 = [int(x) for x in gid.split(',')]
+        src1 = [int(x) for x in src.split(',')]
+        dst1 = [int(x) for x in dst.split(',')]            
+        if len(gid1) != 1 or len(src1) != 1 or len(dst1) != 1:
+            assert False, "extrude can handle only one volume, and when src and dst are one surface"
+        gid = gid1[0]
+        if not src1[0] in v[gid] or  not dst1[0] in v[gid]:
+            assert False, "src/dst doesn't belong to volume"
+        ax, an, px, trans, affine, p_pairs, l_pairs = find_translate_between_surface(src1,
+                                                            dst1, geom_data=geom_data)
+        #if an != 0.0:
+        #    assert False, "normal surface vectors are not aligned"
+        trans_txt = " Affine " + "{{ {} }}".format(",".join([str(x)
+                                                        for x in affine.flatten()]))
+
+        # record master-slave relations
+        # if it is reversely recorded. we skip it to avoid making a loop
+        if cp_cl:
+             vv = self.slaves["Vertex"]
+             for k in p_pairs:
+                 if not check_new_slave(vv, k, p_pairs[k]): continue                 
+                 #if p_pairs[k] in vv and k in vv[p_pairs[k]]: continue            
+                 if not k in vv: vv[k] = []
+                 vv[k].append(p_pairs[k])
+        vv = self.slaves["Line"]
+        new_l_pairs = {}
+        for k in l_pairs:
+            if not check_new_slave(vv, k, l_pairs[k]): continue
+            #if l_pairs[k] in vv and k in vv[l_pairs[k]]: continue            
+            if not k in vv: vv[k] = []
+            vv[k].append(l_pairs[k])
+            new_l_pairs[k] = l_pairs[k]
+        vv = self.slaves["Surface"]
+        new_dst = {}
+        for s, d in zip(src1, dst1):
+            if not check_new_slave(vv, s, d): continue
+            #if d in vv and s in vv[d]: continue                        
+            if not s in vv: vv[s] = []
+            vv[s].append(d)
+            new_dst[s] = d
+
+        ll1 = self.find_line("Volume", gid1)
+        fc1 = self.find_face("Volume", gid1)        
+        ll2 = self.find_line("Surface", src1)
+        ll3 = self.find_line("Surface", dst1)
+        ## set transfinite on this
+        ll1 = [x for x in ll1 if not x in ll2 and not x in ll3]
+        ## set transfinite on this
+        fc1 = [x for x in fc1 if not x in src1 and not x in dst1]
+        fc = {}
+        for x in fc1:
+            fc[x] = self.find_vertex("Surface", [x])
+        return trans_txt, ax, an, px, trans, new_l_pairs, ll1, fc, new_dst
     
+    def meshextrude(self, tag,  gid, dst, src, nlayer, params, meshdim=0):
+        trans_txt, ax, an, px, trans,  l_pairs, ll1, fc, new_dst = params
+        lines = []
+        etg1 = l_pairs.keys()
+        etg2 = l_pairs.values()        
+        src1 = new_dst.keys()
+        dst1 = new_dst.values()        
+        if meshdim == 0:
+            for l1 in etg1:
+                lines.extend(periodic("Curve", str(l_pairs[l1]), str(l1), trans_txt))
+            for l1 in src1:
+                lines.extend(periodic("Surface",  str(new_dst[l1]), str(l1), trans_txt))
+            lines.extend(transfiniteL(','.join([str(x) for x in ll1]),
+                                      progression = 1,
+                                      nseg = nlayer + 1))
+            lines.extend(transfiniteS(','.join([str(x) for x in fc.keys()])))
+            ext = extrude(src, trans, nlayer, ax, an, px)[0]
+            lines.extend([tag+'[] = '+ext+';'])
+            
+        elif meshdim == 3:
+            lines.extend(["Delete {Volume{"+gid+"};}"])
+            xx = self.show_hide_gid(tag+'[1]', mode = "Volume")
+            lines.extend(xx)
+            self.record_finished(gid, mode = "Volume")
+            self.record_finished(tag+"[1]", mode = "Volume")            
+        elif meshdim == 2:
+            xx = self.show_hide_gid(','.join([str(x) for x in fc.keys()]),
+                                    mode = "Surface")            
+            lines.extend(xx)
+            self.record_finished(dst, mode = "Surface")
+            self.record_finished(src, mode = "Surface")
+            self.record_finished(','.join([str(x) for x in fc.keys()]),
+                                 mode = "Surface")                               
+        elif meshdim == 1:
+            xx = self.show_hide_gid(','.join([str(x) for x in ll1]),
+                                    mode = 'Line')
+            lines.extend(xx)
+            if len(etg1)>0:
+                 self.record_finished(','.join([str(x) for x in etg1]), mode = 'Line')
+            if len(etg2)>0:                
+                 self.record_finished(','.join([str(x) for x in etg2]), mode = 'Line')
+            self.record_finished(','.join([str(x) for x in ll1]),  mode = 'Line')
+        else:
+            pass
+        return lines
+        
+    def call_characteristiclength(self, gid, cl):
+        '''
+        call characteristiclength with all slaves
+        '''               
+                    
+        gid = [int(x) for x in gid.split(',')]
+        
+        all_slaves = add_all_slaves(self.slaves["Vertex"], gid)
+        gid = [x for x in all_slaves if not x in self.done["Vertex"]]
+
+        self.done["Vertex"].extend(gid)
+        gid = ','.join([str(x) for x in gid])
+        return characteristiclength(gid, cl)
+
     def characteristiclength(self, gid, cl = 1.0, meshdim = 0):
         if meshdim == 0:
             verts = self.find_vertex("Vertex", gid)                                  
-            self.done["Vertex"].extend(verts)                                  
-            return characteristiclength(gid, cl = cl)
+            return self.call_characteristiclength(gid, cl)
         else:
             return []
+
     def recombine_surface(self, gid, max_angle=45, meshdim=0):
         if meshdim == 1:
             return recombine_surface(gid, max_angle)
@@ -620,7 +845,8 @@ class GmshMesher(object):
 
         return lines, max_mdim
 
-    def show_hide_gid(self, gid, mode = "Line", recursive = True):
+    def show_hide_gid(self, gid, mode = "Line", recursive = True, mdim=None):
+        mdim = mode if mdim is None else mdim
         lines = []
         if gid.strip() == "":
             return lines # dont do anything
@@ -633,7 +859,31 @@ class GmshMesher(object):
                               mode = mode, recursive=recursive))
         else:
             lines.extend(hide("*", mode = mode, recursive=recursive))
-            lines.extend(show(gid, mode = mode, recursive=recursive))
+            try:
+                gid = [int(x) for x in gid.split(',')]
+                isTextTag = False
+            except:
+                isTextTag = True
+
+            if not isTextTag:
+                all_slaves = add_all_slaves(self.slaves[mode], gid)
+
+                if recursive:  # we manually exapnd to include slaves.
+                    if mode == 'Volume' and mdim == 'Line':
+                        all_slaves = self.find_line(mode, all_slaves)
+                        all_slaves = add_all_slaves(self.slaves["Line"], all_slaves)
+
+                    elif mode == 'Volume' and mdim == 'Surface':                    
+                        all_slaves = self.find_face(mode, all_slaves)
+                        all_slaves = add_all_slaves(self.slaves["Surface"], all_slaves)
+
+                    elif mode == 'Surface' and mdim == 'Line':
+                        all_slaves = self.find_line(mode, all_slaves)
+                        all_slaves = add_all_slaves(self.slaves["Line"], all_slaves)
+                    else:
+                        pass
+                gid = ','.join([str(x) for x in all_slaves])
+            lines.extend(show(gid, mode = mdim, recursive=recursive))
         return lines
 
     def record_finished(self, gid, mode = 'Line'):
@@ -667,9 +917,12 @@ class GmshMesher(object):
         if idx == "*":
             assert False, "Not supported..."
         verts = []
-        
+
         if idx != "remaining":
-           idx = [int(x) for x in idx.split(",")]
+           if isinstance(idx, tuple) or isinstance(idx, list):
+               pass
+           else:
+               idx = [int(x) for x in idx.split(",")]
 
         if mode == "Volume":
             if idx == "remaining":
@@ -713,7 +966,10 @@ class GmshMesher(object):
         verts = []
         
         if idx != "remaining":
-           idx = [int(x) for x in idx.split(",")]
+            if isinstance(idx, tuple) or isinstance(idx, list):
+                pass
+            else:
+                idx = [int(x) for x in idx.split(",")]
 
         if mode == "Volume":
             if idx == "remaining":
@@ -746,7 +1002,10 @@ class GmshMesher(object):
         verts = []
         
         if idx != "remaining":
-           idx = [int(x) for x in idx.split(",")]
+            if isinstance(idx, tuple) or isinstance(idx, list):
+                pass
+            else:
+                idx = [int(x) for x in idx.split(",")]
 
         if mode == "Volume":
             if idx == "remaining":

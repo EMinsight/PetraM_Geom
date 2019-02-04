@@ -63,6 +63,21 @@ def read_loops(geom):
                                                        oriented=False)]
     return l, s, v
 
+def read_loops2(geom):
+    '''
+    read vertex coordinats and loops together. 
+    before calling this, do 
+        self.hide_all()        
+        gmsh.model.mesh.generate(1)
+    '''
+    l, s, v = read_loops(geom)
+    model = geom.model
+    nidx, coord, pcoord = geom.model.mesh.getNodes(dim=0)
+    tags = [tag for dim, tag in geom.model.getEntities(0)]
+    p = {t: nidx[k]-1  for k, t in enumerate(tags)}
+    ptx = np.array(coord).reshape(-1, 3)
+    return ptx, p, l, s, v
+
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
 

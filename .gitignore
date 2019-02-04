@@ -10,4 +10,6 @@ build
 dist
 *.egg-info
 petram/trash
+test/tmp*.brep
+test/tmp*.msh
 Makefile

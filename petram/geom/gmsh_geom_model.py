@@ -12,6 +12,7 @@ import traceback
 import sys
 import re
 import time
+from collections import defaultdict
 
 import numpy as np
 import warnings
@@ -29,8 +30,7 @@ try:
 except ImportError:
     from queue import Queue, Empty  # python 3.x
 
-
-
+import petram.geom.gmsh_config
 from petram.geom.geom_model import GeomBase, GeomTopBase
 from petram.namespace_mixin import NS_mixin
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
@@ -186,9 +186,9 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
     def panel1_tip(self):
         return [None]+list(self.vt.panel_tip())
 
-    def build_geom(self, geom, objs):
-        self._newobjs = []
-        warnings.warn("Not implemented: " + self.__class__.__name__, Warning)        
+    #def build_geom(self, geom, objs):
+    #    self._newobjs = []
+    #    warnings.warn("Not implemented: " + self.__class__.__name__, Warning)        
 
     def gsize_hint(self, geom, objs):
         '''
@@ -212,7 +212,11 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
             else: # work plane
                 rootg = p.parent
             rootg._geom_finalized = False
+            
+            od = os.getcwd()
+            os.chdir(viewer.model.owndir())
             rootg.build_geom(**kwargs)
+            os.chdir(od)            
 
         except:
             import ifigure.widgets.dialog as dialog               
@@ -242,7 +246,158 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.select_next_enabled()
         evt.Skip()
+
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = self.vt.make_value_or_expression(self)
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
         
+class BrepFile(GeomTopBase):
+    has_2nd_panel = False
+    def __init__(self, *args, **kwargs):
+        super(BrepFile, self).__init__(*args, **kwargs)
+        NS_mixin.__init__(self, *args, **kwargs)
+        
+    @property
+    def is_finalized(self):
+        if not hasattr(self, "_geom_finalized"):
+            self._geom_finalized = False
+        return self._geom_finalized
+    
+    @property
+    def _geom_brep(self):
+        return self.brep_file_path
+
+    @property
+    def geom_finalized(self):
+        if not hasattr(self, "_geom_finalized"):
+            self._geom_finalized = False
+        return self._geom_finalized
+    
+    @geom_finalized.setter
+    def geom_finalized(self, value):
+        self._geom_finalized = value
+    
+    def attribute_set(self, v):
+        v = super(BrepFile, self).attribute_set(v)
+        v['brep_file_path'] = ''
+        v['geom_timestamp'] = 0
+        v['geom_prev_algorithm'] = 2
+        v['geom_prev_res'] = 30
+        return v
+
+    def panel1_param(self):
+        import wx
+        
+        wc = "ANY|*|Brep|*.brep"
+        return [["File(.brep)", None, 45, {'wildcard':wc}],        
+                ["PreviewAlgorith", "Automatic", 4, {"style":wx.CB_READONLY,
+                                                     "choices": ["Auto", "MeshAdpat",
+                                                                 "Delaunay", "Frontal"]}],
+                ["PreviewResolution", 30,  400, None],
+                [None, None, 341, {"label": "Finalize Geom",
+                                   "func": 'onBuildAll',
+                                   "noexpand": True}],]
+
+    def get_panel1_value(self):
+        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
+        txt = aname[self.geom_prev_algorithm]
+        return [self.brep_file_path, txt, self.geom_prev_res, self]
+       
+    def import_panel1_value(self, v):
+        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
+        for k in aname:
+            if v[1] == aname[k]:
+                self.geom_prev_algorithm = k
+
+        self.geom_prev_res = long(v[2])
+        self.brep_file_path = str(v[0])
+        
+    def get_special_menu(self):
+        return [('Load File', self.onBuildAll, None),]
+    
+    def onBuildAll(self, evt):
+        '''
+        filename : export geometry to a real file (for debug)
+        '''
+        import gmsh
+        
+        if not hasattr(self, "_gmsh4_data"):
+            self._gmsh4_data = None
+        if self._gmsh4_data is not  None:
+            self._gmsh4_data[-1].finalize()
+            
+        objs = GeomObjs()
+        self._objs = objs
+
+        from petram.geom.gmsh_geom_wrapper import Geometry
+        geom = Geometry()
+        
+        import gmsh
+        geom.clear()        
+        gmsh.model.occ.importShapes(self.brep_file_path, highestDimOnly=False)
+        gmsh.model.occ.synchronize()
+
+            
+        # here we ask for 2D mesh for plotting.
+        # size control is done based on geometry size.
+        size = []
+        for dim, tag in gmsh.model.getEntities():
+            x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
+            s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
+            size.append((dim, tag, s))
+        maxsize = max([x[-1] for x in size])
+        lcar = defaultdict(lambda: np.inf)
+        for dim, tag in gmsh.model.getEntities(1):
+            x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
+            s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
+            bdimtags = gmsh.model.getBoundary(((dim, tag,),), oriented=False)
+            for bdim, btag in bdimtags:
+                lcar[btag] = min((lcar[btag], s/self.geom_prev_res))
+        #ss = dict(lcar)
+        #dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
+        #dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", maxsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        geom.model.mesh.generate(1)
+        
+        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax",maxsize/5.)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
+        geom.model.mesh.generate(2)        
+
+
+        self.geom_finalized = True
+        self.geom_timestamp = time.ctime()        
+        
+        from petram.geom.read_gmsh import read_pts_groups, read_loops
+        ptx, cells, cell_data = read_pts_groups(geom)
+        l, s, v = read_loops(gmsh)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+        
+        ret = ptx, cells, {}, cell_data, {}
+
+        # set clmax guess from geometry size
+        clmax = maxsize/3.
+        clmin = maxsize/300.
+        self._clmax_guess = (clmax, clmin)
+        self._geom_coords = ret
+
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        
+        viewer.set_figure_data('geom', self.name(), ret)
+        viewer.update_figure('geom', self.name())
+        
+        viewer._s_v_loop['geom'] = s, v
+        viewer._s_v_loop['mesh'] = s, v
+
+        evt.Skip()
+        
+
 class GmshGeom(GeomTopBase):
     has_2nd_panel = False
     def __init__(self, *args, **kwargs):
@@ -283,7 +438,7 @@ class GmshGeom(GeomTopBase):
         return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array, ArrayRot]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, Fillet, Chamfer, Array, ArrayRot
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
@@ -294,14 +449,16 @@ class GmshGeom(GeomTopBase):
                 ("Protrude...", Extrude, "Extrude"), ("!", Revolve),
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
-                ("", Array, "Array"), ("!", ArrayRot, "ArrayR"),
+                ("", Array), ("!", ArrayRot, "ArrayR"),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
-                ("", WorkPlane),("", CADImport),
+                ("", WorkPlane),
+                ("Import...", BrepImport, "Brep"),("!", CADImport, "STEP/IGS"),
                 ]
                 
     def get_special_menu(self):
         if use_gmsh_api:
-            return [('Build All', self.onBuildAll, None),]
+            return [('Build All', self.onBuildAll, None),
+                    ('Export .brep', self.onExportBrep, None)]
         else:
             return [('Build All', self.onBuildAll, None),
                     ('Export .geo', self.onExportGeom, None)]
@@ -351,16 +508,17 @@ class GmshGeom(GeomTopBase):
 
         filename = os.path.join(viewer.model.owndir(), self.name())
         self.onUpdateGeoView(evt, filename = filename)
-        
+
+        '''
         if not use_gmsh_api:
             fid = open(filename + '.geo_unrolled', 'w')
             fid.write('\n'.join(self._txt_unrolled))
             fid.close()
-            
+        '''    
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
         evt.Skip()
-        
+    '''    
     def onUpdateGeoView3(self, evt, filename = None):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -386,12 +544,19 @@ class GmshGeom(GeomTopBase):
         self._geom_coords = ret
         viewer._s_v_loop['geom'] = read_loops(self._txt_unrolled)
         viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
-
+    '''
     def onUpdateGeoView4(self, evt, filename = None):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
         ret = ptx, cells, {}, cell_data, {}
+
+        # set clmax guess from geometry size
+        xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
+        l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        clmax = l/3.
+        clmin = l/300.
+        self._clmax_guess = (clmax, clmin)
         
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
@@ -399,17 +564,14 @@ class GmshGeom(GeomTopBase):
         
         viewer._s_v_loop['geom'] = s, v
         viewer._s_v_loop['mesh'] = s, v
-        #geom.finalize()
-        #self._gmsh4_data = None
         
     def onUpdateGeoView(self, evt, filename = None):       
         if globals()['gmsh_Major']==4 and use_gmsh_api:
             return self.onUpdateGeoView4(evt, filename = filename)
         else:
-            return self.onUpdateGeoView3(evt, filename = filename)
+            assert False, "GMSH 3 is not supported"
 
-
-    def walk_over_geom_chidlren(self, geom, objs, stop1=None, stop2=None):
+    def walk_over_geom_chidlren(self, geom, stop1=None, stop2=None):
         self._build_stop = (None, None)
         
         children = [x for x in self.walk()]
@@ -424,182 +586,113 @@ class GmshGeom(GeomTopBase):
             if len(child.get_children())==0:
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before
-                child.build_geom(geom, objs)
+                child.add_geom_sequence(geom)
+                #child.build_geom(geom, objs)
                 if child is stop2: break            # for build after
                 
             else:  # workplane
                 children2 = child.get_children()
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before                
-                objs2 = objs.duplicate()
-                org_keys = objs.keys()
+                #objs2 = objs.duplicate()
+                #org_keys = objs.keys()
                 do_break = False
+                
+                geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
                 for child2 in children2:
                     if not child2.enabled: continue                    
                     child2.vt.preprocess_params(child2)
                     if child2 is stop1:
                         do_break = True
                         break            # for build before
-                    child2.build_geom(geom, objs2)
+                    child2.add_geom_sequence(geom)                    
+                    #child2.build_geom(geom, objs2)
                     if child2 is stop2:
                         do_break = True                        
                         break            # for build after
 
                 # translate 2D objects in 3D space
-                for x in org_keys: del objs2[x]
-                child.build_geom(geom, objs2)
+                #for x in org_keys: del objs2[x]
+                child.add_geom_sequence(geom)
+                geom.add_sequence('WP_End', 'WP_End', 'WP_End')
+                
+                #child.build_geom(geom, objs2)
 
                 # copy new objects to objs
-                for x in objs2: objs[x] = objs2[x]
+                #for x in objs2: objs[x] = objs2[x]
                 
                 if do_break: break
                 if child is stop2: break            # for build after
-        if stop1 is not None: self._build_stop = (stop1, None)
-        if stop2 is not None: self._build_stop = (None, stop2)
-    
+        if stop1 is not None:
+            self._build_stop = (stop1, None)
+            return stop1.name()
+        if stop2 is not None:
+            self._build_stop = (None, stop2)
+            return stop2.name()
+        return self.name()
+
+    def update_GUI_after_geom(self, data, objs):
+        children = [x for x in self.walk()]
+        children = children[1:]
+        
+        for child in children:
+            if hasattr(child, "_newobjs"): del child._newobjs
+
+        for child in children:
+            if child.fullname() in data:
+                dd = data[child.fullname()]
+                child._objkeys = dd[0]
+                child._newobjs = dd[1]  
+                
+        self._objs = objs        
+
+                   
     def build_geom4(self, stop1=None, stop2=None, filename = None,
                     finalize = False, no_mesh=False):
         '''
         filename : export geometry to a real file (for debug)
         '''
+        import gmsh
+        
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
-        if self._gmsh4_data is not  None:
-            self._gmsh4_data[-1].finalize()
-            
-        objs = GeomObjs()
-        self._objs = objs
+        #if self._gmsh4_data is not  None:
+        #    self._gmsh4_data[-1].finalize()
 
         from petram.geom.gmsh_geom_wrapper import Geometry
-        geom = Geometry()
+        geom = Geometry(PreviewResolution = self.geom_prev_res,
+                        PreviewAlgorithm = self.geom_prev_algorithm)
         
         geom.set_factory('OpenCASCADE')
         
-        self.walk_over_geom_chidlren(geom, objs,
-                                     stop1=stop1, stop2=stop2)
+        stopname = self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
+
+        import wx
+        app = wx.GetApp().TopWindow
+        L = len(geom.geom_sequence) + 3
+        pgb = wx.ProgressDialog("Generating geometry...",
+                                "", L, parent = app,
+                                style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
+        def close_dlg(evt, dlg=pgb):
+            pgb.Destroy()
+        pgb.Bind(wx.EVT_CLOSE, close_dlg)
         
-        if finalize:
-            print("finalize is on : computing  fragments")
-            geom.apply_fragments()
-        geom.factory.synchronize()
+        gui_data, objs, brep_file, data = geom.run_generator(no_mesh = no_mesh,
+                                                             finalize=finalize,
+                                                             filename = stopname,
+                                                             progressbar = pgb)
+        pgb.Destroy()        
+        self._geom_brep = brep_file
+        self.update_GUI_after_geom(gui_data, objs)
 
-        if no_mesh: return geom
-        
-        # here we ask for 2D mesh for plotting.
-        # size control is done based on geometry size.
-        ss = geom.getObjSizes()
-        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
-        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
+        if data is None:  # if no_mesh = True
+            return   
+        # for the readablity I expend data here, do we need geom?        
+        ptx, cells, cell_data, l, s, v = data
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
 
-        xmin, xmax, ymin, ymax, zmin,zmax = geom.getBoundingBox()
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        return
 
-        vcl = geom.getVertexCL()
-        #print("vertec cl", vcl)
-        for tag in vcl:
-           geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-
-        import gmsh
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
-
-
-        #print(geom.model.getEntities())
-        #geom.model.setVisibility(((3,7), ), False, True)
-
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
-
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
-        geom.model.mesh.generate(1)
-        
-        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
-        geom.model.mesh.generate(2)        
-
-        from petram.geom.read_gmsh import read_pts_groups, read_loops
-        ptx, cells, cell_data = read_pts_groups(geom)
-        
-        if finalize:
-            self.geom_finalized = True
-        else:
-            self.geom_finalized = False        
-
-        v, s, l = read_loops(geom)
-        self._gmsh4_data = (ptx, cells, cell_data, v, s, l, geom)
-
-        if finalize:
-            filename = self.name()
-            geom.write(filename +  '.msh')
-            geom.write(filename +  '.geo_unrolled')
-            fid = open(filename +  '.geo_unrolled', 'r')
-            self._unrolled_geom4 = fid.readlines()
-            fid.close()
-
-    def build_geom3(self, stop1=None, stop2=None, filename = None,
-                   finalize = False):
-        '''
-        filename : export geometry to a real file (for debug)
-        '''
-        children = [x for x in self.walk()]
-        children = children[1:]
-
-        objs = GeomObjs()
-
-        self._objs = objs        
-        from petram.geom.gmsh_primitives import Geometry
-
-        geom = Geometry()
-        
-        geom.set_factory('OpenCASCADE')
-        
-        self.walk_over_geom_chidlren(geom, objs,
-                                     stop1=stop1, stop2=stop2)
- 
-        unrolled, rolled, entities = generate_mesh(geom, dim = 0,
-                                                  filename = filename)
-        unrolled = [x.strip() for x in unrolled]
-        s, v =  read_loops(unrolled)
-        if finalize:
-            dim = check_dim(unrolled)
-            extra = []
-            if ((dim == 2 and len(s.keys()) > 1) or
-                (dim == 3 and len(s.keys()) > 1 and len(v.keys()) == 1)):
-                print("splitting surface",  s.keys())
-                extra.append(BoolFramgents_extra('final_s', 'Surface', s.keys()))
-                unrolled, rolled, entities = generate_mesh(geom, dim = 0,
-                                                             filename = filename,
-                                                             extra = extra)
-                unrolled = [x.strip() for x in unrolled]
-                s, v =  read_loops(unrolled)              
-            if dim == 3 and len(v.keys()) > 1:                
-                print("splitting volume",  v.keys())                
-                extra.append(BoolFramgents_extra('final_v', 'Volume', v.keys()))
-                unrolled, rolled, entities = generate_mesh(geom, dim = 0,
-                                                           filename = filename,
-                                                           extra = extra)
-                unrolled = [x.strip() for x in unrolled]
-                s, v =  read_loops(unrolled)
-
-            from petram.mesh.gmsh_mesher import write_entities_relations
-            ipv = v.keys()[0] if len(v.keys()) == 1 else -1
-            ips = s.keys()[0] if len(s.keys()) == 1 else -1
-            rolled = write_entities_relations(rolled, writev = ipv,
-                                              writes = ips)
-            unrolled, rolled, entities = generate_mesh(dim = 0,
-                                                       filename = filename,
-                                                       geo_text = rolled)
-            
-        else:
-            self.geom_finalized = False
-        self._txt_rolled = rolled                
-        self._txt_unrolled = unrolled
-        self._num_entities = entities
 
     def build_geom(self, stop1=None, stop2=None, filename = None,
                    finalize = False):
@@ -609,12 +702,12 @@ class GmshGeom(GeomTopBase):
                              filename=filename,
                              finalize=finalize)
         else:
-            self.build_geom3(stop1=stop1, stop2=stop2,
-                             filename=filename,
-                             finalize=finalize)
+            assert False, "GMSH 3 is not supported"
+            #self.build_geom3(stop1=stop1, stop2=stop2,
+            #                 filename=filename,
+            #                 finalize=finalize)
 
     def onExportGeom(self, evt):
-        print("export geom file")
         if not hasattr(self, "_txt_unrolled"):
             evt.Skip()
             return
@@ -627,7 +720,21 @@ class GmshGeom(GeomTopBase):
             fid = open(path, 'w')
             fid.write('\n'.join(self._txt_rolled))
             fid.close()
-         
+            
+    def onExportBrep(self, evt):
+        if not hasattr(self, "_geom_brep"):
+            evt.Skip()
+            return
+        from ifigure.widgets.dialog import write
+        parent = evt.GetEventObject()
+        path = write(parent,
+                     message = 'Enter .brep file name',
+                     wildcard = '*.brep')
+        if path != '':
+            from shutil import copyfile
+            copyfile(self._geom_brep, path)
+
+    '''
     def load_gui_figure_data(self, viewer):
         import meshio
         filename = os.path.join(viewer.model.owndir(), self.name())
@@ -646,11 +753,12 @@ class GmshGeom(GeomTopBase):
             viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
 
         return 'geom', self.name(), ret
-    
+    '''
     def is_viewmode_grouphead(self):
         return True
     
-   
+
+    
 def check_dim(unrolled):
     for line in unrolled:
         if line.startswith('Volume'): return 3
@@ -716,6 +824,7 @@ def read_loops(unrolled):
         s[ks] = list(set(tmp))
     return s, v
 
+'''
 def BoolFramgents_extra(name, shape_type,  inputs, delete = True):
     txt = '{}[] = {}{{{} {{{}}}; {}}} {{{} {{{}}}; {}}};'.format(
                 name, 
@@ -919,4 +1028,4 @@ def generate_mesh(
             pt_data[key] = pt_data[key][uvertices]
 
     return X, cells, pt_data, cell_data, field_data
-    
+'''    
