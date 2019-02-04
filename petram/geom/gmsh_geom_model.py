@@ -205,6 +205,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         viewer = dlg.GetParent()
         engine = viewer.engine
         engine.build_ns()
+        kwargs['gui_parent'] = dlg
         try:
             p  = self.parent
             if isinstance(p, GmshGeom):
@@ -502,7 +503,7 @@ class GmshGeom(GeomTopBase):
         try:
             od = os.getcwd()
             os.chdir(viewer.model.owndir())
-            self.build_geom(finalize = True)
+            self.build_geom(finalize = True, gui_parent=dlg)
             os.chdir(od)
         except:
             import ifigure.widgets.dialog as dialog               
@@ -646,7 +647,7 @@ class GmshGeom(GeomTopBase):
 
                    
     def build_geom4(self, stop1=None, stop2=None, filename = None,
-                    finalize = False, no_mesh=False):
+                    finalize = False, no_mesh=False, gui_parent=None):
         '''
         filename : export geometry to a real file (for debug)
         '''
@@ -668,10 +669,12 @@ class GmshGeom(GeomTopBase):
         stopname = self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
 
         import wx
-        app = wx.GetApp().TopWindow
+        if gui_parent is None:
+            gui_parent = wx.GetApp().TopWindow
+
         L = len(geom.geom_sequence) + 3
         pgb = wx.ProgressDialog("Generating geometry...",
-                                "", L, parent = app,
+                                "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
         def close_dlg(evt, dlg=pgb):
             pgb.Destroy()
@@ -695,12 +698,13 @@ class GmshGeom(GeomTopBase):
 
 
     def build_geom(self, stop1=None, stop2=None, filename = None,
-                   finalize = False):
+                   finalize = False, gui_parent=None):
 
         if globals()['gmsh_Major']==4 and use_gmsh_api:
             self.build_geom4(stop1=stop1, stop2=stop2,
                              filename=filename,
-                             finalize=finalize)
+                             finalize=finalize,
+                             gui_parent = gui_parent)
         else:
             assert False, "GMSH 3 is not supported"
             #self.build_geom3(stop1=stop1, stop2=stop2,

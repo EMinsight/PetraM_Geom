@@ -122,6 +122,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             geom_root.onBuildAll(evt)
             
         try:
+            kwargs['gui_parent'] = dlg
             count = self.parent.build_mesh(geom_root, **kwargs)
             do_clear = (count == 0)
         except:
@@ -445,7 +446,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             geom_root.onBuildAll(evt)
             
         try:
-            count = self.build_mesh(geom_root, nochild =True)
+            count = self.build_mesh(geom_root, nochild =True,
+                                    gui_parent = dlg)
             do_clear = (count == 0)
         except:
             import ifigure.widgets.dialog as dialog               
@@ -491,7 +493,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         try:
             filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'
             do_clear = True
-            count = self.build_mesh(geom_root, finalize=True, filename=filename)
+            count = self.build_mesh(geom_root, finalize=True, filename=filename,
+                                    gui_parent = dlg)
             do_clear = count == 0
         except:
             import ifigure.widgets.dialog as dialog               
@@ -581,7 +584,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return embed
 
     def build_mesh(self, geom_root, stop1=None, stop2=None, filename = '', 
-                         nochild = False, finalize=False):
+                         nochild = False, finalize=False, gui_parent = None):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops
         
@@ -621,10 +624,11 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             self._mesher_data = None                # set None since mesher may die...
             
             import wx
-            app = wx.GetApp().TopWindow
+            if gui_parent is None:
+                gui_parent = wx.GetApp().TopWindow
             L = mesher.count_sequence()*4 + 3
             pgb = wx.ProgressDialog("Generating mesh...",
-                                "", L, parent = app,
+                                "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
             def close_dlg(evt, dlg=pgb):
                 pgb.Destroy()
