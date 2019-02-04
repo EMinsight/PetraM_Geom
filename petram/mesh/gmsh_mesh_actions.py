@@ -31,7 +31,7 @@ class TransfiniteLine(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
-        mesher.add('transfinite_line', gid, nseg=nseg,
+        mesher.add('transfinite_edge', gid, nseg=nseg,
                    progression = p,  bump = b)
 
     def get_element_selection(self):

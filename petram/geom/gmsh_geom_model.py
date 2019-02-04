@@ -212,7 +212,11 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
             else: # work plane
                 rootg = p.parent
             rootg._geom_finalized = False
+            
+            od = os.getcwd()
+            os.chdir(viewer.model.owndir())
             rootg.build_geom(**kwargs)
+            os.chdir(od)            
 
         except:
             import ifigure.widgets.dialog as dialog               
@@ -445,7 +449,7 @@ class GmshGeom(GeomTopBase):
                 ("Protrude...", Extrude, "Extrude"), ("!", Revolve),
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
-                ("", Array, "Array"), ("!", ArrayRot, "ArrayR"),
+                ("", Array), ("!", ArrayRot, "ArrayR"),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
                 ("", WorkPlane),
                 ("Import...", BrepImport, "Brep"),("!", CADImport, "STEP/IGS"),

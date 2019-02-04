@@ -1,4 +1,11 @@
+'''
 
+   gmsh_primitive
+
+   This file define GUI interface. See gmsh_geom_wrapper for actual
+   geometry generation routine
+
+'''
 import numpy as np
 from collections import defaultdict
 
@@ -87,36 +94,6 @@ except:
     has_gmsh = False
 '''
 
-'''
-object created from givn coordinates
-   Point
-   Circle
-   Rect
-   Line
-   Polygon
-
-object created from given entities
-   Spline -> Points to Spline
-   CreateLine -> Points to multiple Lines
-
-   LineLoop -> Lines to LineLoop
-   CreateSurface -> Lines to PlaneSurface
-
-   SurfaceLoop -> Surfacess to SurfaceLoop
-   CreateVolume ->  Surfacess to Volume
-
-object manipulation
-   Extrude
-   Revolve
-   Recombine Surface
-
-boolean operation
-   Union
-   Intersection
-   Difference
-   Fragments
-
-'''
 invalid_pdata = (('NotUsedValue', VtableElement('NotUsedValue', type='array',
                                   guilabel = 'not_implemented',
                                   default = '0.0',
@@ -223,72 +200,11 @@ vtdata =  (('center', VtableElement('center', type='float',
           ('z_rarius', VtableElement('z_radius', type='float',
                                      guilabel = 'radius (Z)',
                                      default = 1.0,                                
-                                     tip = "radius in Z direction" )),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                                   tip = "characteristc length from point" )),)
+                                     tip = "radius in Z direction" )),)
                  
 class Ball(GeomPB):
     vt = Vtable(vtdata)
-    def build_geom(self, geom, objs):
-        x0,  l1,  l2,  l3, lcar = self.vt.make_value_or_expression(self)
-
-        # Add points.
-        radii = [l1, l2, l3]
-        rr = min(radii)
-        v1 = geom.add_sphere(x0[0], x0[1], x0[2], rr)
-        if (l1/rr != 1.0 or l2/rr != 1.0 or l3/rr != 1.0):
-            geom.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
-        newkey = objs.addobj(v1, 'bl')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
-        '''
-        print(radii)
-        p = [ geom.add_point(x0, lcar=lcar),
-              geom.add_point([x0[0]+radii[0], x0[1], x0[2]], lcar=lcar),
-              geom.add_point([x0[0], x0[1]+radii[1], x0[2]], lcar=lcar),
-              geom.add_point([x0[0], x0[1], x0[2]+radii[2]], lcar=lcar),
-              geom.add_point([x0[0]-radii[0], x0[1], x0[2]], lcar=lcar),
-              geom.add_point([x0[0], x0[1]-radii[1], x0[2]], lcar=lcar),
-              geom.add_point([x0[0], x0[1], x0[2]-radii[2]], lcar=lcar), ]
-
-        c = [geom.add_ellipse_arc(p[1], p[0], p[6]),
-             geom.add_ellipse_arc(p[6], p[0], p[4]),
-             geom.add_ellipse_arc(p[4], p[0], p[3]),
-             geom.add_ellipse_arc(p[3], p[0], p[1]),
-             geom.add_ellipse_arc(p[1], p[0], p[2]),
-             geom.add_ellipse_arc(p[2], p[0], p[4]),
-             geom.add_ellipse_arc(p[4], p[0], p[5]),
-             geom.add_ellipse_arc(p[5], p[0], p[1]),
-             geom.add_ellipse_arc(p[6], p[0], p[2]),
-             geom.add_ellipse_arc(p[2], p[0], p[3]),
-             geom.add_ellipse_arc(p[3], p[0], p[5]),
-             geom.add_ellipse_arc(p[5], p[0], p[6]), ]
-        ll = [geom.add_line_loop([c[4], c[9], c[3]]),
-              geom.add_line_loop([c[8], -c[4], c[0]]),
-              geom.add_line_loop([-c[9], c[5], c[2]]),
-              geom.add_line_loop([-c[5], -c[8], c[1]]),
-              geom.add_line_loop([c[7], -c[3], c[10]]),
-              geom.add_line_loop([c[11], -c[7], -c[0]]),
-              geom.add_line_loop([-c[10], -c[2], c[6]]),
-              geom.add_line_loop([-c[1], -c[6], -c[11]]), ]
-        s = [geom.add_surface_filling(l) for l in ll]
-        # Combine the surfaces to avoid seams
-        #new_surfs = [
-        #        self.add_surface_filling(s[:4]),
-        #        self.add_compound(s[4:])
-        #        ]
-
-        # Create the surface loop and volume
-        sl = geom.add_surface_loop(s)
-        v1= geom.add_volume(sl)
-        
-        newkey = objs.addobj(v1, 'bl')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-        '''
+    
 vtdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
                              suffix =('x', 'y', 'z'),
@@ -310,23 +226,11 @@ vtdata =  (('center', VtableElement('center', type='float',
           ('angle', VtableElement('angle', type='float',
                                guilabel = 'Angle',
                                default = 360,
-                               tip = "angle")),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                                   tip = "characteristc length from point" )),)
+                               tip = "angle")),)
 
 class Cone(GeomPB):
     vt = Vtable(vtdata)
-    def build_geom(self, geom, objs):
-        x0,  d0,  r1, r2, angle, lcar = self.vt.make_value_or_expression(self)
-
-        v1 = geom.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
-                           r1, r2,  angle/180*np.pi)
-        newkey = objs.addobj(v1, 'cn')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
+    
 vtdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
                              suffix =('x', 'y', 'z'),
@@ -348,43 +252,6 @@ vtdata =  (('center', VtableElement('center', type='float',
 
 class Cylinder(GeomPB):  
     vt = Vtable(vtdata)
-    def build_geom(self, geom, objs):
-        x0,  d0,  r1,  angle = self.vt.make_value_or_expression(self)
-        
-        lcar = 0.0
-        d0 = np.array(d0)
-        if np.sum(d0*np.array([1,0,0])) > np.sum(d0*np.array([0,1,0])):
-           a1 = np.cross(d0, [0, 1, 0])
-        else:
-           a1 = np.cross(d0, [1, 0, 0])
-        a2 = np.cross(d0, a1)   
-
-        a1 = a1/np.sqrt(np.sum(a1**2))*r1
-        a2 = a2/np.sqrt(np.sum(a2**2))*r1
-
-        c =np.array(x0)
-        p1 = geom.add_point(c+a1, lcar)
-        p2 = geom.add_point(c+a2, lcar)
-        p3 = geom.add_point(c-a1, lcar)
-        p4 = geom.add_point(c-a2, lcar)                      
-        pc = geom.add_point(c, lcar)
-        ca1 = geom.add_circle_arc(p1, pc, p2)
-        ca2 = geom.add_circle_arc(p2, pc, p3)
-        ca3 = geom.add_circle_arc(p3, pc, p4)
-        ca4 = geom.add_circle_arc(p4, pc, p1)
-        ll1 = geom.add_line_loop([ca1, ca2, ca3, ca4])
-        ps1 = geom.add_plane_surface(ll1)
-        
-        ret = geom.extrude(ps1, translation_axis=d0,)
-        newkey = objs.addobj(ret[0], 'cn')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-        
-        #v1 = geom.add_cylinder(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
-        #                   r1, angle/180*np.pi)
-        #newkey = objs.addobj(v1, 'cn')
-        #self._objkeys = objs.keys()
-        #self._newobjs = [newkey]
         
 vtdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Corner',
@@ -397,24 +264,13 @@ vtdata =  (('corner', VtableElement('corner', type='float',
                              default = [1,1,0.1],
                              tip = "Size of Wedge" )),           
           ('ltx', VtableElement('ltx', type='float',
-                               guilabel = 'Top Extendradius1',
-                               default = 1.0,
-                               tip = "r1")),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                                   tip = "characteristc length from point" )),)
+                               guilabel = 'Top Extend',
+                               default = 0.0,
+                               tip = "r1")),)
 
 class Wedge(GeomPB):
     vt = Vtable(vtdata)
-    def build_geom(self, geom, objs):
-        x0,  d0,  ltx, lcar = self.vt.make_value_or_expression(self)
-        print(x0, d0, ltx, lcar)
-        v1 = geom.add_wedge(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2], ltx)
-        newkey = objs.addobj(v1, 'wdg')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
+    
 vtdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
                              suffix =('x', 'y', 'z'),
@@ -431,22 +287,11 @@ vtdata =  (('center', VtableElement('center', type='float',
           ('angle', VtableElement('angle', type='float',
                                guilabel = 'Angle',
                                default = 360,
-                               tip = "angle")),
-          ('lcar', VtableElement('lcar', type='float',
-                                   guilabel = 'lcar',
-                                   default = 0.0, 
-                                   tip = "characteristc length from point" )),)
+                               tip = "angle")),)
 
 class Torus(GeomPB):
     vt = Vtable(vtdata)
-    def build_geom(self, geom, objs):
-        x0,  r1,  r2, angle, lcar = self.vt.make_value_or_expression(self)
-        v1 = geom.add_torus(x0[0], x0[1], x0[2], r1, r2, angle)
-        newkey = objs.addobj(v1, 'trs')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
-
+    
 pdata =  (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
                               default = '0.0',
@@ -459,10 +304,6 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'Z',
                               default = '0.0',
                               tip = "Z" )),)
-#          ('lcar', VtableElement('lcar', type='float',
-#                                   guilabel = 'lcar',
-#                                   default = 0.0, 
-#                              tip = "characteristc length from point" )),)
 
 class Line(GeomPB):
     vt = Vtable(pdata)
@@ -498,73 +339,15 @@ class Line(GeomPB):
         #xarr, yarr, zarr,  lcar = self.vt.make_value_or_expression(self)      
         return self.vt.make_value_or_expression(self)
 
-    def build_geom(self, geom, objs):
-        xarr, yarr, zarr, = self._make_value_or_expression()
-        lcar = 0.0
-        if len(xarr) < 2: return
-        try:
-           pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except:
-           print("can not make proper input array")
-           return
-
-        dist = np.sqrt(np.sum((pos[:-1,:]- pos[1:,:])**2,1))
-        if min(dist) == 0.0:
-           assert False, "minimum distance between point is 0.0"
-        if max(dist) > min(dist)*1e4:
-           assert False, "some points are too close (d_max > d_min*1e4)"
-        pts = []
-        for ii, p in enumerate(pos):
-            pt = geom.add_point(p, lcar,
-                                mask = (ii == 0 or ii == len(pos)-1))
-            pts.append(pt)
-
-        if not self.make_spline:
-            pts1 = pts[:-1]
-            pts2 = pts[1:]
-
-            newkeys = []
-            for p1, p2 in zip(pts1, pts2):
-                ln = geom.add_line(p1, p2)
-                newkeys.append(objs.addobj(ln, 'ln'))
-            self._newobjs = newkeys
-        else:     
-            spline = geom.add_spline(pts, remove_control=True)
-            newobj = objs.addobj(spline, 'sp')
-            self._newobjs = [newobj]
-        newobj1 = objs.addobj(pts[0], 'pt')
-        newobj2 = objs.addobj(pts[-1], 'pt')
-        #print("entities(0)", geom.model.getEntities())                     
-        
-        self._newobjs.append(newobj1)
-        self._newobjs.append(newobj2)
-        
-        self._objkeys = objs.keys()
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = list(self.vt.make_value_or_expression(self)) + [self.make_spline]
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
 
 class Polygon(GeomPB):
     vt = Vtable(pdata)
-    def build_geom(self, geom, objs):
-        xarr, yarr, zarr = self.vt.make_value_or_expression(self)
-        lcar = 0.0
-        if len(xarr) < 2: return
-        try:
-           pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except:
-           print("can not make proper input array")
-           return
-        # check if data is already closed...
-        if np.abs(np.sum((pos[0] - pos[-1])**2)) < 1e-17:
-            pos = pos[:-1]
-        poly = geom.add_polygon(pos, lcar = lcar)
-
-        # apparently I should use this object (poly.surface)...?
-        newkey = objs.addobj(poly.surface, 'pol')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-
-'''
-object created from given entities
-'''
+    
 ldata =  (('points', VtableElement('pts', type='string',
                                     guilabel = 'Points',
                                     default = "",
@@ -572,37 +355,8 @@ ldata =  (('points', VtableElement('pts', type='string',
 class Spline(GeomPB):
     vt = Vtable(ldata)
 
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]
-        
-        #pts = [objs[x] for x in pts]
-        pts = get_target1(objs, pts, 'p')        
-        spline = geom.add_spline(pts)
-        newobj = objs.addobj(spline, 'sp')
-        
-        self._newobjs = [newobj]
-        self._objkeys = objs.keys()
-                           
 class CreateLine(GeomPB):
     vt = Vtable(ldata)
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]        
-        pts = get_target1(objs, pts, 'p')
-        pts0 = pts[:-1]
-        pts1 = pts[1:]
-        self._newobjs = []
-        
-        for p0, p1 in zip(pts0, pts1):
-             #if not p0 in objs:
-             #    assert False, p0 + " does not exist"
-             #if not p1 in objs:
-             #    assert False, p1 + " does not exist"
-             line = geom.add_line(p0, p1)
-             self._newobjs.append(objs.addobj(line, 'ln'))
-
-        self._objkeys = objs.keys()
         
 ldata =  (('lines', VtableElement('lines', type='string',
                                     guilabel = 'Lines',
@@ -611,56 +365,9 @@ ldata =  (('lines', VtableElement('lines', type='string',
 
 class LineLoop(GeomPB):
     vt = Vtable(ldata)
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]
-
-        ptx = get_target1(objs, pts, 'l')
-        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        for x in pts:
-           if x.startswith('-'):
-               if x[1:] in objs:
-                   del objs[x[1:]]
-           else:
-               if x in objs:
-                   del objs[x]
-               
-        spline = geom.add_line_loop(ptx)
-        newobj = objs.addobj(spline, 'll')
-        
-        self._newobjs = [newobj]
-        self._objkeys = objs.keys()
-
                            
 class CreateSurface(GeomPB):        
     vt = Vtable(ldata)
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]
-        
-        ptx = get_target1(objs, pts, 'l')
-        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        for x in pts:
-           if x.startswith('-'):
-               if x[1:] in objs:
-                   del objs[x[1:]]
-           else:
-               if x in objs:
-                   del objs[x]
-                   
-        #objid = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        #objsign = [not x.startswith('-') for x in pts]        
-        #for x in pts:
-        #   if x.startswith('-'): del objs[x[1:]]
-        #   else: del objs[x]
-           
-        ll = geom.add_line_loop(ptx)
-        newobj1 = objs.addobj(ll, 'll')
-        surface = geom.add_plane_surface(ll)
-        newobj2 = objs.addobj(surface, 'ps')
-        
-        self._newobjs = [newobj1, newobj2]
-        self._objkeys = objs.keys()
         
 ldata =  (('surfs', VtableElement('surfs', type='string',
                                     guilabel = 'Surfaces',
@@ -668,31 +375,9 @@ ldata =  (('surfs', VtableElement('surfs', type='string',
                                     tip = "surfacess to be connected")), )       
 class SurfaceLoop(GeomPB):
     vt = Vtable(ldata)
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]
-        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        ptx = get_target(objs, targets, 'f')        
-        sl = geom.add_surface_loop(pts)
-        newobj = objs.addobj(sl, 'sl')
-        
-        self._newobjs = [newobj]
-        self._objkeys = objs.keys()
                            
 class CreateVolume(GeomPB):        
     vt = Vtable(ldata)
-    def build_geom(self, geom, objs):
-        pts = self.vt.make_value_or_expression(self)
-        pts = [x.strip() for x in pts[0].split(',')]
-        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        ptx = get_target(objs, targets, 'f')                
-        sl = geom.add_surface_loop(pts)
-        newobj1 = objs.addobj(sl, 'sl')
-        vol = geom.add_volume(sl)
-        newobj2 = objs.addobj(vol, 'vol')
-        
-        self._newobjs = [newobj1, newobj2]
-        self._objkeys = objs.keys()
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Target',
@@ -767,21 +452,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Move(GeomPB): # tanslate in gmsh
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets, dx, dy, dz, keep  = self.vt.make_value_or_expression(self)
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                                
-
-        if keep:
-           tt = geom.copy(tt)          
-        geom.translate(tt, dx, dy, dz)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'mv'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -795,7 +465,7 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
           ('ax_rot', VtableElement('ax_rot', type='float',
                                    guilabel = 'Axis',
                                    suffix = ('x', 'y', 'z'),                                    
-                                   default = [0., 0., 0.0],
+                                   default = [0., 0., 1.0],
                                    tip = "direction of revolustion axis")),
           ('angle', VtableElement('angle', type='float',
                                    guilabel = 'angle',
@@ -808,23 +478,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
         
 class Rotate(GeomPB):
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets, cc, aa,  angle, keep  = self.vt.make_value_or_expression(self)
-        cx, cy, cz = cc
-        ax, ay, az = aa
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                        
-
-        if keep:
-           tt = geom.copy(tt)          
-        geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'rot'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
         
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -847,24 +500,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Scale(GeomPB):  # Dilate in gmsh
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets,  cc, ss, keep  = self.vt.make_value_or_expression(self)
-        cx, cy, cz = cc
-        sx, sy, sz = ss
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                
-
-        if keep:
-           tt = geom.copy(tt)          
-        geom.dilate(tt, cx, cy, cz, sx, sy, sz)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'sc'))          
-
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
         
 class Array(GeomPB):
     data0 =  (('target_object', VtableElement('target_object', type='string',
@@ -880,21 +515,6 @@ class Array(GeomPB):
                                default = [1, 0, 0], 
                                tip = "displacemnt" )),)
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):          
-        targets, count, displacement  = self.vt.make_value_or_expression(self)
-        dx, dy, dz = displacement
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)        
-
-        for i in range(count):
-           tt = geom.copy(tt)          
-           geom.translate(tt, dx, dy, dz)
-           for t in tt:
-                newkeys.append(objs.addobj(t, 'cp'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 class ArrayRot(GeomPB):
     data0 =  (('target_object', VtableElement('target_object', type='string',
@@ -912,30 +532,13 @@ class ArrayRot(GeomPB):
               ('ax_rot', VtableElement('ax_rot', type='float',
                                    guilabel = 'Axis',
                                    suffix = ('x', 'y', 'z'),                                    
-                                   default = [0., 0., 0.0],
+                                   default = [0., 0., 1.0],
                                    tip = "direction of revolustion axis")),
               ('angle', VtableElement('angle', type='float',
                                    guilabel = 'angle',
                                    default = 180.0,
                                    tip = "angle of revoluiton")),)
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):          
-        targets, count, cc, aa,  angle = self.vt.make_value_or_expression(self)
-        cx, cy, cz = cc
-        ax, ay, az = aa
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                        
-        
-        for i in range(count):
-           tt = geom.copy(tt)
-           geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)           
-           for t in tt:
-                newkeys.append(objs.addobj(t, 'cp'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
-        
 
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -964,22 +567,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Flip(GeomPB):
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets, a, b, c, d,  keep  = self.vt.make_value_or_expression(self)
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)
-
-        if keep:
-           tt = geom.copy(tt)          
-        geom.symmetrize(tt, a, b, c, d)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'flp'))          
-
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Volume',
@@ -997,23 +584,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Fillet(GeomPB):
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):
-        volumes, curves, radius  = self.vt.make_value_or_expression(self)
-        volumes = [x.strip() for x in volumes.split(',')]
-        curves = [x.strip() for x in curves.split(',')]
-        
-        radii = [radius]
-
-        volumes = get_target1(objs, volumes, 'v')
-        curves  = get_target1(objs, curves, 'v')
-        
-        ret = geom.fillet(volumes, curves, radii, removeVolume=True)
-        newkeys = []
-        for r in ret:
-            newkeys.append(objs.addobj(r, 'vol'))
-        
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Volume',
@@ -1034,23 +604,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
         
 class Chamfer(GeomPB):
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):
-        volumes, curves, distances, surfaces  = self.vt.make_value_or_expression(self)
-        volumes = [x.strip() for x in volumes.split(',')]
-        curves = [x.strip() for x in curves.split(',')]
-        surfaces = [x.strip() for x in surfaces.split(',')]
-        
-        volumes = [objs[t] if t in objs else int(t)  for t in volumes]
-        curves  = [objs[t] if t in objs else int(t)  for t in curves]
-        surfaces = [objs[t] if t in objs else int(t)  for t in surfaces]
-        ret = geom.chamfer(voluems, curves, distances, surfaces, removeVolume=True)
-        newkeys = []
-        for r in ret:
-            newkeys.append(objs.addobj(r, 'vol'))
-        
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
-        
         
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -1059,18 +612,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Copy(GeomPB):
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):
-        targets  = self.vt.make_value_or_expression(self)[0]
-        targets = [x.strip() for x in targets.split(',')]
-
-        newkeys = []
-        tt = get_target2(objs, targets)
-        ret = geom.copy(tt)
-        for r in ret:
-            newkeys.append(objs.addobj(r, 'cp'))
-        
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
         
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -1083,18 +624,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Remove(GeomPB):
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):
-        targets, recursive= self.vt.make_value_or_expression(self)
-        targets = [x.strip() for x in targets.split(',')]
-
-        newkeys = []
-        tt = get_target2(objs, targets)
-        geom.remove(tt, recursive=recursive)
-        for t in targets:
-           if t in objs: del objs[t]
-                               
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 class GeomPB_Bool(GeomPB):
     def attribute_set(self, v):
@@ -1129,6 +658,13 @@ class GeomPB_Bool(GeomPB):
         tip = GeomPB.panel1_tip(self)
         return tip + ['delete input objects'] + ['delete tool objects']
 
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = (list(self.vt.make_value_or_expression(self)) +
+                     [self.delete_input, self.delete_tool])
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
+    
 
 ddata =  (('objplus', VtableElement('objplus', type='string',
                                       guilabel = '+',
@@ -1141,165 +677,22 @@ ddata =  (('objplus', VtableElement('objplus', type='string',
                 
 class Difference(GeomPB_Bool):    
     vt = Vtable(ddata)
-    def build_geom(self, geom, objs):
-        tp, tm  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp.split(',')]
-        tm = [x.strip() for x in tm.split(',')]          
-
-        input_entity = get_target2(objs, tp)
-        tool_entity  = get_target2(objs, tm)
-        
-        ret = geom.boolean_difference(
-                          input_entity,
-                          tool_entity,
-                          removeObject = self.delete_input,
-                          removeTool = self.delete_tool)
-
-        newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'diff'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
-                
-        if self.delete_input:
-            for x in tp[:1]: 
-                if x in objs: del objs[x]          
-        if self.delete_tool:
-            for x in tp[1:]: 
-                if x in objs: del objs[x]          
-            
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
-        
+    
 udata =  (('objplus', VtableElement('obj1', type='string',
                                       guilabel = 'input',
                                       default = "",
                                       tip = "objects")),)
-
 class Union(GeomPB_Bool):    
     vt = Vtable(udata)
-    def build_geom(self, geom, objs):
-        tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp[0].split(',')]
-        if len(tp) < 2: return
-
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
-        ret = geom.boolean_union(
-                          input_entity,
-                          tool_entity,
-                          removeObject = self.delete_input,
-                          removeTool = self.delete_tool)
-        
-        newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'uni'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
-                
-        if self.delete_input:
-           for x in tp[:1]:
-             if x in objs: del objs[x]
-        if self.delete_tool:
-           for x in tp[1:]: 
-             if x in objs: del objs[x]           
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
-
+    
 class Union2D(GeomPB_Bool):    
     vt = Vtable(udata)
-    def build_geom(self, geom, objs):
-        tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp[0].split(',')]
-        if len(tp) < 2: return
-
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
-        ret = geom.boolean_union2d(
-                          input_entity,
-                          tool_entity,
-                          removeObject = self.delete_input,
-                          removeTool = self.delete_tool)
-        
-        newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'uni'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
-                
-        if self.delete_input:
-            for x in tp[:1]: 
-                if x in objs: del objs[x]          
-
-        if self.delete_tool:
-            for x in tp[1:]: 
-                if x in objs: del objs[x]          
-            
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
         
 class Intersection(GeomPB_Bool):    
     vt = Vtable(udata)
-    def build_geom(self, geom, objs):
-        tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp[0].split(',')]
-        if len(tp) < 2: return
-
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
-
-        ret = geom.boolean_intersection(
-                          input_entity,
-                          tool_entity,
-                          removeObject = self.delete_input,
-                          removeTool = self.delete_tool)
-        newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'its'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
-
-        if self.delete_input:
-            for x in tp[:1]: 
-                if x in objs: del objs[x]          
-        if self.delete_tool:
-            for x in tp[1:]: 
-                if x in objs: del objs[x]          
-                
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
 
 class Fragments(GeomPB_Bool):    
     vt = Vtable(udata)
-    def build_geom(self, geom, objs):
-        tp  = self.vt.make_value_or_expression(self)
-        tp = [x.strip() for x in tp[0].split(',')]
-        if len(tp) < 2: return
-
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
-        ret = geom.boolean_fragments(
-                          input_entity,
-                          tool_entity,
-                          removeObject = self.delete_input,
-                          removeTool = self.delete_tool)
-
-        newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'frag'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o, get_geom_key(o)))
-                
-        if self.delete_input:
-            for x in tp[:1]: 
-                if x in objs: del objs[x]          
-        if self.delete_tool:
-            for x in tp[1:]: 
-                if x in objs: del objs[x]          
-            
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
-        
           
 
 class Point2D(GeomPB):
@@ -1345,29 +738,6 @@ cdata =  (('center', VtableElement('center', type='float',
 
 class Circle2D(GeomPB):
     vt = Vtable(cdata)
-    def build_geom(self, geom, objs):
-        center, ax1, ax2, radius = self.vt.make_value_or_expression(self)
-        lcar = 0.0
-        a1 = np.array(ax1+[0]);  a2 = np.array(ax2+[0])
-        a2 = np.cross(np.cross(a1, a2), a1)
-        a1 = a1/np.sqrt(np.sum(a1**2))*radius
-        a2 = a2/np.sqrt(np.sum(a2**2))*radius                      
-
-        c =np.array(center+[0])
-        p1 = geom.add_point(c+a1, lcar)
-        p2 = geom.add_point(c+a2, lcar)
-        p3 = geom.add_point(c-a1, lcar)
-        p4 = geom.add_point(c-a2, lcar)                      
-        pc = geom.add_point(c, lcar)
-        ca1 = geom.add_circle_arc(p1, pc, p2)
-        ca2 = geom.add_circle_arc(p2, pc, p3)
-        ca3 = geom.add_circle_arc(p3, pc, p4)
-        ca4 = geom.add_circle_arc(p4, pc, p1)
-        ll1 = geom.add_line_loop([ca1, ca2, ca3, ca4])
-        ps1 = geom.add_plane_surface(ll1)
-        newkey = objs.addobj(ps1, 'ps')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
   
 cdata =  (('center', VtableElement('center', type='float',
                              guilabel = 'Center',
@@ -1403,44 +773,6 @@ cdata =  (('center', VtableElement('center', type='float',
 
 class Arc2D(GeomPB):
     vt = Vtable(cdata)
-    def build_geom(self, geom, objs):
-        center, ax1, ax2, radius, an1, an2, do_fill = self.vt.make_value_or_expression(self)
-        lcar = 0.0
-        a1 = np.array(ax1+[0]);  a2 = np.array(ax2+[0])
-        a2 = np.cross(np.cross(a1, a2), a1)
-        a1 = a1/np.sqrt(np.sum(a1**2))*radius
-        a2 = a2/np.sqrt(np.sum(a2**2))*radius
-        if an1 > an2:
-           tmp = an2; an2 = an1; an1 = tmp
-        if an2 - an1 > 180:
-           assert False, "angle must be less than 180"
-
-        an3 = (an1 + an2)/2.0
-        pt1 = a1*np.cos(an1*np.pi/180.) + a2*np.sin(an1*np.pi/180.)
-        pt2 = a1*np.cos(an2*np.pi/180.) + a2*np.sin(an2*np.pi/180.)
-        pt3 = a1*np.cos(an3*np.pi/180.) + a2*np.sin(an3*np.pi/180.)        
-
-        c =np.array(center+[0])
-        p1 = geom.add_point(c+pt1, lcar)
-        p2 = geom.add_point(c+pt2, lcar)
-        p3 = geom.add_point(c+pt3, lcar)        
-        pc = geom.add_point(c, lcar)
-        ca1 = geom.add_circle_arc(p1, pc, p3)
-        ca2 = geom.add_circle_arc(p3, pc, p2)
-
-        if not do_fill:
-            newkey = objs.addobj(ca1, 'ln')
-            newkey = objs.addobj(ca2, 'ln')
-            self._objkeys = objs.keys()
-            self._newobjs = [newkey]
-        else:
-            l1 = geom.add_line(pc, p1)
-            l2 = geom.add_line(p2, pc)            
-            ll1 = geom.add_line_loop([l1, ca1, ca2, l2])
-            ps1 = geom.add_plane_surface(ll1)
-            newkey = objs.addobj(ps1, 'ps')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
   
 rdata =  (('corner', VtableElement('corner', type='float',
                              guilabel = 'Corner',
@@ -1460,25 +792,6 @@ rdata =  (('corner', VtableElement('corner', type='float',
 
 class Rect2D(GeomPB):
     vt = Vtable(rdata)
-    def build_geom(self, geom, objs):
-        c1,  e1,  e2 = self.vt.make_value_or_expression(self)
-        lcar = 0.0
-        c1 = np.array(c1+[0]);
-        e1 = np.array(e1+[0]);
-        e2 = np.array(e2+[0]);
-        p1 = geom.add_point(c1, lcar)
-        p2 = geom.add_point(c1+e1, lcar)
-        p3 = geom.add_point(c1+e1+e2, lcar)
-        p4 = geom.add_point(c1+e2, lcar)
-        l1 = geom.add_line(p1, p2)
-        l2 = geom.add_line(p2, p3)
-        l3 = geom.add_line(p3, p4)
-        l4 = geom.add_line(p4, p1)        
-        ll1 = geom.add_line_loop([l1, l2, l3, l4])
-        rec1 = geom.add_plane_surface(ll1)
-        newkey = objs.addobj(rec1, 'rec')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
         
 pdata =  (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
@@ -1490,26 +803,7 @@ pdata =  (('xarr', VtableElement('xarr', type='array',
                               tip = "Y" )),)
 class Polygon2D(GeomPB):
     vt = Vtable(pdata)
-    def build_geom(self, geom, objs):
-        xarr, yarr = self.vt.make_value_or_expression(self)
-        zarr = [0]*len(yarr)
-        lcar = 0.0
-        if len(xarr) < 2: return
-        try:
-           pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except:
-           print("can not make proper input array")
-           return
-        # check if data is already closed...
-        if np.abs(np.sum((pos[0] - pos[-1])**2)) < 1e-17:
-            pos = pos[:-1]
-        poly = geom.add_polygon(pos, lcar = lcar)
-
-        # apparently I should use this object (poly.surface)...?
-        newkey = objs.addobj(poly.surface, 'pol')
-        self._objkeys = objs.keys()
-        self._newobjs = [newkey]
-  
+    
 class Spline2D(Spline):
     pass
   
@@ -1533,21 +827,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Move2D(GeomPB): # tanslate in gmsh
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets, dx, dy, keep  = self.vt.make_value_or_expression(self)
-        dz = 0.0
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                                
-        if keep:
-           tt = geom.copy(tt)          
-        geom.translate(tt, dx, dy, dz)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'mv'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
         
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -1569,23 +848,7 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
         
 class Rotate2D(GeomPB):
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets, cc, angle, keep  = self.vt.make_value_or_expression(self)
-        cx, cy= cc; cz = 0.0
-        ax, ay, az = 0.0, 0.0, 1.0
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                                        
-
-        if keep:
-           tt = geom.copy(tt)          
-        geom.rotate(tt, cx, cy, cz, ax, ay, az, np.pi*angle/180.)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'rot'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
+    
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
@@ -1609,22 +872,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Flip2D(GeomPB):
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets, a, b, d,  keep  = self.vt.make_value_or_expression(self)
-        c = 0.0
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)        
-        if keep:
-           tt = geom.copy(tt)          
-        geom.symmetrize(tt, a, b, c, d)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'flp'))          
-
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
   
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
@@ -1647,23 +894,6 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Scale2D(GeomPB):  # Dilate in gmsh
     vt = Vtable(data0)
-    def build_geom(self, geom, objs):          
-        targets,  cc, ss, keep  = self.vt.make_value_or_expression(self)
-        cx, cy = cc; cz = 0.0
-        sx, sy = ss; sz = 1.0
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                
-        if keep:
-           tt = geom.copy(tt)          
-        geom.dilate(tt, cx, cy, cz, sx, sy, sz)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'sc'))          
-
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
   
 class Array2D(GeomPB):
     data0 =  (('target_object', VtableElement('target_object', type='string',
@@ -1679,22 +909,6 @@ class Array2D(GeomPB):
                                default = [1, 0, ], 
                                tip = "displacemnt" )),)
     vt = Vtable(data0)  
-    def build_geom(self, geom, objs):          
-        targets, count, displacement  = self.vt.make_value_or_expression(self)
-        dx, dy = displacement
-        dz = 0.0
-        targets = [x.strip() for x in targets.split(',')]
-          
-        newkeys = []
-        tt = get_target2(objs, targets)                        
-        for i in range(count):
-           tt = geom.copy(tt)          
-           geom.translate(tt, dx, dy, dz)
-           for t in tt:
-                newkeys.append(objs.addobj(t, 'cp'))          
-        self._objkeys = objs.keys()
-        self._newobjs = newkeys
-
 
 data0 = (('center', VtableElement('center', type='float',
                                  guilabel = 'Center',
@@ -1715,64 +929,6 @@ data0 = (('center', VtableElement('center', type='float',
 class WorkPlane(GeomPB):
     vt = Vtable(data0)
     
-    def build_geom(self, geom, objs):
-        c1,  a1,  a2 = self.vt.make_value_or_expression(self)
-        c1 = np.array(c1)
-        a1 = np.array(a1); a1 = a1/np.sqrt(np.sum(a1**2))
-        a2 = np.array(a2); a2 = a2/np.sqrt(np.sum(a2**2))        
-
-
-        ax = np.cross(np.array([1., 0., 0.]), a1)
-        an = np.arcsin(np.sqrt(np.sum(ax**2)))
-        
-        tt = [objs[t] for t in objs]
-
-        from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
-
-        #print("tt_in", tt)
-        tt = geom.get_unique_entity(tt)
-        dprint1("tt_out", tt)        
-        #print("entities(1)", geom.model.getEntities())
-        #for t in tt:
-        #     if isinstance(t, SurfaceID): continue
-        #     print("working on t", t)             
-        #     geom.translate([t], c1[0], c1[1], c1[2])
-        #     geom.factory.synchronize()
-        #     print("entities(-1)", geom.model.getEntities())             
-        #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
-        geom.translate(tt, c1[0], c1[1], c1[2])
-        if np.sum(ax**2) != 0.0 and an != 0.0:
-            print(ax, an)
-            geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
-            
-        from petram.geom.geom_utils import rotation_mat
-        R = rotation_mat(ax, an)
-        '''
-        c = np.cos(an); s = np.sin(an)
-        R = np.array(
-            [[c + (1-c)*ax[0]**2, ax[0]*ax[1]*(1-c)-ax[2]*s, ax[0]*ax[2]*(1-c)+ax[1]*s],
-             [ax[0]*ax[1]*(1-c)+ax[2]*s, c + (1-c)*ax[1]**2,  ax[1]*ax[2]*(1-c)-ax[0]*s],
-             [ax[0]*ax[2]*(1-c)-ax[1]*s, ax[1]*ax[2]*(1-c)+ax[0]*s, c + (1-c)*ax[2]**2]]
-            )
-        '''
-        y2 =  np.dot(R, np.array([0, 1, 0]))
-                     
-        ax = np.cross(y2, a2)
-        an = np.arcsin(np.sqrt(np.sum(ax**2)))
-        
-        #for t in tt:
-        #     if isinstance(t, SurfaceID): continue
-        #     print("working on t", t)             
-        #
-        #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
-        if np.sum(ax**2) != 0.0 and an != 0.0:
-            print(ax, an)          
-            geom.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
-
-        self._newobjs = objs.keys()
-        # transform all object in objs (obj in wk)
-        pass
-      
     def get_possible_child(self):
         return [Point2D,  Line2D, Circle2D, Arc2D, Rect2D, Polygon2D, Spline2D,
                 Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
@@ -1822,14 +978,12 @@ class CADImport(GeomPB):
     def panel1_tip(self):
         return [None, None, None]
   
-    def build_geom(self, geom, objs):
-        PTs = geom.import_shapes(self.cad_file)
-        # apparently I should use this object (poly.surface)...?
-        self._newobjs = []        
-        for p in PTs:
-           newkey = objs.addobj(p, 'cd')
-           self._newobjs.append(newkey)
-        self._objkeys = objs.keys()
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = (self.cad_file,)
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
+
 
 # we make BREP import separately so that we can add Brep specific
 # interface later....
@@ -1864,14 +1018,12 @@ class BrepImport(GeomPB):
 
     def panel1_tip(self):
         return [None, None, None]
-  
-    def build_geom(self, geom, objs):
-        PTs = geom.import_shapes(self.cad_file)
-        # apparently I should use this object (poly.surface)...?
-        self._newobjs = []        
-        #for p in PTs:
-        #   newkey = objs.addobj(p, 'cd')
-        #   self._newobjs.append(newkey)
-        self._objkeys = objs.keys()
+
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = (self.cad_file,)
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
+    
         
 

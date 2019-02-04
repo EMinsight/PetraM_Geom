@@ -557,6 +557,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
+            print("size", (0, tag), size)
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
@@ -1782,6 +1783,8 @@ class GMSHMeshWrapper(object):
 
             except QueueEmpty:
                 if not p.is_alive():
+                    if progressbar is not None:                    
+                       progressbar.Destroy()
                     assert False, "Child Process Died"
                     break
                 time.sleep(1.)
