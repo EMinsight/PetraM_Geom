@@ -91,7 +91,7 @@ class CharacteristicLength(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, cl= self.vt.make_value_or_expression(self)
-        mesher.add('characteristiclength', gid, cl = cl)
+        mesher.add('cl', gid, cl = cl)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
