@@ -341,7 +341,7 @@ class Line(GeomPB):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = list(self.vt.make_value_or_expression(self)) + [self.make_spline]
+        gui_param = list(self._make_value_or_expression()) + [self.make_spline]
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
@@ -554,7 +554,7 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
                                     tip = "direction on flip axis")),           
           ('flip_az', VtableElement('flip_az', type='float',
                                     guilabel = 'Flip Axis Z',
-                                   default = 0.0,
+                                   default = 1.0,
                                     tip = "direction on flip axis")), 
           ('flip_d', VtableElement('flip_d', type='float',
                                    guilabel = 'Offset', 
@@ -693,10 +693,18 @@ class Intersection(GeomPB_Bool):
 
 class Fragments(GeomPB_Bool):    
     vt = Vtable(udata)
-          
 
+pdata = (('xarr', VtableElement('xarr', type='array',
+                              guilabel = 'X',
+                              default = '0.0',
+                              tip = "X" )),
+          ('yarr', VtableElement('yarr', type='array',
+                              guilabel = 'Y',
+                              default = '0.0',
+                              tip = "Y" )),)
+    
 class Point2D(GeomPB):
-    pass
+    vt = Vtable(pdata)    
 
 pdata =  (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
@@ -859,7 +867,7 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
                                     tip = "direction on flip axis")),            
           ('flip_ay', VtableElement('flip_ay', type='float',
                                     guilabel = 'Flip Axis Y',
-                                    default = 0.0,
+                                    default = 1.0,
                                     tip = "direction on flip axis")),           
           ('flip_d', VtableElement('flip_d', type='float',
                                    guilabel = 'Offset', 

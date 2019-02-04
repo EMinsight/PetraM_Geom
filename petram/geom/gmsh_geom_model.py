@@ -623,8 +623,13 @@ class GmshGeom(GeomTopBase):
                 
                 if do_break: break
                 if child is stop2: break            # for build after
-        if stop1 is not None: self._build_stop = (stop1, None)
-        if stop2 is not None: self._build_stop = (None, stop2)
+        if stop1 is not None:
+            self._build_stop = (stop1, None)
+            return stop1.name()
+        if stop2 is not None:
+            self._build_stop = (None, stop2)
+            return stop2.name()
+        return self.name()
 
     def update_GUI_after_geom(self, data, objs):
         children = [x for x in self.walk()]
@@ -660,7 +665,7 @@ class GmshGeom(GeomTopBase):
         
         geom.set_factory('OpenCASCADE')
         
-        self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
+        stopname = self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
 
         import wx
         app = wx.GetApp().TopWindow
@@ -674,7 +679,7 @@ class GmshGeom(GeomTopBase):
         
         gui_data, objs, brep_file, data = geom.run_generator(no_mesh = no_mesh,
                                                              finalize=finalize,
-                                                             filename = self.name(),
+                                                             filename = stopname,
                                                              progressbar = pgb)
         pgb.Destroy()        
         self._geom_brep = brep_file
@@ -688,134 +693,7 @@ class GmshGeom(GeomTopBase):
 
         return
 
-        '''
-                   
-        if finalize:
-            print("finalize is on : computing  fragments")
-            geom.apply_fragments()
-        geom.factory.synchronize()
 
-        if no_mesh: return geom
-
-        if finalize:
-            import os
-
-            filename = self.name()
-            geom.write(filename +  '.msh')
-            geom.write(filename +  '.brep')            
-            self._geom_brep = os.path.join(os.getcwd(), filename+'.brep')
-            geom.clear()
-            geom.set_factory('OpenCASCADE')                
-            gmsh.model.occ.importShapes(self._geom_brep, highestDimOnly=False)
-            gmsh.model.occ.synchronize()
-            print("hoge",  gmsh.model.getEntities())            
-        # here we ask for 2D mesh for plotting.
-        # size control is done based on geometry size.
-        ss = geom.getObjSizes()
-        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
-        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
-
-        xmin, xmax, ymin, ymax, zmin,zmax = geom.getBoundingBox()
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-
-        vcl = geom.getVertexCL()
-        #print("vertec cl", vcl)
-        for tag in vcl:
-           geom.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim1_size/1.5)
-
-
-        #print(geom.model.getEntities())
-        #geom.model.setVisibility(((3,7), ), False, True)
-
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
-
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
-        geom.model.mesh.generate(1)
-        
-        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
-        geom.model.mesh.generate(2)        
-
-        
-        from petram.geom.read_gmsh import read_pts_groups, read_loops
-        ptx, cells, cell_data = read_pts_groups(geom)
-        
-        if finalize:
-            self.geom_finalized = True
-        else:
-            self.geom_finalized = False        
-
-        l, s, v = read_loops(geom)
-        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
-        '''
-
-    '''
-    def build_geom3(self, stop1=None, stop2=None, filename = None,
-                   finalize = False):
-        children = [x for x in self.walk()]
-        children = children[1:]
-
-        objs = GeomObjs()
-
-        self._objs = objs        
-        from petram.geom.gmsh_primitives import Geometry
-
-        geom = Geometry()
-        
-        geom.set_factory('OpenCASCADE')
-        
-        self.walk_over_geom_chidlren(geom, objs,
-                                     stop1=stop1, stop2=stop2)
- 
-        unrolled, rolled, entities = generate_mesh(geom, dim = 0,
-                                                  filename = filename)
-        unrolled = [x.strip() for x in unrolled]
-        s, v =  read_loops(unrolled)
-        if finalize:
-            dim = check_dim(unrolled)
-            extra = []
-            if ((dim == 2 and len(s.keys()) > 1) or
-                (dim == 3 and len(s.keys()) > 1 and len(v.keys()) == 1)):
-                print("splitting surface",  s.keys())
-                extra.append(BoolFramgents_extra('final_s', 'Surface', s.keys()))
-                unrolled, rolled, entities = generate_mesh(geom, dim = 0,
-                                                             filename = filename,
-                                                             extra = extra)
-                unrolled = [x.strip() for x in unrolled]
-                s, v =  read_loops(unrolled)              
-            if dim == 3 and len(v.keys()) > 1:                
-                print("splitting volume",  v.keys())                
-                extra.append(BoolFramgents_extra('final_v', 'Volume', v.keys()))
-                unrolled, rolled, entities = generate_mesh(geom, dim = 0,
-                                                           filename = filename,
-                                                           extra = extra)
-                unrolled = [x.strip() for x in unrolled]
-                s, v =  read_loops(unrolled)
-
-            from petram.mesh.gmsh_mesher import write_entities_relations
-            ipv = v.keys()[0] if len(v.keys()) == 1 else -1
-            ips = s.keys()[0] if len(s.keys()) == 1 else -1
-            rolled = write_entities_relations(rolled, writev = ipv,
-                                              writes = ips)
-            unrolled, rolled, entities = generate_mesh(dim = 0,
-                                                       filename = filename,
-                                                       geo_text = rolled)
-            
-        else:
-            self.geom_finalized = False
-        self._txt_rolled = rolled                
-        self._txt_unrolled = unrolled
-        self._num_entities = entities
-    '''
     def build_geom(self, stop1=None, stop2=None, filename = None,
                    finalize = False):
 
@@ -946,6 +824,7 @@ def read_loops(unrolled):
         s[ks] = list(set(tmp))
     return s, v
 
+'''
 def BoolFramgents_extra(name, shape_type,  inputs, delete = True):
     txt = '{}[] = {}{{{} {{{}}}; {}}} {{{} {{{}}}; {}}};'.format(
                 name, 
@@ -1149,4 +1028,4 @@ def generate_mesh(
             pt_data[key] = pt_data[key][uvertices]
 
     return X, cells, pt_data, cell_data, field_data
-    
+'''    
