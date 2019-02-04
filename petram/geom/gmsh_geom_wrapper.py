@@ -122,8 +122,11 @@ class Geometry(object):
 
         self.geom_prev_res = kwargs.pop('PreviewResolutio', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
+        self.occ_parallel = kwargs.pop('OCCParallel', 0)
+        self.maxthreads = kwargs.pop('Maxthreads', 1)
         
         gmsh.option.setNumber("General.Terminal", 1)
+        gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
         modelname = kwargs.pop("modelname", "model1")
         gmsh.clear()
         gmsh.model.add(modelname)
@@ -599,11 +602,11 @@ class Geometry(object):
         self.factory.synchronize()
 
         allent = self.model.getEntities()
-        print('all', allent)
+        #print('all', allent)
         dimtags = [x for x in dimtags if x in allent]
         outdimtags = dimtags[:]
 
-        print('input', dimtags)
+        #print('input', dimtags)
         for dimtag in reversed(dimtags):
            bdimtags = self.recursive_getBdry(dimtag)
            print("checking", dimtag, bdimtags)
@@ -614,7 +617,7 @@ class Geometry(object):
                if not x in allent:
                    idx = outdimtags.index(x)
                    del outdimtags[idx]
-        print('output', outdimtags)                                                     
+        #print('output', outdimtags)                                                     
         return dimtag2id(outdimtags)
 
     '''
@@ -1756,7 +1759,7 @@ class Geometry(object):
 
         vcl = self.getVertexCL()
         for tag in vcl:
-           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/3.5)
+           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
 
 
         #print(geom.model.getEntities())
@@ -1768,8 +1771,10 @@ class Geometry(object):
         #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
         #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
 
+        gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads)
+        gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads)
+
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
-        print("size limit", modelsize, self.geom_prev_res)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
         gmsh.model.mesh.generate(1)
         
@@ -1790,7 +1795,7 @@ class Geometry(object):
             if self.logfile is not None:
                 self.logfile.write("finalize is on : computing  fragments\n")
             if self.queue is not None:
-                self.queue.put((False, "finalize is on : computing  fragments\n"))
+                self.queue.put((False, "finalize is on : computing  fragments"))
                 
             self.apply_fragments()
             
@@ -1823,7 +1828,9 @@ class Geometry(object):
                       progressbar = None):
         
         kwargs = {'PreviewResolutio': self.geom_prev_res,
-                  'PreviewAlgorithm': self.geom_prev_algorithm}
+                  'PreviewAlgorithm': self.geom_prev_algorithm,
+                  'OCCParallel': self.occ_parallel,
+                  'Maxthreads': self.maxthreads}
                  
         q = mp.Queue()
         p = mp.Process(target = generator,

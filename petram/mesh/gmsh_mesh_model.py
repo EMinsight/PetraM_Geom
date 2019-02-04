@@ -240,7 +240,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
                    ["3D Algorithm", c2[-1], 4, setting2],
-                   ["            ", self.gen_all_phys_entity==1 ,  3,
+                   [None, self.gen_all_phys_entity==1 ,  3,
                     {"text":"Write physical entities for all dimensions."}],
                    [None, None, 341, {"label": "Use default size",
                                       "func": 'onSetDefSize',

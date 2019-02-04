@@ -173,10 +173,7 @@ class GMSHMeshWrapper(object):
         self.algorithm = MeshAlgorithm
         self.algorithm3d = MeshAlgorithm3D
         self.maxthreads= MaxThreads    # general, 1D, 2D, 3D: defualt = 1,1,1,1
-        
-
         self._new_brep = True        
-
         
     def add(self, name, *gids, **kwargs):
         '''

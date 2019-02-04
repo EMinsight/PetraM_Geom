@@ -431,6 +431,8 @@ class GmshGeom(GeomTopBase):
         v['geom_timestamp'] = 0
         v['geom_prev_algorithm'] = 2
         v['geom_prev_res'] = 30
+        v['occ_parallel'] = False
+        v['maxthreads'] = 1
         return v
         
     def get_possible_child(self):
@@ -469,7 +471,9 @@ class GmshGeom(GeomTopBase):
                 ["PreviewAlgorith", "Automatic", 4, {"style":wx.CB_READONLY,
                                                      "choices": ["Auto", "MeshAdpat",
                                                                  "Delaunay", "Frontal"]}],
-                ["PreviewResolution", 30,  400, None],
+                ["Preview Resolution", 30,  400, None],
+                ["Preview #threads", self.maxthreads, 400, None],                
+                [None, self.occ_parallel, 3, {"text":"OCC parallel boolean"}],
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
@@ -477,7 +481,7 @@ class GmshGeom(GeomTopBase):
     def get_panel1_value(self):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
         txt = aname[self.geom_prev_algorithm]
-        return [None, txt, self.geom_prev_res, self]
+        return [None, txt, self.geom_prev_res, self.maxthreads, self.occ_parallel, self]
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
@@ -486,6 +490,8 @@ class GmshGeom(GeomTopBase):
                 self.geom_prev_algorithm = k
 
         self.geom_prev_res = long(v[2])
+        self.maxthreads  =  long(v[3])
+        self.occ_parallel  = v[4]
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -587,15 +593,13 @@ class GmshGeom(GeomTopBase):
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before
                 child.add_geom_sequence(geom)
-                #child.build_geom(geom, objs)
                 if child is stop2: break            # for build after
                 
             else:  # workplane
                 children2 = child.get_children()
                 child.vt.preprocess_params(child)
                 if child is stop1: break            # for build before                
-                #objs2 = objs.duplicate()
-                #org_keys = objs.keys()
+
                 do_break = False
                 
                 geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
@@ -606,7 +610,6 @@ class GmshGeom(GeomTopBase):
                         do_break = True
                         break            # for build before
                     child2.add_geom_sequence(geom)                    
-                    #child2.build_geom(geom, objs2)
                     if child2 is stop2:
                         do_break = True                        
                         break            # for build after
@@ -615,11 +618,6 @@ class GmshGeom(GeomTopBase):
                 #for x in org_keys: del objs2[x]
                 child.add_geom_sequence(geom)
                 geom.add_sequence('WP_End', 'WP_End', 'WP_End')
-                
-                #child.build_geom(geom, objs2)
-
-                # copy new objects to objs
-                #for x in objs2: objs[x] = objs2[x]
                 
                 if do_break: break
                 if child is stop2: break            # for build after
@@ -661,7 +659,9 @@ class GmshGeom(GeomTopBase):
 
         from petram.geom.gmsh_geom_wrapper import Geometry
         geom = Geometry(PreviewResolution = self.geom_prev_res,
-                        PreviewAlgorithm = self.geom_prev_algorithm)
+                        PreviewAlgorithm = self.geom_prev_algorithm,
+                        OCCParallel = int(self.occ_parallel),
+                        Maxthreads = self.maxthreads)
         
         geom.set_factory('OpenCASCADE')
         
