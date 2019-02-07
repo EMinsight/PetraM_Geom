@@ -221,6 +221,74 @@ class Geometry(object):
             for bdim, btag in bdimtags:
                 lcar[btag] = min((lcar[btag], s))
         return dict(lcar)
+
+    
+    def getEntityNumberingInfo(self):
+        '''
+        Numbering info is collected to understand the change of dimtags
+        after brep is saved/loaded. This info may be useful for caching
+        the geometry in future?
+        '''
+        info_digits = 7
+        from collections import defaultdict
+        
+        #self.factory.removeAllDuplicates()
+        self.factory.synchronize()        
+        
+        points = [];
+        edges = [];
+        faces = [];
+        volumes = [];
+        for dimtag in self.model.getEntities(3):
+            volumes.append(dimtag[1])
+            f = self.model.getBoundary([dimtag], combined = False, oriented = False)
+            for dim, tag in f:
+                if not tag in faces: faces.append(tag)
+                e = self.model.getBoundary([(dim,tag)], combined = False, oriented = False)
+                for dim, tag in e:
+                    if not tag in edges: edges.append(tag)
+                    p = self.model.getBoundary([(dim,tag)], combined = False, oriented = False)
+                    for dim, tag in p:
+                        if not tag in points: points.append(tag)
+        for dimtag in self.model.getEntities(2):
+            dim, tag = dimtag
+            if not tag in faces: faces.append(tag)
+            e = self.model.getBoundary([(dim,tag)], combined = False, oriented = False)
+            for dim, tag in e:
+                if not tag in edges: edges.append(tag)
+                p = self.model.getBoundary([(dim,tag)], combined = False, oriented = False)
+                for dim, tag in p:
+                    if not tag in points: points.append(tag)
+        for dimtag in self.model.getEntities(1):
+            dim, tag = dimtag            
+            if not tag in edges: edges.append(tag)
+            p = self.model.getBoundary([(dim,tag)], combined = False, oriented = False)
+            for dim, tag in p:
+                if not tag in points: points.append(tag)
+        for dimtag in self.model.getEntities(0):
+            dim, tag = dimtag 
+            if not tag in points: points.append(tag)           
+
+        map = points, edges, faces, volumes
+        print("entities", points, edges, faces, volumes)        
+        return map
+        
+
+    def applyEntityNumberingInfo(self, map, objs):
+        map1  = self.getEntityNumberingInfo()
+        point_map = dict(zip(map[0], map1[0]))
+        edge_map = dict(zip(map[1], map1[1]))
+        face_map = dict(zip(map[2], map1[2]))
+        volume_map = dict(zip(map[3], map1[3]))        
+        for key in objs:
+            if isinstance(objs[key], VertexID):
+                objs[key] = VertexID(point_map[objs[key]])
+            if isinstance(objs[key], LineID):
+                objs[key] = LineID(edge_map[objs[key]])
+            if isinstance(objs[key], SurfaceID):
+                objs[key] = SurfaceID(face_map[objs[key]])
+            if isinstance(objs[key], VolumeID):
+                objs[key] = VolumeID(volume_map[objs[key]])
        
     @staticmethod
     def write(filename):
@@ -272,8 +340,12 @@ class Geometry(object):
         #self.factory.synchronize()                                
         return SurfaceID(s)
 
-    def add_surface_filling(self, ll):
-        s = self.factory.addSurfaceFilling(ll)
+    def add_surface_filling(self, tags):
+        tags = list(np.atleast_1d(tags))
+        print("calling wire")
+        wire = self.factory.addWire(tags)
+        print("calling filling", wire)        
+        s = self.factory.addSurfaceFilling(wire)
         return SurfaceID(s)
        
     def add_line_loop(self, pts, sign=None):
@@ -659,11 +731,16 @@ class Geometry(object):
            assert False, "minimum distance between point is 0.0"
         if max(dist) > min(dist)*1e4:
            assert False, "some points are too close (d_max > d_min*1e4)"
-        pts = []
-        for ii, p in enumerate(pos):
-            pt = self.add_point(p, lcar,
-                                mask = (ii == 0 or ii == len(pos)-1))
+
+        
+        pt1 = self.add_point(pos[0], lcar, mask=True)
+        pt2 = self.add_point(pos[-1], lcar, mask=True)        
+
+        pts = [pt1]
+        for ii, p in enumerate(pos[1:-1]):
+            pt = self.add_point(p, lcar, mask = False)
             pts.append(pt)
+        pts.append(pt2)
 
         if not make_spline:
             pts1 = pts[:-1]
@@ -756,8 +833,8 @@ class Geometry(object):
         return  objs.keys(), [newkey]
 
     def CreateSurface_build_geom(self, objs, *args):
-        pts = args
-        pts = [x.strip() for x in pts[0].split(',')]
+        pts, isFilling = args
+        pts = [x.strip() for x in pts.split(',')]
         
         ptx = get_target1(objs, pts, 'l')
         #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
@@ -775,12 +852,16 @@ class Geometry(object):
         #   if x.startswith('-'): del objs[x[1:]]
         #   else: del objs[x]
            
-        ll = self.add_line_loop(ptx)
-        newobj1 = objs.addobj(ll, 'll')
-        surface = self.add_plane_surface(ll)
-        newobj2 = objs.addobj(surface, 'ps')
-        
-        newkeys = [newobj1, newobj2]
+        if isFilling:
+           surface = self.add_surface_filling(ptx)
+           newobj1 = objs.addobj(surface, 'sf')
+           newkeys = [newobj1]           
+        else:
+           ll = self.add_line_loop(ptx)
+           #newobj1 = objs.addobj(ll, 'll')
+           surface = self.add_plane_surface(ll)            
+           newobj2 = objs.addobj(surface, 'ps')
+           newkeys = [newobj2]
 
         return  objs.keys(), newkeys        
 
@@ -800,11 +881,11 @@ class Geometry(object):
 
         ptx = get_target(objs, targets, 'f')                
         sl = self.add_surface_loop(pts)
-        newobj1 = objs.addobj(sl, 'sl')
+        #newobj1 = objs.addobj(sl, 'sl')
         vol = self.add_volume(sl)
         newobj2 = objs.addobj(vol, 'vol')
 
-        return  objs.keys(), [newobj1, newobj2]   
+        return  objs.keys(), [newobj2]   
     
     def Rect_build_geom(self, objs, *args):
         c1,  e1,  e2 = args
@@ -1109,6 +1190,26 @@ class Geometry(object):
                  
         return  objs.keys(), newkeys
 
+    def Sweep_build_geom(self, objs, *args):
+        print("objs", objs)
+        targets, lines = args
+        targets = [x.strip() for x in targets.split(',')]
+        targetID = get_target2(objs, targets)
+        lines = [x.strip() for x in lines.split(',')]        
+        lineID = get_target2(objs, lines)
+
+        newkeys = []
+        for t, idd in zip(targets, targetID):        
+             #if not t in objs:
+             #    assert False, t + " does not exist"
+             #dimtags = [id2dimtag(wireID)]                                         
+             wire = self.factory.addWire(lineID)
+             dimtags = [id2dimtag(idd)]                                         
+             ret = self.factory.addPipe(dimtags, wire)
+             newkeys.append(objs.addobj(ret[0], 'ex'))
+                 
+        return  objs.keys(), newkeys
+    
 
     def Move_build_geom(self, objs, *args):          
         targets, dx, dy, dz, keep  = args
@@ -1710,6 +1811,8 @@ class Geometry(object):
         from petram.geom.gmsh_geom_model import GeomObjs
         objs = GeomObjs()
         gui_data = dict()
+
+        isWP = False
         
         for gui_name, gui_param, geom_name in self.geom_sequence:
             if self.logfile is not None:
@@ -1726,10 +1829,12 @@ class Geometry(object):
                 
                 org_objs = objs
                 objs = tmp
+                isWP = True
                 
             elif geom_name == "WP_End":
                 for x in objs: org_objs[x] = objs[x]
                 objs = org_objs
+                isWP = False                
 
             else:
                 try:
@@ -1741,6 +1846,8 @@ class Geometry(object):
                     if self.logfile is not None:                    
                         self.logfile.write("failed " + traceback.format_exc())
                     assert False, traceback.format_exc()
+
+        #cacheName = "" if isWP else gui_name
         return gui_data, objs
     
 
@@ -1789,7 +1896,7 @@ class Geometry(object):
             geom_msh = os.path.join(os.getcwd(), filename+'.msh')
             gmsh.write(geom_msh)
     
-    def generate_brep(self, filename = '', finalize=False):
+    def generate_brep(self, objs, filename = '', finalize=False):
         
         if finalize:
             if self.logfile is not None:
@@ -1801,19 +1908,18 @@ class Geometry(object):
             
         self.factory.synchronize()
 
-        if finalize:
-            filename = filename
-        else:
-            filenmae = self.geom_sequence[-1][0]
-            
         '''
         Save BREP for meshing.
         '''
         import os
+
+        map = self.getEntityNumberingInfo()
+        
         geom_brep = os.path.join(os.getcwd(), filename+'.brep')
         gmsh.write(geom_brep)
-        
-        if finalize:
+
+        do_map_always = True
+        if finalize or do_map_always:
             '''
             We need to reload it here so that indexing is consistent
             in meshing.
@@ -1821,8 +1927,10 @@ class Geometry(object):
             gmsh.clear()
             gmsh.model.occ.importShapes(geom_brep, highestDimOnly=False)
             gmsh.model.occ.synchronize()
+
+            self.applyEntityNumberingInfo(map, objs)
             
-        return geom_brep            
+        return geom_brep
         
     def run_generator(self, no_mesh=False, finalize=False, filename = '',
                       progressbar = None):
@@ -1873,7 +1981,7 @@ class Geometry(object):
         return ret[1]
         
 
-def generator(q, sequence, no_mesh, finalize, filename, kwargs):
+def generator(q, sequence, no_mesh, finalize, filename,  kwargs):
  
     
     kwargs['write_log'] = True
@@ -1887,9 +1995,15 @@ def generator(q, sequence, no_mesh, finalize, filename, kwargs):
     mw.geom_sequence = sequence
     mw.out_queue = q
     
-    gui_data, objs = mw.run_sequence()
-    
-    brep_file = mw.generate_brep(filename = filename, finalize = finalize)
+    gui_data, objs= mw.run_sequence()
+
+    if finalize:
+        filename = filename
+        brep_file = mw.generate_brep(objs, filename = filename, finalize = True)
+    else:
+        filename = sequrence[-1][0]
+        mw.generate_brep(objs, filename = filename, finalize = False)
+        brep_file = ''
 
     if no_mesh:
         q.put((True, (gui_data, objs, brep_file, None)))

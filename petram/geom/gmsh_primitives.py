@@ -365,17 +365,29 @@ ldata =  (('lines', VtableElement('lines', type='string',
 
 class LineLoop(GeomPB):
     vt = Vtable(ldata)
-                           
-class CreateSurface(GeomPB):        
-    vt = Vtable(ldata)
-        
+
 ldata =  (('surfs', VtableElement('surfs', type='string',
                                     guilabel = 'Surfaces',
                                     default = "",
-                                    tip = "surfacess to be connected")), )       
+                                    tip = "surfacess to be connected")), 
+          ('isplane', VtableElement('isplane_org', type='bool',
+                                      guilabel = 'Use surface filling',
+                                      default = True,
+                                      tip = "Surface filling")), )
+class CreateSurface(GeomPB):        
+    vt = Vtable(ldata)
+    
+ldata =  (('lines', VtableElement('lines', type='string',
+                                    guilabel = 'Lines',
+                                    default = "",
+                                    tip = "lines to be connected")), )
 class SurfaceLoop(GeomPB):
     vt = Vtable(ldata)
-                           
+    
+ldata =  (('lines', VtableElement('lines', type='string',
+                                    guilabel = 'Lines',
+                                    default = "",
+                                    tip = "lines to be connected")), )
 class CreateVolume(GeomPB):        
     vt = Vtable(ldata)
 
@@ -422,6 +434,18 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
                              tip = "Extrusion length" )), )         
         
 class Revolve(GeomPB):    
+    vt = Vtable(edata)
+    
+edata =  (('ex_target', VtableElement('ex_target', type='string',
+                                      guilabel = 'Target',
+                                      default = "",
+                                      tip = "extrusion target")),
+          ('path', VtableElement('path', type='string',
+                                   guilabel = 'Path (Lines)',
+                                   default = "",                                  
+                                   tip = "sweep path" )),)
+        
+class Sweep(GeomPB):    
     vt = Vtable(edata)
 
 
