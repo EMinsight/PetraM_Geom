@@ -434,6 +434,7 @@ class GmshGeom(GeomTopBase):
         v['geom_prev_res'] = 30
         v['occ_parallel'] = False
         v['maxthreads'] = 1
+        v['skip_final_frag'] = False
         return v
         
     def get_possible_child(self):
@@ -475,6 +476,7 @@ class GmshGeom(GeomTopBase):
                 ["Preview Resolution", 30,  400, None],
                 ["Preview #threads", self.maxthreads, 400, None],                
                 [None, self.occ_parallel, 3, {"text":"OCC parallel boolean"}],
+                [None, self.skip_final_frag, 3, {"text":"Skip fragmentationn"}],                
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
@@ -482,7 +484,8 @@ class GmshGeom(GeomTopBase):
     def get_panel1_value(self):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
         txt = aname[self.geom_prev_algorithm]
-        return [None, txt, self.geom_prev_res, self.maxthreads, self.occ_parallel, self]
+        return [None, txt, self.geom_prev_res, self.maxthreads, self.occ_parallel,
+                self.skip_final_frag, self]
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
@@ -493,6 +496,7 @@ class GmshGeom(GeomTopBase):
         self.geom_prev_res = long(v[2])
         self.maxthreads  =  long(v[3])
         self.occ_parallel  = v[4]
+        self.skip_final_frag = v[5]
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -662,7 +666,8 @@ class GmshGeom(GeomTopBase):
         geom = Geometry(PreviewResolution = self.geom_prev_res,
                         PreviewAlgorithm = self.geom_prev_algorithm,
                         OCCParallel = int(self.occ_parallel),
-                        Maxthreads = self.maxthreads)
+                        Maxthreads = self.maxthreads,
+                        SkipFrag = self.skip_final_frag)
         
         geom.set_factory('OpenCASCADE')
         

@@ -124,6 +124,7 @@ class Geometry(object):
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
         self.maxthreads = kwargs.pop('Maxthreads', 1)
+        self.skip_final_frag = kwargs.pop('SkipFrag', False)
         
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
@@ -279,7 +280,8 @@ class Geometry(object):
         point_map = dict(zip(map[0], map1[0]))
         edge_map = dict(zip(map[1], map1[1]))
         face_map = dict(zip(map[2], map1[2]))
-        volume_map = dict(zip(map[3], map1[3]))        
+        volume_map = dict(zip(map[3], map1[3]))
+        print("objs", objs)
         for key in objs:
             if isinstance(objs[key], VertexID):
                 objs[key] = VertexID(point_map[objs[key]])
@@ -1390,10 +1392,10 @@ class Geometry(object):
                 newkeys.append(objs.addobj(o,  get_geom_key(o)))
                 
         if delete_input:
-            for x in tp[:1]: 
+            for x in tp: 
                 if x in objs: del objs[x]          
         if delete_tool:
-            for x in tp[1:]: 
+            for x in tm: 
                 if x in objs: del objs[x]          
             
         return  objs.keys(), newkeys
@@ -1421,7 +1423,7 @@ class Geometry(object):
            for x in tp[:1]:
              if x in objs: del objs[x]
         if delete_tool:
-           for x in tp[1:]: 
+           for x in tp[1:]:
              if x in objs: del objs[x]
              
         return  objs.keys(), newkeys             
@@ -1898,7 +1900,7 @@ class Geometry(object):
     
     def generate_brep(self, objs, filename = '', finalize=False):
         
-        if finalize:
+        if finalize and not self.skip_final_frag:
             if self.logfile is not None:
                 self.logfile.write("finalize is on : computing  fragments\n")
             if self.queue is not None:
@@ -1938,7 +1940,8 @@ class Geometry(object):
         kwargs = {'PreviewResolutio': self.geom_prev_res,
                   'PreviewAlgorithm': self.geom_prev_algorithm,
                   'OCCParallel': self.occ_parallel,
-                  'Maxthreads': self.maxthreads}
+                  'Maxthreads': self.maxthreads,
+                  'SkipFrag': self.skip_final_frag}
                  
         q = mp.Queue()
         p = mp.Process(target = generator,
@@ -2001,7 +2004,7 @@ def generator(q, sequence, no_mesh, finalize, filename,  kwargs):
         filename = filename
         brep_file = mw.generate_brep(objs, filename = filename, finalize = True)
     else:
-        filename = sequrence[-1][0]
+        filename = sequence[-1][0]
         mw.generate_brep(objs, filename = filename, finalize = False)
         brep_file = ''
 
