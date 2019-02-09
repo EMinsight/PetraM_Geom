@@ -1095,7 +1095,7 @@ class Geometry(object):
         return  objs.keys(), [newkey]        
 
     def Torus_build_geom(self, objs, *args):
-        x0,  r1,  r2, angle = args
+        x0,  r1,  r2, angle, keep_interior = args
 
         lcar = 0.0
         a1 = np.array([r2, 0, 0])
@@ -1117,11 +1117,11 @@ class Geometry(object):
         dst = [id2dimtag(ps1), ]        
         volumes = []
 
-        if angle > 270:
+        if abs(angle) > 270:
            seg = 4
-        elif  angle > 180:
+        elif  abs(angle) > 180:
            seg = 3            
-        elif  angle > 90:
+        elif  abs(angle) > 90:
            seg = 2                       
         else:
            seg = 1            
@@ -1130,19 +1130,25 @@ class Geometry(object):
         
         for i in range(seg):
             ret = self.factory.revolve(dst,
-                                      x0[0], x0[1], x0[2],
-                                      0, 0, 1, np.pi/2.)
+                                       x0[0], x0[1], x0[2],
+                                       0, 0, 1, an*np.pi/180.)
             dst = ret[:1]
             volumes.append(ret[1])
 
-        if seg > 1:
-            ret = self.factory.fuse(volumes[:1], volumes[1:])
-            v1 = VolumeID(ret[0][0][1])
+        if keep_interior:
+            newkey = []
+            for v in volumes:
+                v1 = VolumeID(v[1])
+                newkey.append(objs.addobj(v1, 'trs'))
         else:
-            v1 = VolumeID(ret[1][1])
+            if seg > 1:
+                ret = self.factory.fuse(volumes[:1], volumes[1:])
+                v1 = VolumeID(ret[0][0][1])
+            else:
+                v1 = VolumeID(ret[1][1])
 
-        newkey = objs.addobj(v1, 'trs')
-        return  objs.keys(), [newkey]                
+            newkey = [objs.addobj(v1, 'trs')]
+        return  objs.keys(), newkey        
     
     def Extrude_build_geom(self, objs, *args):
         targets,  tax, len = args
@@ -1915,7 +1921,7 @@ class Geometry(object):
         '''
         import os
 
-        map = self.getEntityNumberingInfo()
+        #map = self.getEntityNumberingInfo()
         
         geom_brep = os.path.join(os.getcwd(), filename+'.brep')
         gmsh.write(geom_brep)
@@ -1930,7 +1936,7 @@ class Geometry(object):
             gmsh.model.occ.importShapes(geom_brep, highestDimOnly=False)
             gmsh.model.occ.synchronize()
 
-            self.applyEntityNumberingInfo(map, objs)
+            #self.applyEntityNumberingInfo(map, objs)
             
         return geom_brep
         

@@ -287,7 +287,12 @@ vtdata =  (('center', VtableElement('center', type='float',
           ('angle', VtableElement('angle', type='float',
                                guilabel = 'Angle',
                                default = 360,
-                               tip = "angle")),)
+                               tip = "angle")),
+          ('keep_interior', VtableElement('keep_interior', type='bool',
+                                      guilabel = 'keep interior surfaces',
+                                      default = True,
+                                      tip = "Keep Intrior Surfaces ")), )
+
 
 class Torus(GeomPB):
     vt = Vtable(vtdata)

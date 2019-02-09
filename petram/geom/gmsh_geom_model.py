@@ -449,7 +449,7 @@ class GmshGeom(GeomTopBase):
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
                 ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("", LineLoop), ("", SurfaceLoop),
+                #("", LineLoop), ("", SurfaceLoop),
                 ("Protrude...", Extrude, "Extrude"), ("", Revolve), ("!", Sweep),
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
