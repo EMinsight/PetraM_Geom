@@ -1077,7 +1077,7 @@ class CADImport(GeomPB):
 
     @classmethod    
     def fancy_menu_name(self):
-        return "STEP/IGS",
+        return "STEP/IGS"
 
 # we make BREP import separately so that we can add Brep specific
 # interface later....
