@@ -450,13 +450,13 @@ class GmshGeom(GeomTopBase):
                 ("!", Torus),
                 ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
                 #("", LineLoop), ("", SurfaceLoop),
-                ("Protrude...", Extrude, "Extrude"), ("", Revolve), ("!", Sweep),
+                ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
-                ("", Array), ("!", ArrayRot, "ArrayR"),
+                ("", Array), ("!", ArrayRot),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
                 ("", WorkPlane),
-                ("Import...", BrepImport, "Brep"),("!", CADImport, "STEP/IGS"),
+                ("Import...", BrepImport),("!", CADImport),
                 ]
                 
     def get_special_menu(self):
