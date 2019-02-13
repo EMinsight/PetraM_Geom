@@ -371,10 +371,10 @@ ldata =  (('lines', VtableElement('lines', type='string',
 class LineLoop(GeomPB):
     vt = Vtable(ldata)
 
-ldata =  (('surfs', VtableElement('surfs', type='string',
-                                    guilabel = 'Surfaces',
+ldata =  (('lines', VtableElement('lines', type='string',
+                                    guilabel = 'Lines',
                                     default = "",
-                                    tip = "surfacess to be connected")), 
+                                    tip = "lines to be connected")), 
           ('isplane', VtableElement('isplane_org', type='bool',
                                       guilabel = 'Use surface filling',
                                       default = True,
@@ -382,17 +382,13 @@ ldata =  (('surfs', VtableElement('surfs', type='string',
 class CreateSurface(GeomPB):        
     vt = Vtable(ldata)
     
-ldata =  (('lines', VtableElement('lines', type='string',
-                                    guilabel = 'Lines',
+ldata =  (('surfs', VtableElement('surfs', type='string',
+                                    guilabel = 'Surfaces',
                                     default = "",
-                                    tip = "lines to be connected")), )
+                                    tip = "surfacess to be connected")), )
 class SurfaceLoop(GeomPB):
     vt = Vtable(ldata)
     
-ldata =  (('lines', VtableElement('lines', type='string',
-                                    guilabel = 'Lines',
-                                    default = "",
-                                    tip = "lines to be connected")), )
 class CreateVolume(GeomPB):        
     vt = Vtable(ldata)
 
