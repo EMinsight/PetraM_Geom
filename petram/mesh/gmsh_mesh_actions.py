@@ -354,7 +354,7 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
 # Transform Hint (extrude)
 #    d     : dx, dy, dz : 3 float
 #    l1, l2,,,,: set of edges : end points determines d (N.I.)
-def process_hint(text):
+def process_hint_ex(text):
     try:
         values = [float(x) for x in text.split(',')]
         if len(values) == 3:
@@ -367,7 +367,7 @@ class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
         gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
-        kwargs = process_hint(hint)
+        kwargs = process_hint_ex(hint)
         mesher.add('extrude_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)
 
     def get_element_selection(self):
@@ -385,7 +385,7 @@ class ExtrudeMesh(GmshMeshActionBase):
 #    ax an : ax_x, ax_y, ax_z, angle(deg): 4 float
 #    l1, angle  : l1 direction of axis, angle (deg) (N.I.)
 #    s1, angle  : normal to face s1, angle (deg) (N.I.)
-def process_hint(text):
+def process_hint_rv(text):
     try:
         values = [float(x) for x in text.split(',')]
         if len(values) == 4:
@@ -398,7 +398,7 @@ class RevolveMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
         gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
-        kwargs = process_hint(hint)
+        kwargs = process_hint_rv(hint)
         mesher.add('revolve_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)        
 
     def get_element_selection(self):
