@@ -43,6 +43,9 @@ def show_all(evt):
         o.hide_component([])
     else:
         pass
+    viewer._hidden_volume = []
+    viewer._hidden_face = []
+    viewer._hidden_edge = []
     viewer._dom_bdr_sel  = ([], [], [], [])                
     viewer.draw_all()    
 
