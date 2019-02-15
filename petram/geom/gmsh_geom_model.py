@@ -326,8 +326,8 @@ class BrepFile(GeomTopBase):
         
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
-        if self._gmsh4_data is not  None:
-            self._gmsh4_data[-1].finalize()
+        #if self._gmsh4_data is not  None:
+        #    self._gmsh4_data[-1].finalize()
             
         objs = GeomObjs()
         self._objs = objs

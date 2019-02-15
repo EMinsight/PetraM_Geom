@@ -1926,7 +1926,7 @@ class Geometry(object):
         geom_brep = os.path.join(os.getcwd(), filename+'.brep')
         gmsh.write(geom_brep)
 
-        do_map_always = True
+        do_map_always = False
         if finalize or do_map_always:
             '''
             We need to reload it here so that indexing is consistent
