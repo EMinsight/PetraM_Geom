@@ -725,15 +725,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
     '''        
     def load_gui_figure_data(self, viewer):
-        import meshio
-        
-        filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'
-        msh_filename = filename + '.msh'
-        if os.path.exists(msh_filename):
-            ret = meshio.read(msh_filename)
-            return 'mesh', self.name(), ret
-        else:
-            return 'mesh', self.name(), None
+        #import meshio
+        return 'mesh', self.name(), None
+    
+        #filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'
+        #msh_filename = filename + '.msh'
+        #if os.path.exists(msh_filename):
+        #    ret = meshio.read(msh_filename)
+        #    return 'mesh', self.name(), ret
+        #else:
+
         
     def is_viewmode_grouphead(self):
         return True
