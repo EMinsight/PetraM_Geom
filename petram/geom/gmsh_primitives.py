@@ -377,7 +377,7 @@ ldata =  (('lines', VtableElement('lines', type='string',
                                     tip = "lines to be connected")), 
           ('isplane', VtableElement('isplane_org', type='bool',
                                       guilabel = 'Use surface filling',
-                                      default = True,
+                                      default = False,
                                       tip = "Surface filling")), )
 class CreateSurface(GeomPB):        
     vt = Vtable(ldata)
@@ -1032,6 +1032,62 @@ class WorkPlane(GeomPB):
                 ("Boolean...", Union2D),
                 ("",Intersection),("",Difference),("!",Fragments),
                 ]
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'WP By Coordinates'
+    @classmethod    
+    def fancy_tree_name(self):
+        return 'WorkPlane'
+    
+
+    
+data0 = (('center', VtableElement('pts1', type='string',
+                                    guilabel = 'center',
+                                    default = "",
+                                    tip = "center of WP")), 
+         ('ax1', VtableElement('ax1', type='string',
+                               guilabel = '1st axis',
+                               default = "",
+                               tip = "point on the 1st axis")), 
+         ('ax2', VtableElement('ax2', type='string',         
+                                guilabel = 'point on surface',
+                                default = "",
+                                tip = "point on the surface")),
+         ('flip1', VtableElement('flip1', type='bool',
+                                      guilabel = 'flip 1st axis',
+                                      default = False,
+                                      tip = "flip 1st axis")), 
+         ('flip2', VtableElement('flip2', type='bool',
+                                      guilabel = 'flip 2nd axis',
+                                      default = False,
+                                      tip = "flip 2nd axis")), )
+
+class WorkPlaneByPoints(GeomPB):
+    vt = Vtable(data0)
+    
+    def get_possible_child(self):
+        return [Point2D,  Line2D, Circle2D, Arc2D, Rect2D, Polygon2D, Spline2D,
+                Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
+                Union2D, Intersection, Difference, Fragments, Copy, Remove,
+               CreateLine, CreateSurface]
+
+    def get_possible_child_menu(self):
+        return [("", Point2D),("", Line2D), ("", Circle2D), ("", Arc2D),
+                ("", Rect2D), ("", Polygon2D), ("", Spline2D),
+                ("", CreateLine), ("", CreateSurface),
+                ("", Copy), ("", Remove),
+                ("Translate...", Move2D), ("", Rotate2D),
+                ("", Flip2D),("", Scale2D),("!", Array2D),
+                ("Boolean...", Union2D),
+                ("",Intersection),("",Difference),("!",Fragments),
+                ]
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'WP By Points'
+    
+    @classmethod    
+    def fancy_tree_name(self):
+        return 'WorkPlane'
       
 class CADImport(GeomPB):
     vt = Vtable(tuple())

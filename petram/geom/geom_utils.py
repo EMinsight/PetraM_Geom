@@ -6,6 +6,7 @@ def rotation_mat(ax, an):
     matrix to rotate arounc ax by an [rad]
     '''
     c = np.cos(an); s = np.sin(an)
+    ax = ax/np.sqrt(np.sum(ax**2))
     R = np.array(
             [[c + (1-c)*ax[0]**2, ax[0]*ax[1]*(1-c)-ax[2]*s, ax[0]*ax[2]*(1-c)+ax[1]*s],
              [ax[0]*ax[1]*(1-c)+ax[2]*s, c + (1-c)*ax[1]**2,  ax[1]*ax[2]*(1-c)-ax[0]*s],

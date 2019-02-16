@@ -337,19 +337,26 @@ class Geometry(object):
     def add_plane_surface(self, tags):
         # tags : 1st element exterier, others makes hole
         tags = list(np.atleast_1d(tags))
-        #self.factory.synchronize()                        
         s = self.factory.addPlaneSurface(tags)
-        #self.factory.synchronize()                                
         return SurfaceID(s)
 
     def add_surface_filling(self, tags):
         tags = list(np.atleast_1d(tags))
-        print("calling wire")
+        #print("calling wire")
+        self.factory.synchronize()
+        #print(gmsh.model.getEntities(1))
         wire = self.factory.addWire(tags)
-        print("calling filling", wire)        
+        self.factory.remove([(1,x) for x in tags], recursive=True)
+        #print(wire)
+        self.factory.synchronize()
+        #print(gmsh.model.getEntities(1))
         s = self.factory.addSurfaceFilling(wire)
+        self.factory.remove([(1,wire),], recursive=True)        
+        self.factory.synchronize()
+        #print("boundary", self.model.getBoundary([(2, s)]))
+        #print(gmsh.model.getEntities(1))
         return SurfaceID(s)
-       
+    
     def add_line_loop(self, pts, sign=None):
         tags = list(np.atleast_1d(pts))
         if sign is not None:
@@ -683,7 +690,7 @@ class Geometry(object):
         #print('input', dimtags)
         for dimtag in reversed(dimtags):
            bdimtags = self.recursive_getBdry(dimtag)
-           print("checking", dimtag, bdimtags)
+           #print("checking", dimtag, bdimtags)
            for x in bdimtags:
                if x in outdimtags:
                    idx = outdimtags.index(x)
@@ -856,8 +863,12 @@ class Geometry(object):
            
         if isFilling:
            surface = self.add_surface_filling(ptx)
-           newobj1 = objs.addobj(surface, 'sf')
-           newkeys = [newobj1]           
+           newobj2 = objs.addobj(surface, 'sf')           
+#           newobj1 = objs.addobj(line, 'ln')
+#           newkeys = [newobj2, newobj1]                       
+#           surface = self.add_surface_filling(ptx)            
+#
+           newkeys = [newobj2, ]           
         else:
            ll = self.add_line_loop(ptx)
            #newobj1 = objs.addobj(ll, 'll')
@@ -1732,33 +1743,30 @@ class Geometry(object):
                 
         return  objs.keys(), newkeys
     
-    def WorkPlane_build_geom(self, objs, *args):
-        c1,  a1,  a2 = args
-        c1 = np.array(c1)
-        a1 = np.array(a1); a1 = a1/np.sqrt(np.sum(a1**2))
-        a2 = np.array(a2); a2 = a2/np.sqrt(np.sum(a2**2))        
-
-
-        ax = np.cross(np.array([1., 0., 0.]), a1)
-        an = np.arcsin(np.sqrt(np.sum(ax**2)))
+    def _WorkPlane_build_geom(self, objs, c1, a1, a2):
+        print(objs)
+        
+        x1 = np.array([1., 0., 0.])
+        
+        ax = np.cross(x1, a1)
+        an = np.arctan2(np.sqrt(np.sum(ax**2)), np.dot(a1, x1))
         
         tt = [objs[t] for t in objs]
 
-        from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
+        #from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
 
-        #print("tt_in", tt)
         tt = self.get_unique_entity(tt)
-        #dprint1("tt_out", tt)        
-        #print("entities(1)", geom.model.getEntities())
-        #for t in tt:
-        #     if isinstance(t, SurfaceID): continue
-        #     print("working on t", t)             
-        #     geom.translate([t], c1[0], c1[1], c1[2])
-        #     geom.factory.synchronize()
-        #     print("entities(-1)", geom.model.getEntities())             
-        #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
+        #print("first rot ???", ax, an, np.sum(ax**2))
+        if np.sum(ax**2) == 0.0:
+             if an != 0.0:
+                 #if a1 is [0, 0, -1], rotate 180 deg
+                 ax = np.array([0, 1, 0])
+                 an = np.pi
+             else:
+                 ax = x1
+                 an = 0.0
         if np.sum(ax**2) != 0.0 and an != 0.0:
-            #print(ax, an)
+            #print("first rot", ax, an)
             self.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
             
         from petram.geom.geom_utils import rotation_mat
@@ -1772,17 +1780,22 @@ class Geometry(object):
             )
         '''
         y2 =  np.dot(R, np.array([0, 1, 0]))
-                     
-        ax = np.cross(y2, a2)
-        an = np.arcsin(np.sqrt(np.sum(ax**2)))
+        ax = a1
+        aaa = np.cross(a1, y2)
+        an = np.arctan2(np.dot(a2, aaa), np.dot(a2, y2))
         
         #for t in tt:
         #     if isinstance(t, SurfaceID): continue
         #     print("working on t", t)             
         #
         #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
+        #print("2nd rot ???", ax, an, np.sum(ax**2))
+        if np.sum(ax**2) == 0.0 and an != 0.0:
+            #rotate 180 deg around a1
+            ax = a1
+            an = np.pi
         if np.sum(ax**2) != 0.0 and an != 0.0:
-            #print(ax, an)          
+            #print("2nd rot", ax, an)            
             self.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
             
         if c1[0] != 0.0 or c1[1] != 0.0 or c1[2] != 0.0:
@@ -1790,6 +1803,38 @@ class Geometry(object):
 
         #self._newobjs = objs.keys()
         return  objs.keys(), []
+    
+    def WorkPlane_build_geom(self, objs, *args):
+        c1,  a1,  a2 = args
+        c1 = np.array(c1)
+        a1 = np.array(a1); a1 = a1/np.sqrt(np.sum(a1**2))
+        a2 = np.array(a2); a2 = a2/np.sqrt(np.sum(a2**2))        
+        return self._WorkPlane_build_geom(objs, c1, a1, a2)
+        
+    def WorkPlaneByPoints_build_geom(self, objs, *args):
+        c1,  a1,  a2, flip1, flip2 = args
+
+        self.factory.synchronize()        
+        c1 = gmsh.model.getValue(0, int(c1), [])
+        a1 = gmsh.model.getValue(0, int(a1), [])
+        a2 = gmsh.model.getValue(0, int(a2), [])
+
+        d1 = np.array(a1) - np.array(c1)
+        d1 = d1/np.sqrt(np.sum(d1**2))
+        if flip1:
+            d1 = -d1
+        
+        d2 = np.array(a2) - np.array(c1)
+        d2 = d2/np.sqrt(np.sum(d2**2))
+
+        d3 = np.cross(d1, d2)
+        d3 = d3/np.sqrt(np.sum(d3**2))        
+        d2 = np.cross(d3, d1)
+        d2 = d2/np.sqrt(np.sum(d2**2))
+        if flip2:
+            d2 = -d2
+
+        return self._WorkPlane_build_geom(objs, c1, d1, d2)        
 
     def BrepImport_build_geom(self, objs, *args):
         cad_file = args[0]
