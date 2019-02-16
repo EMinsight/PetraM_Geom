@@ -1023,7 +1023,7 @@ class WorkPlane(GeomPB):
                CreateLine, CreateSurface]
 
     def get_possible_child_menu(self):
-        return [("", Point2D),("", Line2D), ("", Circle2D), ("", Arc2D, "Arc"),
+        return [("", Point2D),("", Line2D), ("", Circle2D), ("", Arc2D),
                 ("", Rect2D), ("", Polygon2D), ("", Spline2D),
                 ("", CreateLine), ("", CreateSurface),
                 ("", Copy), ("", Remove),

@@ -1757,7 +1757,6 @@ class Geometry(object):
         #     geom.factory.synchronize()
         #     print("entities(-1)", geom.model.getEntities())             
         #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
-        self.translate(tt, c1[0], c1[1], c1[2])
         if np.sum(ax**2) != 0.0 and an != 0.0:
             #print(ax, an)
             self.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
@@ -1785,6 +1784,9 @@ class Geometry(object):
         if np.sum(ax**2) != 0.0 and an != 0.0:
             #print(ax, an)          
             self.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
+            
+        if c1[0] != 0.0 or c1[1] != 0.0 or c1[2] != 0.0:
+            self.translate(tt, c1[0], c1[1], c1[2])
 
         #self._newobjs = objs.keys()
         return  objs.keys(), []
