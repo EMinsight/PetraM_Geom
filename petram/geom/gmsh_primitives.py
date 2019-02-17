@@ -1039,8 +1039,6 @@ class WorkPlane(GeomPB):
     def fancy_tree_name(self):
         return 'WorkPlane'
     
-
-    
 data0 = (('center', VtableElement('pts1', type='string',
                                     guilabel = 'center',
                                     default = "",
