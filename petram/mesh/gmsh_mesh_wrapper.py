@@ -499,22 +499,22 @@ class GMSHMeshWrapper(object):
         return done, params
     
     @process_text_tags(dim=2, check=False)
-    def recombine_face_0D(self, done, params, dimtags):
+    def recombine_surface_0D(self, done, params, dimtags):
         for dim, tag in dimtags:
             if dim != 2: continue
             gmsh.model.mesh.setRecombine(2, tag)
         return done, params
     
     @process_text_tags(dim=2, check=False)
-    def recombine_face_1D(self, done, params, dimtags):
+    def recombine_surface_1D(self, done, params, dimtags):
         return done, params
     
     @process_text_tags(dim=2, check=False)
-    def recombine_face_2D(self, done, params, dimtags):
+    def recombine_surface_2D(self, done, params, dimtags):
         return done, params
     
     @process_text_tags(dim=2, check=False)
-    def recombine_face_3D(self, done, params, dimtags):
+    def recombine_surface_3D(self, done, params, dimtags):
         return done, params        
 
     # freevolume
@@ -846,6 +846,7 @@ class GMSHMeshWrapper(object):
     def transfinite_surface_1D(self, done, params, dimtags, *args, **kwargs):
         arrangement = kwargs.get('arrangement', 'Left')
         cornerTags = kwargs.get('corner', [])
+        print('Corner', cornerTags)
 
         # for now, we don't do anything
         # we could add a step to try trasnsfinite remaining (not-yet-meshed)

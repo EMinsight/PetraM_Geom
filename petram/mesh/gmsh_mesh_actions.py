@@ -18,11 +18,11 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                    tip = "Number of segments" )),
         ('progression', VtableElement('progression', type='float',
                                    guilabel = 'Progression',
-                                   default = 0, 
+                                   default = 1.0, 
                                    tip = "Progression" )),
         ('bump', VtableElement('bump', type='float',
                                    guilabel = 'Bump',
-                                   default = 0, 
+                                   default = 1.0, 
                                    tip = "Bump" )),)
 
         
@@ -48,26 +48,27 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                    default = "", 
                                    tip = "Surface ID" )),
         ('edge1', VtableElement('edge1', type='string',
-                                 guilabel = '1st edge',
+                                 guilabel = '1st corner',
                                  default = "", 
                                  tip = "1st Edge" )),
         ('edge2', VtableElement('edge2', type='string',
-                                 guilabel = '2nd edge',
+                                 guilabel = '2nd corner',
                                  default = "", 
                                  tip = "2ndp Edge" )),
         ('edge3', VtableElement('edge3', type='string',
-                                 guilabel = '3rd edge',
+                                 guilabel = '3rd corner',
                                  default = "", 
                                  tip = "3rd Edge" )),
         ('edge4', VtableElement('edge4', type='string',
-                                 guilabel = '4th edge',
+                                 guilabel = '4th corner',
                                  default = "", 
                                  tip = "4th Edge" )),)
 class TransfiniteSurface(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, e1, e2, e3, e4 = self.vt.make_value_or_expression(self)
-        mesher.add('transfinite_surface', gid, edges = (e1,e2,e3,e4))
+        c = [int(x)  for x in (e1,e2,e3,e4) if x.strip()!= '']
+        mesher.add('transfinite_surface', gid, corner = c)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -319,17 +320,17 @@ class CopyFace(GmshMeshActionBase):
 rsdata =  (('geom_id', VtableElement('geom_id', type='string',
                                     guilabel = 'Surfaces',
                                     default = "",
-                                    tip = "surfacess to be recombined")), 
-           ('max_angle', VtableElement('max_angle', type='float',
-                                guilabel = 'Max size)',
-                                default = 45, 
-                                tip = "Maximum differend of angle" )),)
+                                    tip = "surfacess to be recombined")), )
+#           ('max_angle', VtableElement('max_angle', type='float',
+#                                guilabel = 'Max size)',
+#                                default = 45, 
+#                                tip = "Maximum differend of angle" )),)
 
 class RecombineSurface(GmshMeshActionBase):
     vt = Vtable(rsdata)
     def add_meshcommand(self, mesher):
-        gid, max_angle  = self.vt.make_value_or_expression(self)
-        mesher.add('recombine_surface', gid, max_angle=max_angle)
+        gid = self.vt.make_value_or_expression(self)[0]
+        mesher.add('recombine_surface', gid)
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Volume',
