@@ -566,11 +566,12 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 
 class Copy(GeomPB):
     vt = Vtable(data0)  
-        
+
+    
 data0 =  (('target_object', VtableElement('target_object', type='string',
                                           guilabel = 'Object',
                                           default = "",
-                                          tip = "object to move")), 
+                                          tip = "object to move")),
           ('recursive', VtableElement('recursive', type='bool',
                                       guilabel = 'Recursive',
                                       default = True,
@@ -579,12 +580,14 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
 class Remove(GeomPB):
     vt = Vtable(data0)  
 
+
 class GeomPB_Bool(GeomPB):
     def attribute_set(self, v):
         v = super(GeomPB, self).attribute_set(v)
         self.vt.attribute_set(v)
         v["delete_input"] = True
-        v["delete_tool"] = True        
+        v["delete_tool"] = True
+        v["keep_highest"] = False
         return v
     
     def panel1_param(self):
@@ -593,29 +596,33 @@ class GeomPB_Bool(GeomPB):
                     self.delete_input,  3, {"text":""}])
         ll.append(["Delete Tool",
                     self.delete_tool,  3, {"text":""}])
+        ll.append(["Keep highest dim only",
+                    self.keep_highest,  3, {"text":""}])
         return ll
         
     def get_panel1_value(self):
         v = GeomPB.get_panel1_value(self)
-        return v + [self.delete_input, self.delete_tool]
+        return v + [self.delete_input, self.delete_tool, self.keep_highest]
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        GeomPB.import_panel1_value(self, v[:-2])        
-        self.delete_input = v[-2]
-        self.delete_tool = v[-1]
+        GeomPB.import_panel1_value(self, v[:-3])        
+        self.delete_input = v[-3]
+        self.delete_tool = v[-2]
+        self.keep_highest = v[-1]  
 
     def panel1_tip(self):
         tip = GeomPB.panel1_tip(self)
-        return tip + ['delete input objects'] + ['delete tool objects']
+        return tip + ['delete input objects'] + ['delete tool objects'] + ['keep highest dim. objects']
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
         gui_param = (list(self.vt.make_value_or_expression(self)) +
-                     [self.delete_input, self.delete_tool])
+                     [self.delete_input,
+                      self.delete_tool, self.keep_highest])
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
     
@@ -633,9 +640,14 @@ class Difference(GeomPB_Bool):
     vt = Vtable(ddata)
     
 udata =  (('objplus', VtableElement('obj1', type='string',
-                                      guilabel = 'input',
+                                      guilabel = 'Input',
                                       default = "",
-                                      tip = "objects")),)
+                                      tip = "objects")),
+          ('tool_object', VtableElement('tool_object', type='string',
+                                          guilabel = 'Tool Obj.',
+                                          default = "",
+                                          tip = "object to move")),)
+
 class Union(GeomPB_Bool):    
     vt = Vtable(udata)
     
@@ -652,6 +664,8 @@ class Intersection(GeomPB_Bool):
 class Fragments(GeomPB_Bool):    
     vt = Vtable(udata)
 
+
+        
 pdata = (('xarr', VtableElement('xarr', type='array',
                               guilabel = 'X',
                               default = '0.0',

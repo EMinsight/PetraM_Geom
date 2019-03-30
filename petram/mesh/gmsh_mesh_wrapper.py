@@ -236,6 +236,7 @@ class GMSHMeshWrapper(object):
             if size > self.clmax: size = self.clmax
             if size <= self.clmin: size = self.clmin
             gmsh.model.mesh.setSize(((0, tag),), size)
+            print("Default Point Size", (0, tag), size)
         
         done = [[], [], [], []]
         params = [None]*len(self.mesh_sequence)
@@ -524,28 +525,38 @@ class GMSHMeshWrapper(object):
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution",  np.inf)
 
-        embeds = [x for x in kwargs.pop("embeds",  '').split(',')]
-        embeds = [x for x in embeds if len(x) > 0]                        
+        done[3].extend([x for dim, x in dimtags])                           
+
+        embeds = [x for x in kwargs.pop("embed_s",  '').split(',')]
+        embeds = [int(x) for x in embeds if len(x) > 0]                        
         if len(embeds) > 0:
             if len(dimtags) > 1:
                 assert False, "Embed works only when there is one target"
-            for x in embeds:
-                gmsh.mesh.embed(2, x, dimtags[0][0], dimtags[0][1])
-        embedl=[x for x in kwargs.pop("embedl",  '').split(',')]
-        embedl = [x for x in embedl if len(x) > 0]                
+            gmsh.model.mesh.embed(2, embeds, dimtags[0][0], dimtags[0][1])
+            
+        embedl=[x for x in kwargs.pop("embed_l",  '').split(',')]
+        embedl = [int(x) for x in embedl if len(x) > 0]                
         if len(embedl) > 0:
             if len(dimtags) > 1:
                 assert False, "Embed works only when there is one target"
-            for x in embedl:
-                gmsh.mesh.embed(2, x, dimtags[0][0], dimtags[0][1])
-        embedp = [x for x in kwargs.pop("embedp",  '').split(',')]
-        embedp = [x for x in embedp if len(x) > 0]                                
+            gmsh.model.mesh.embed(1, embedl, dimtags[0][0], dimtags[0][1])
+            
+        embedp = [x for x in kwargs.pop("embed_p",  '').split(',')]
+        embedp = [int(x) for x in embedp if len(x) > 0]                                
         if len(embedp) > 0:
             if len(dimtags) > 1:
                 assert False, "Embed works only when there is one target"
-            for x in embedp:
-                gmsh.mesh.embed(1, x, dimtags[0][0], dimtags[0][1])
+            gmsh.model.mesh.embed(0, embedp, dimtags[0][0], dimtags[0][1])
 
+        dimtags.extend([(2, x) for x in embeds])
+        sdimtags = self.expand_dimtags(dimtags, return_dim = 2)
+        done[2].extend([x for dim, x in sdimtags if not x in done[2]])
+        
+        dimtags.extend([(1, x) for x in embedl])
+        ldimtags = self.expand_dimtags(dimtags, return_dim = 1)
+        done[1].extend([x for dim, x in ldimtags if not x in done[1]])
+        
+        dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
@@ -554,7 +565,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("size", (0, tag), size)
+            print("Volume Set Point Size", (0, tag), size)            
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
@@ -564,9 +575,17 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
 
         done[3].extend([x for dim, x in dimtags])
+
+        embeds=[x for x in kwargs.pop("embed_s",  '').split(',')]
+        embeds = [(2, int(x)) for x in embeds if len(x) > 0]
+        embedl=[x for x in kwargs.pop("embed_l",  '').split(',')]
+        embedl = [(1, int(x)) for x in embedl if len(x) > 0]
+        
+        dimtags.extend(embeds)
         sdimtags = self.expand_dimtags(dimtags, return_dim = 2)
         done[2].extend([x for dim, x in sdimtags if not x in done[2]])        
-        
+
+        dimtags.extend(embedl)        
         dimtags = self.expand_dimtags(dimtags, return_dim = 1)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]        
@@ -580,12 +599,17 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
 
         done[3].extend([x for dim, x in dimtags])
-        
+
+        embeds=[x for x in kwargs.pop("embed_s",  '').split(',')]
+        embeds = [(2, int(x)) for x in embeds if len(x) > 0]
+        dimtags.extend(embeds)        
         dimtags = self.expand_dimtags(dimtags, return_dim = 2)
+        
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
 
         self.show_only(dimtags)
+        print("2D meshing for ", dimtags)
         gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in tags])                
         return done, params
@@ -593,7 +617,7 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=3)
     def freevolume_3D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        tags = [(dim, tag) for dim, tag in dimtags]
+        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[3]]
         self.show_only(dimtags)
         gmsh.model.mesh.generate(3)
         done[3].extend([x for dim, x in tags])                        
@@ -605,22 +629,26 @@ class GMSHMeshWrapper(object):
         maxsize=kwargs.pop("maxsize", 1e20)
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution", np.inf)
-
-        embedl=[x for x in kwargs.pop("embedl",  '').split(',')]
-        embedl = [x for x in embedl if len(x) > 0]        
+ 
+        done[2].extend([x for dim, x in dimtags])                   
+        
+        embedl=[x for x in kwargs.pop("embed_l",  '').split(',')]
+        embedl = [int(x) for x in embedl if len(x) > 0]        
         if len(embedl) > 0:
             if len(dimtags) > 1:
                 assert False, "Embed works only when there is one target"
-            for x in embedl:
-                gmsh.mesh.embed(2, x, dimtags[0][0], dimtags[0][1])
-        embedp=[x for x in kwargs.pop("embedp",  '').split(',')]
-        embedp = [x for x in embedp if len(x) > 0]        
+            gmsh.model.mesh.embed(1, embedl, dimtags[0][0], dimtags[0][1])
+            
+        embedp=[x for x in kwargs.pop("embed_p",  '').split(',')]
+        embedp = [int(x) for x in embedp if len(x) > 0]        
         if len(embedp) > 0:
             if len(dimtags) > 1:
                 assert False, "Embed works only when there is one target"
-            for x in embedp:
-                gmsh.mesh.embed(1, x, dimtags[0][0], dimtags[0][1])
-                
+            gmsh.model.mesh.embed(0, embedp, dimtags[0][0], dimtags[0][1])
+            
+
+        dimtags.extend([(1, x) for x in embedl])
+        dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
@@ -629,6 +657,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
+            print("Face Set Point Size", (0, tag), size)
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
@@ -640,6 +669,10 @@ class GMSHMeshWrapper(object):
         done[2].extend([x for dim, x in dimtags])
         
         dimtags = self.expand_dimtags(dimtags, return_dim = 1)
+        embedl=[x for x in kwargs.pop("embed_l",  '').split(',')]
+        embedl = [(1, int(x)) for x in embedl if len(x) > 0]
+        dimtags.extend(embedl)
+
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]        
         self.show_only(dimtags)
@@ -667,13 +700,12 @@ class GMSHMeshWrapper(object):
         minsize=kwargs.pop("minsize", 0.0)
         res=kwargs.pop("resolution", np.inf)
 
-        embedp=[x for x in kwargs.pop("embedp",  '').split(',')]
-        embedp = [x for x in embedp if len(x) > 0]
+        embedp=[x for x in kwargs.pop("embed_p",  '').split(',')]
+        embedp = [int(x) for x in embedp if len(x) > 0]
         if len(embedp) > 0:
             if len(dimtags) > 1:
                 assert False, "Embed works only when there is one target"
-            for x in embedp:
-                gmsh.mesh.embed(1, x, dimtags[0][0], dimtags[0][1])
+            gmsh.model.mesh.embed(0, embedp, dimtags[0][0], dimtags[0][1])
                 
         done[1].extend([x for dim, x in dimtags])
         

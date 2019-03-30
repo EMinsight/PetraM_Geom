@@ -140,7 +140,7 @@ class FreeVolume(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         values = self.vt.make_value_or_expression(self)
-        gid, clmax, clmin, res, embed_s, embed_l, embed_p = values
+        gid, clmax, clmin, res, embeds, embedl, embedp = values
         mesher.add('freevolume', gid,
                    maxsize = clmax,
                    minsize = clmin,

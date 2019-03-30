@@ -40,7 +40,11 @@ geom_key_dict = {'SurfaceBase': 'sb',
                  'PlaneSurface' : 'sp',
                  'Point': 'pt',
                  'Line': 'ln',
-                 'Spline': 'sp'}
+                 'Spline': 'sp',
+                 'SurfaceID': 's',
+                 'VolumeID': 'v',
+                 'LineID': 'l',
+                 'VertexID': 'p'}
 
 
 def get_gmsh_exe():
@@ -106,11 +110,14 @@ def collect_std_out(p,  verbose=True):
     return lines, p.poll()
 
 def get_geom_key(obj):
-    if obj.__class__ in geom_key_dict:
-        return geom_key_dict[obj.__class__]
-    name = obj.__class__.__name__
-    key = ''.join([i.lower() for i in name if not i.isupper()])
+    if obj.__class__.__name__ in geom_key_dict:
+        return geom_key_dict[obj.__class__.__name__]
 
+    assert False, " name not found for " + obj.__class__.__name__ + " in " + str(geom_key_dict)
+
+    ### it should not come here...
+    name = obj.__class__.__name__    
+    key = ''.join([i.lower() for i in name if not i.isupper()])
     for k in geom_key_dict.keys():
         if geom_key_dict[k] == key:
             assert False, key + " is used for " + k.__name__

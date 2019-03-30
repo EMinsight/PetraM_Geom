@@ -28,22 +28,26 @@ class GeomIDBase(int):
        return self.__class__.__name__+"("+str(int(self))+")"
 
 class VertexID(GeomIDBase):
+   dim = 0
    def __add__(self, v):
        return VertexID(int(self) + v)
 
 class LineID(GeomIDBase):
+   dim = 1    
    def __add__(self, v):
        return LineID(int(self) + v)
    def __neg__(self):
        return LineID(-int(self))
     
 class SurfaceID(GeomIDBase):
+   dim = 2    
    def __add__(self, v):
        return SurfaceID(int(self) + v)
    def __neg__(self):
        return SurfaceID(-int(self))
    
-class VolumeID(GeomIDBase):   
+class VolumeID(GeomIDBase):
+   dim = 3    
    def __add__(self, v):
        return VolumeID(int(self) + v)
    def __neg__(self):
@@ -483,13 +487,15 @@ class Geometry(object):
         if delete:
              removeObject=True
              removeTool=True
-
+        #self.factory.synchronize()             
+        #print("before", self.model.getEntities(), dimtag1, dimtag2)
         m = getattr(self.factory, m)
         dimtag3, dimtagMap = m(dimtag1, dimtag2,
                                removeObject=removeObject,
                                removeTool=removeTool)
+        #print("dimtag3, map", dimtag3, dimtagMap)
         self.factory.synchronize()
-        self.model.getEntities()
+        #print(self.model.getEntities())
         return dimtag2id(dimtag3)                
         
     def boolean_intersection(self, input_entity, tool_entity,
@@ -990,9 +996,9 @@ class Geometry(object):
         rec3 = self.add_plane_surface(ll3)
         rec4 = self.add_plane_surface(ll4)
         rec5 = self.add_plane_surface(ll5)
-        rec5 = self.add_plane_surface(ll6)
+        rec6 = self.add_plane_surface(ll6)
 
-        sl = self.add_surface_loop([ll1, ll2, ll3, ll4, ll5, ll6])
+        sl = self.add_surface_loop([rec1, rec2, rec3, rec4, rec5, rec6])
         v1 = self.add_volume(sl)
         
         newkey = objs.addobj(v1, 'bx')
@@ -1389,7 +1395,7 @@ class Geometry(object):
         return  objs.keys(), newkeys           
     
     def Difference_build_geom(self, objs, *args):
-        tp, tm, delete_input, delete_tool = args
+        tp, tm, delete_input, delete_tool, keep_highest = args
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]          
 
@@ -1403,10 +1409,14 @@ class Geometry(object):
                           removeTool = delete_tool)
 
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'diff'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+        for rr in ret:
+            if rr.dim == input_entity[0].dim:
+                newkeys.append(objs.addobj(rr, 'diff'))
+            else:
+                if keep_highest:
+                    self.remove([rr], recursive=True)
+                else:
+                    newkeys.append(objs.addobj(rr,  get_geom_key(rr)))                
                 
         if delete_input:
             for x in tp: 
@@ -1418,12 +1428,13 @@ class Geometry(object):
         return  objs.keys(), newkeys
 
     def Union_build_geom(self, objs, *args):
-        tp, delete_input, delete_tool = args
+        tp, tm, delete_input, delete_tool, keep_highest = args
         tp = [x.strip() for x in tp.split(',')]
-        if len(tp) < 2: return
+        tm = [x.strip() for x in tm.split(',')]        
 
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
+        input_entity = get_target2(objs, tp)
+        tool_entity  = get_target2(objs, tm)
+        
         ret = self.boolean_union(
                           input_entity,
                           tool_entity,
@@ -1431,27 +1442,32 @@ class Geometry(object):
                           removeTool = delete_tool)
         
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'uni'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+        for rr in ret:
+            if rr.dim == input_entity[0].dim:
+                newkeys.append(objs.addobj(rr, 'uni'))
+            else:                
+                if keep_highest:
+                    self.remove([rr], recursive=True)
+                else:
+                    newkeys.append(objs.addobj(rr,  get_geom_key(rr)))                
                 
         if delete_input:
-           for x in tp[:1]:
+           for x in tp:
              if x in objs: del objs[x]
         if delete_tool:
-           for x in tp[1:]:
+           for x in tm:
              if x in objs: del objs[x]
              
         return  objs.keys(), newkeys             
 
     def Union2D_build_geom(self, objs, *args):
-        tp, delete_input, delete_tool = args        
+        tp, tm, delete_input, delete_tool, keep_highest = args
         tp = [x.strip() for x in tp.split(',')]
-        if len(tp) < 2: return
+        tm = [x.strip() for x in tm.split(',')]        
 
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
+        input_entity = get_target2(objs, tp)
+        tool_entity  = get_target2(objs, tm)
+        
         ret = self.boolean_union2d(
                           input_entity,
                           tool_entity,
@@ -1459,28 +1475,32 @@ class Geometry(object):
                           removeTool = delete_tool)
         
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'uni'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
+        for rr in ret:
+            if rr.dim == input_entity[0].dim:
+                newkeys.append(objs.addobj(rr, 'uni'))
+            else:
+                if keep_highest:
+                    self.remove([rr], recursive=True)
+                else:
+                    newkeys.append(objs.addobj(rr,  get_geom_key(rr)))                
                 
         if delete_input:
-            for x in tp[:1]: 
+            for x in tp: 
                 if x in objs: del objs[x]          
 
         if delete_tool:
-            for x in tp[1:]: 
+            for x in tm: 
                 if x in objs: del objs[x]          
 
         return  objs.keys(), newkeys                             
 
     def Intersection_build_geom(self, objs, *args):
-        tp, delete_input, delete_tool = args        
+        tp, tm, delete_input, delete_tool, keep_highest = args
         tp = [x.strip() for x in tp.split(',')]
-        if len(tp) < 2: return
+        tm = [x.strip() for x in tm.split(',')]        
 
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
+        input_entity = get_target2(objs, tp)
+        tool_entity  = get_target2(objs, tm)
 
         ret = self.boolean_intersection(
                           input_entity,
@@ -1488,27 +1508,31 @@ class Geometry(object):
                           removeObject = delete_input,
                           removeTool = delete_tool)
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'its'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o,  get_geom_key(o)))
-
+        for rr in ret:
+            if rr.dim == input_entity[0].dim:
+                newkeys.append(objs.addobj(rr, 'its'))
+            else:
+                if keep_highest:
+                    self.remove([rr], recursive=True)
+                else:
+                    newkeys.append(objs.addobj(rr,  get_geom_key(rr)))                
+        
         if delete_input:
-            for x in tp[:1]: 
+            for x in tp: 
                 if x in objs: del objs[x]          
         if delete_tool:
-            for x in tp[1:]: 
+            for x in tm: 
                 if x in objs: del objs[x]          
 
         return  objs.keys(), newkeys
     
     def Fragments_build_geom(self, objs, *args):
-        tp, delete_input, delete_tool = args
+        tp, tm, delete_input, delete_tool, keep_highest = args
         tp = [x.strip() for x in tp.split(',')]
-        if len(tp) < 2: return
+        tm = [x.strip() for x in tm.split(',')]        
 
-        input_entity = get_target2(objs, tp[:1])
-        tool_entity  = get_target2(objs, tp[1:])
+        input_entity = get_target2(objs, tp)
+        tool_entity  = get_target2(objs, tm)
         ret = self.boolean_fragments(
                           input_entity,
                           tool_entity,
@@ -1516,16 +1540,21 @@ class Geometry(object):
                           removeTool = delete_tool)
 
         newkeys = []
-        newkeys.append(objs.addobj(ret[0], 'frag'))
-        if len(ret) > 1:
-            for o in ret[1:]:
-                newkeys.append(objs.addobj(o, get_geom_key(o)))
-                
+        newkeys = []
+        for rr in ret:
+            if rr.dim == input_entity[0].dim:
+                newkeys.append(objs.addobj(rr, 'frag'))
+            else:
+                if keep_highest:
+                     self.remove([rr], recursive=True)
+                else:
+                     newkeys.append(objs.addobj(rr,  get_geom_key(rr)))                
+        
         if delete_input:
-            for x in tp[:1]: 
+            for x in tp: 
                 if x in objs: del objs[x]          
         if delete_tool:
-            for x in tp[1:]: 
+            for x in tm: 
                 if x in objs: del objs[x]          
             
         return  objs.keys(), newkeys
@@ -1744,8 +1773,6 @@ class Geometry(object):
         return  objs.keys(), newkeys
     
     def _WorkPlane_build_geom(self, objs, c1, a1, a2):
-        print(objs)
-        
         x1 = np.array([1., 0., 0.])
         
         ax = np.cross(x1, a1)
