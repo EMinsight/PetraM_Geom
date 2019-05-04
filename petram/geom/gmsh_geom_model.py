@@ -356,24 +356,26 @@ class BrepFile(GeomTopBase):
             s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
             size.append((dim, tag, s))
         maxsize = max([x[-1] for x in size])
-        lcar = defaultdict(lambda: np.inf)
+        lcar = defaultdict(lambda: maxsize)
         for dim, tag in gmsh.model.getEntities(1):
             x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
             s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
             bdimtags = gmsh.model.getBoundary(((dim, tag,),), oriented=False)
             for bdim, btag in bdimtags:
-                lcar[btag] = min((lcar[btag], s/self.geom_prev_res))
-        #ss = dict(lcar)
+                lcar[btag] = min((lcar[btag], s))
+        lcar = dict(lcar)
+        print(lcar)
         #dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
         #dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", maxsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", min(lcar))
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         geom.model.mesh.generate(1)
         
         gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax",maxsize/5.)
+        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax",maxsize/self.geom_prev_res)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
         geom.model.mesh.generate(2)        
 
@@ -389,8 +391,8 @@ class BrepFile(GeomTopBase):
         ret = ptx, cells, {}, cell_data, {}
 
         # set clmax guess from geometry size
-        clmax = maxsize/3.
-        clmin = maxsize/300.
+        clmax = max(lcar)/3.
+        clmin = min(lcar)/3.
         self._clmax_guess = (clmax, clmin)
         self._geom_coords = ret
 
@@ -536,33 +538,7 @@ class GmshGeom(GeomTopBase):
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
         evt.Skip()
-    '''    
-    def onUpdateGeoView3(self, evt, filename = None):
-        dlg = evt.GetEventObject().GetTopLevelParent()
-        viewer = dlg.GetParent()
         
-        geo_text = self._txt_rolled[:]
-        xyz = guess_geom_size(self._txt_unrolled)
-
-        clmax = np.max(np.max(xyz, 0) - np.min(xyz, 0))/3.
-        clmin = np.min(np.max(xyz, 0) - np.min(xyz, 0))/3.        
-        self._clmax_guess = (clmax, clmin)
-        geo_text.extend(['Show "*";',
-                         'Mesh.CharacteristicLengthMax = '+str(clmax) + ';'])
-
-        ret =  generate_mesh(geo_object = None,
-                             dim = 2,
-                             filename = filename,
-                             num_quad_lloyd_steps=0,
-                             num_lloyd_steps=0,                             
-                             geo_text = geo_text)
-        viewer.set_figure_data('geom', self.name(), ret)
-        viewer.update_figure('geom', self.name())
-
-        self._geom_coords = ret
-        viewer._s_v_loop['geom'] = read_loops(self._txt_unrolled)
-        viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
-    '''
     def onUpdateGeoView4(self, evt, filename = None):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
@@ -570,11 +546,11 @@ class GmshGeom(GeomTopBase):
         ret = ptx, cells, {}, cell_data, {}
 
         # set clmax guess from geometry size
-        xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
-        l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        clmax = l/3.
-        clmin = l/300.
-        self._clmax_guess = (clmax, clmin)
+        #xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
+        #l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        #clmax = l/3.
+        #clmin = l/300.
+        #self._clmax_guess = (clmax, clmin)
         
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
@@ -692,7 +668,7 @@ class GmshGeom(GeomTopBase):
             pgb.Destroy()
         pgb.Bind(wx.EVT_CLOSE, close_dlg)
         
-        gui_data, objs, brep_file, data = geom.run_generator(no_mesh = no_mesh,
+        gui_data, objs, brep_file, data, vcl = geom.run_generator(no_mesh = no_mesh,
                                                              finalize=finalize,
                                                              filename = stopname,
                                                              progressbar = pgb)
@@ -705,6 +681,8 @@ class GmshGeom(GeomTopBase):
         # for the readablity I expend data here, do we need geom?        
         ptx, cells, cell_data, l, s, v = data
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+
+        self._clmax_guess = vcl
 
         return
 

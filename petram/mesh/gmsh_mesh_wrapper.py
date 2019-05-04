@@ -227,7 +227,8 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
         gmsh.option.setNumber("Mesh.MaxNumThreads3D", self.maxthreads[3])
-
+        gmsh.option.setNumber("Mesh.Optimize", 0)
+        
         # 
         self.vertex_geom_size = get_vertex_geom_zie()
         # set default vertex mesh size
@@ -236,7 +237,7 @@ class GMSHMeshWrapper(object):
             if size > self.clmax: size = self.clmax
             if size <= self.clmin: size = self.clmin
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("Default Point Size", (0, tag), size)
+            #print("Default Point Size", (0, tag), size)
         
         done = [[], [], [], []]
         params = [None]*len(self.mesh_sequence)
@@ -251,9 +252,14 @@ class GMSHMeshWrapper(object):
                 if self.queue is not None:
                     self.queue.put((False,
                                     "Processing " + proc+"_"+str(mdim)+"D"))
-                
+
+                    
+                if mdim == 3 and idx == len(self.mesh_sequence)-1:
+                    gmsh.option.setNumber("Mesh.Optimize", 1)
+
                 done, params[idx] = f(done, params[idx],
                                       *args, **kwargs)
+                gmsh.model.mesh.removeDuplicateNodes()                
                 
             for i in range(mdim+1, 4): done[i] = []
             
@@ -565,7 +571,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("Volume Set Point Size", (0, tag), size)            
+            #print("Volume Set Point Size", (0, tag), size)            
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
@@ -618,7 +624,8 @@ class GMSHMeshWrapper(object):
     def freevolume_3D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[3]]
-        self.show_only(dimtags)
+
+        self.show_only(dimtags, recursive = False)
         gmsh.model.mesh.generate(3)
         done[3].extend([x for dim, x in tags])                        
         return done, params

@@ -573,7 +573,7 @@ class Geometry(object):
         bbx = self.factory.addRectangle(xmin-dx/10., ymin-dy/10., (zmin+zmax)/2.,
                                         dx*1.2, dy*1.2)
         out_dimtag3, dimtagMap = self.factory.cut(((2,bbx),), out_dimtag2)
-        self.factory.synchronize()                       
+        self.factory.synchronize()
         return dimtag2id(out_dimtag3)                        
 
     def apply_fragments(self):
@@ -581,29 +581,38 @@ class Geometry(object):
         if self.dim == 0: return
 
         dimtags =  self.model.getEntities(self.dim)
-        if len(dimtags) != 1:
+        if len(dimtags) > 1:
+            if self.logfile is not None:
+                self.logfile.write("computing  fragments\n")
+            if self.queue is not None:
+                self.queue.put((False, "computing  fragments"))
+            
             self.factory.fragment(dimtags[:1], dimtags[1:],
                                   removeObject=True, removeTool=True)
             
             self.factory.synchronize()
+            self.factory.removeAllDuplicates()                           
             return
-        
+        '''
+        ## since self.dim returns the highest dim in geometry
+        ## we dont need this
         if self.dim > 1:
            dimtags =  self.model.getEntities(self.dim-1)
-           if len(dimtags) != 1:
+           print("here2", dimtags)           
+           if len(dimtags) > 1:
                self.factory.fragment(dimtags[:1], dimtags[1:],
                                   removeObject=True, removeTool=True)
                self.factory.synchronize()
+               self.factory.removeAllDuplicates()               
                return
            
         if self.dim > 2:
            dimtags =  self.model.getEntities(self.dim-2)
-           if len(dimtags) != 1:
-               print('doing this 3')                              
+           if len(dimtags) > 1:
                self.factory.fragment(dimtags[:1], dimtags[1:],
                                   removeObject=True, removeTool=True)
                self.factory.synchronize()
-               
+               self.factory.removeAllDuplicates()                                          '''
                              
     def remove(self, entity, recursive=False):
         dimtags = []
@@ -1783,6 +1792,7 @@ class Geometry(object):
         #from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
 
         tt = self.get_unique_entity(tt)
+        print("tt", tt)        
         #print("first rot ???", ax, an, np.sum(ax**2))
         if np.sum(ax**2) == 0.0:
              if an != 0.0:
@@ -1977,14 +1987,22 @@ class Geometry(object):
             import os
             geom_msh = os.path.join(os.getcwd(), filename+'.msh')
             gmsh.write(geom_msh)
+
+        values = vcl.values()
+        if len(values) > 0:
+            a =  max(values)
+            b =  min(values)
+            return a, b
+        else:
+            return 1e20, 0
     
     def generate_brep(self, objs, filename = '', finalize=False):
         
         if finalize and not self.skip_final_frag:
             if self.logfile is not None:
-                self.logfile.write("finalize is on : computing  fragments\n")
+                self.logfile.write("finalize is on \n")
             if self.queue is not None:
-                self.queue.put((False, "finalize is on : computing  fragments"))
+                self.queue.put((False, "finalize is on"))
                 
             self.apply_fragments()
             
@@ -2089,17 +2107,17 @@ def generator(q, sequence, no_mesh, finalize, filename,  kwargs):
         brep_file = ''
 
     if no_mesh:
-        q.put((True, (gui_data, objs, brep_file, None)))
+        q.put((True, (gui_data, objs, brep_file, None, None)))
 
     else:
-        mw.generate_preview_mesh()
+        vcl = mw.generate_preview_mesh()
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops        
         ptx, cells, cell_data = read_pts_groups(gmsh)
         l, s, v = read_loops(gmsh)
     
         data = ptx, cells, cell_data, l, s, v
-        q.put((True, (gui_data, objs, brep_file, data)))
+        q.put((True, (gui_data, objs, brep_file, data, vcl)))
 
 
     

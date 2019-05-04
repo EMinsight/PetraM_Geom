@@ -193,12 +193,12 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel = 'Max size(def)',
-                                default_txt = '1e20',
-                                default = 1.0e20, 
+                                default_txt = '',
+                                default = 1e20,
                                 tip = "CharacteristicLengthMax" )),
         ('clmin', VtableElement('clmin', type='float',
                                 guilabel = 'Min size(def)',
-                                default_txt = '0.0',                                
+                                default_txt = '',                                
                                 default = 0.0, 
                                 tip = "CharacteristicLengthMin" )),)
         
@@ -590,7 +590,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
         self.vt.preprocess_params(self)
         clmax, clmin = self.vt.make_value_or_expression(self)        
-
+        dprint1("callcing build mesh with", clmax, clmin)
         geom_root = self.geom_root
         
         if not geom_root.is_finalized:
