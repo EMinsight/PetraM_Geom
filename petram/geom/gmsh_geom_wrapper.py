@@ -737,7 +737,7 @@ class Geometry(object):
            newkey = objs.addobj(p, 'pt')
            _newobjs.append(newkey)
            
-        return  list(objs.keys()), _newobjs
+        return  list(objs), _newobjs
 
     def Line_build_geom(self, objs, *args):
         xarr, yarr, zarr, make_spline = args
@@ -786,7 +786,7 @@ class Geometry(object):
         _newobjs.append(newobj1)
         _newobjs.append(newobj2)
 
-        return  list(objs.keys()), _newobjs
+        return  list(objs), _newobjs
 
     def Polygon_build_geom(self, objs, *args):
         xarr, yarr, zarr = args
@@ -804,7 +804,7 @@ class Geometry(object):
 
         # apparently I should use this object (poly.surface)...?
         newkey = objs.addobj(poly.surface, 'pol')
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
 
     def Spline_build_geom(self, objs, *args):
         pts = args
@@ -815,7 +815,7 @@ class Geometry(object):
         spline = self.add_spline(pts)
         newkey = objs.addobj(spline, 'sp')
         
-        return  list(objs.keys()), [newkey]        
+        return  list(objs), [newkey]        
 
     def CreateLine_build_geom(self, objs, *args):
         pts = args
@@ -834,7 +834,7 @@ class Geometry(object):
              line = self.add_line(p0, p1)
              newkeys.append(objs.addobj(line, 'ln'))
 
-        return  list(objs.keys()), newkeys
+        return  list(objs), newkeys
 
     def LineLoop_build_geom(self, objs, *args):
         pts = args
@@ -853,7 +853,7 @@ class Geometry(object):
         lloop = self.add_line_loop(ptx)
         newkey = objs.addobj(lloop, 'll')
         
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
 
     def CreateSurface_build_geom(self, objs, *args):
         pts, isFilling = args
@@ -890,7 +890,7 @@ class Geometry(object):
            newobj2 = objs.addobj(surface, 'ps')
            newkeys = [newobj2]
 
-        return  list(objs.keys()), newkeys        
+        return  list(objs), newkeys        
 
     def SurfaceLoop_build_geom(self, objs, *args):
         pts = args
@@ -900,7 +900,7 @@ class Geometry(object):
         sl = self.add_surface_loop(pts)
         newobj = objs.addobj(sl, 'sl')
         
-        return  list(objs.keys()), [newobj]
+        return  list(objs), [newobj]
 
     def CreateVolume_build_geom(self, objs, *args):
         pts = args
@@ -912,7 +912,7 @@ class Geometry(object):
         vol = self.add_volume(sl)
         newobj2 = objs.addobj(vol, 'vol')
 
-        return  list(objs.keys()), [newobj2]   
+        return  list(objs), [newobj2]   
     
     def Rect_build_geom(self, objs, *args):
         c1,  e1,  e2 = args
@@ -932,11 +932,8 @@ class Geometry(object):
         ll1 = self.add_line_loop([l1, l2, l3, l4])
         rec1 = self.add_plane_surface(ll1)
         newkey = objs.addobj(rec1, 'rec')
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
     
-        #self._objkeys = objs.keys()
-        #self._newobjs = newkeys
-        
     def Circle_build_geom(self, objs, *args):
         center, ax1, ax2, radius = args
         lcar = 0.0
@@ -958,7 +955,7 @@ class Geometry(object):
         ll1 = self.add_line_loop([ca1, ca2, ca3, ca4])
         ps1 = self.add_plane_surface(ll1)
         newkey = objs.addobj(ps1, 'ps')
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
     
         #self._objkeys = objs.keys()
         #self._newobjs = [newkey]        
@@ -1011,7 +1008,7 @@ class Geometry(object):
         
         newkey = objs.addobj(v1, 'bx')
         
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
     
     def Ball_build_geom(self, objs, *args):
         self.factory.synchronize()
@@ -1060,7 +1057,7 @@ class Geometry(object):
             self.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
         
         newkey = objs.addobj(v1, 'bl')
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
 
     def Cone_build_geom(self, objs, *args):
         x0,  d0,  r1, r2, angle = args
@@ -1080,7 +1077,7 @@ class Geometry(object):
            v1 = VolumeID(ret[0][0][1])
 
         newkey = objs.addobj(v1, 'cn')
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
 
     def Cylinder_build_geom(self, objs, *args):
         x0,  d0,  r1,  angle = args
@@ -1110,14 +1107,14 @@ class Geometry(object):
         
         ret = self.extrude(ps1, translation_axis=d0,)
         newkey = objs.addobj(ret[0], 'cn')
-        return  list(objs.keys()), [newkey]
+        return  list(objs), [newkey]
 
     def Wedge_build_geom(self, objs, *args):
         x0,  d0,  ltx = args
         v1 = self.add_wedge(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2], ltx)
         
         newkey = objs.addobj(v1, 'wg')
-        return  list(objs.keys()), [newkey]        
+        return  list(objs), [newkey]        
 
     def Torus_build_geom(self, objs, *args):
         x0,  r1,  r2, angle, keep_interior = args
@@ -1173,7 +1170,7 @@ class Geometry(object):
                 v1 = VolumeID(ret[1][1])
 
             newkey = [objs.addobj(v1, 'trs')]
-        return list(objs.keys()), newkey        
+        return list(objs), newkey        
     
     def Extrude_build_geom(self, objs, *args):
         targets,  tax, len = args
@@ -1196,7 +1193,7 @@ class Geometry(object):
                  newkeys.append(objs.addobj(ret[0], t))
                  newkeys.append(objs.addobj(ret[1], 'ex'))             
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
     def Revolve_build_geom(self, objs, *args):
         
@@ -1221,7 +1218,7 @@ class Geometry(object):
                  newkeys.append(objs.addobj(ret[0], t))
                  newkeys.append(objs.addobj(ret[1], 'ex'))
                  
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Sweep_build_geom(self, objs, *args):
         print("objs", objs)
@@ -1241,7 +1238,7 @@ class Geometry(object):
              ret = self.factory.addPipe(dimtags, wire)
              newkeys.append(objs.addobj(ret[0], 'ex'))
                  
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
 
     def Move_build_geom(self, objs, *args):          
@@ -1258,7 +1255,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'mv'))
                 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Rotate_build_geom(self, objs, *args):          
         targets, cc, aa,  angle, keep  = args
@@ -1275,7 +1272,7 @@ class Geometry(object):
         if keep:
             for t in tt:
                 newkeys.append(objs.addobj(t, 'rot'))
-        return list(objs.keys()), newkeys                
+        return list(objs), newkeys                
 
     def Scale_build_geom(self, objs, *args):          
         targets,  cc, ss, keep  = args
@@ -1293,7 +1290,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'sc'))          
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Array_build_geom(self, objs, *args):          
         targets, count, displacement  = args
@@ -1309,7 +1306,7 @@ class Geometry(object):
            for t in tt:
                 newkeys.append(objs.addobj(t, 'cp'))
                 
-        return list(objs.keys()), newkeys                
+        return list(objs), newkeys                
 
     def ArrayRot_build_geom(self, objs, *args):          
         targets, count, cc, aa,  angle = args
@@ -1326,7 +1323,7 @@ class Geometry(object):
            for t in tt:
                 newkeys.append(objs.addobj(t, 'cp'))
 
-        return list(objs.keys()), newkeys                                 
+        return list(objs), newkeys                                 
 
     def Flip_build_geom(self, objs, *args):          
         targets, a, b, c, d,  keep  = args
@@ -1342,7 +1339,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'flp'))
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Fillet_build_geom(self, objs, *args):
         volumes, curves, radius = args
@@ -1359,7 +1356,7 @@ class Geometry(object):
         for r in ret:
             newkeys.append(objs.addobj(r, 'vol'))
 
-        return list(objs.keys()), newkeys            
+        return list(objs), newkeys            
 
     def Chamfer_build_geom(self, objs, *args):
         volumes, curves, distances, surfaces  = args
@@ -1376,7 +1373,7 @@ class Geometry(object):
         for r in ret:
             newkeys.append(objs.addobj(r, 'vol'))
         
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Copy_build_geom(self, objs, *args):
         targets  = args[0]
@@ -1388,7 +1385,7 @@ class Geometry(object):
         for r in ret:
             newkeys.append(objs.addobj(r, 'cp'))
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Remove_build_geom(self, objs, *args):
         targets, recursive = args
@@ -1400,7 +1397,7 @@ class Geometry(object):
         for t in targets:
            if t in objs: del objs[t]
 
-        return list(objs.keys()), newkeys           
+        return list(objs), newkeys           
     
     def Difference_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -1433,7 +1430,7 @@ class Geometry(object):
             for x in tm: 
                 if x in objs: del objs[x]          
             
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Union_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -1466,7 +1463,7 @@ class Geometry(object):
            for x in tm:
              if x in objs: del objs[x]
              
-        return list(objs.keys()), newkeys             
+        return list(objs), newkeys             
 
     def Union2D_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -1500,7 +1497,7 @@ class Geometry(object):
             for x in tm: 
                 if x in objs: del objs[x]          
 
-        return list(objs.keys()), newkeys                             
+        return list(objs), newkeys                             
 
     def Intersection_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -1532,7 +1529,7 @@ class Geometry(object):
             for x in tm: 
                 if x in objs: del objs[x]          
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
     def Fragments_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -1565,7 +1562,7 @@ class Geometry(object):
             for x in tm: 
                 if x in objs: del objs[x]          
             
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     '''
     2D elements
@@ -1588,7 +1585,7 @@ class Geometry(object):
            newkey = objs.addobj(p, 'pt')
            _newobjs.append(newkey)
            
-        return list(objs.keys()), _newobjs
+        return list(objs), _newobjs
 
     # Define 2D version the same as 3D
     Line2D_build_geom = Line_build_geom
@@ -1616,7 +1613,7 @@ class Geometry(object):
         ps1 = self.add_plane_surface(ll1)
         newkey = objs.addobj(ps1, 'ps')
 
-        return list(objs.keys()), [newkey]
+        return list(objs), [newkey]
 
     def Arc2D_build_geom(self, objs, *args):
         center, ax1, ax2, radius, an1, an2, do_fill = args
@@ -1655,7 +1652,7 @@ class Geometry(object):
             ps1 =  self.add_plane_surface(ll1)
             newkeys = [objs.addobj(ps1, 'ps')]
             
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
 
     def Rect2D_build_geom(self, objs, *args):
         c1,  e1,  e2 = args
@@ -1674,7 +1671,7 @@ class Geometry(object):
         ll1 = self.add_line_loop([l1, l2, l3, l4])
         rec1 = self.add_plane_surface(ll1)
         newkey = objs.addobj(rec1, 'rec')
-        return list(objs.keys()), [newkey]
+        return list(objs), [newkey]
 
 
     def Polygon2D_build_geom(self, objs, *args):
@@ -1695,7 +1692,7 @@ class Geometry(object):
         # apparently I should use this object (poly.surface)...?
         newkey = objs.addobj(poly.surface, 'pol')
 
-        return  list(objs.keys()), [newkey]        
+        return  list(objs), [newkey]        
 
     def Move2D_build_geom(self, objs, *args):          
         targets, dx, dy, keep  = args
@@ -1711,7 +1708,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'mv'))
 
-        return list(objs.keys()), newkeys                                
+        return list(objs), newkeys                                
     
     def Rotate2D_build_geom(self, objs, *args):          
         targets, cc, angle, keep  = args
@@ -1729,7 +1726,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'rot'))
                 
-        return list(objs.keys()), newkeys                
+        return list(objs), newkeys                
     
     def Flip2D_build_geom(self, objs, *args):          
         targets, a, b, d,  keep  = args
@@ -1745,7 +1742,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'flp'))          
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
     def Scale2D_build_geom(self, objs, *args):          
         targets,  cc, ss, keep  = args
@@ -1762,7 +1759,7 @@ class Geometry(object):
             for t in tt:
                 newkeys.append(objs.addobj(t, 'sc'))          
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
     def Array2D_build_geom(self, objs, *args):          
         targets, count, displacement  = args
@@ -1778,7 +1775,7 @@ class Geometry(object):
            for t in tt:
                 newkeys.append(objs.addobj(t, 'cp'))
                 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
     def _WorkPlane_build_geom(self, objs, c1, a1, a2):
         x1 = np.array([1., 0., 0.])
@@ -1838,7 +1835,7 @@ class Geometry(object):
             self.translate(tt, c1[0], c1[1], c1[2])
 
         #self._newobjs = objs.keys()
-        return  list(objs.keys()), []
+        return  list(objs), []
     
     def WorkPlane_build_geom(self, objs, *args):
         c1,  a1,  a2 = args
@@ -1890,7 +1887,7 @@ class Geometry(object):
                pp = dimtag2id([p])
                newkeys.append(objs.addobj(pp[0], 'impt'))
 
-        return list(objs.keys()), newkeys
+        return list(objs), newkeys
     
     def CADImport_build_geom(self, objs, *args):
         return self.BrepImport_build_geom(objs, *args)
@@ -1914,7 +1911,7 @@ class Geometry(object):
             
             if geom_name == "WP_Start":
                 tmp = objs.duplicate()
-                org_keys = list(objs.keys())
+                org_keys = list(objs)
 
                 for x in org_keys: del tmp[x]
                 

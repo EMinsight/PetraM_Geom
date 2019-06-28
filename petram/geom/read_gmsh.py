@@ -142,12 +142,14 @@ def read_pts_groups(geom, finished_lines=None,
             finished = finished_faces if ndim==2 else finished_lines
             #print("here we are removing unfinished lines",  dimtags, finished_lines)
             dimtags = [dt for dt in dimtags if dt[1] in finished]
+
         for dim, tag in dimtags:
             elType2, elTag2, nodeTag2 = model.mesh.getElements(dim=dim,
                                                                tag=tag)
             for k, el_type in enumerate(elType2):                       
                 el_type_name = gmsh_element_type[el_type]
                 for elTag in elTag2[k]:
+                   if not el_type_name in el2idx: continue
                    idx = el2idx[el_type_name][elTag]
                    cell_data[el_type_name]['geometrical'][idx] = tag
 
@@ -160,6 +162,7 @@ def read_pts_groups(geom, finished_lines=None,
                 for k, el_type in enumerate(elType2):                       
                     el_type_name = gmsh_element_type[el_type]
                     for elTag in elTag2[k]:
+                        if not el_type_name in el2idx: continue                        
                         idx = el2idx[el_type_name][elTag]
                         cell_data[el_type_name]['physical'][idx] = ptag
 

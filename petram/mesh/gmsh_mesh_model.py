@@ -232,8 +232,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         from petram.mesh.gmsh_mesh_wrapper import Algorithm2D, Algorithm3D
 
-        c1 = Algorithm2D.keys()
-        c2 = Algorithm3D.keys()
+        c1 = list(Algorithm2D)
+        c2 = list(Algorithm3D)
 
         from wx import CB_READONLY
         setting1 = {"style":CB_READONLY, "choices": c1}
@@ -444,7 +444,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
-            
+
+        do_clear = True
         try:
             count = self.build_mesh(geom_root, nochild =True,
                                     gui_parent = dlg)
@@ -490,9 +491,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         geom_root = self.geom_root
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
+            
+        do_clear = True            
         try:
             filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'
-            do_clear = True
             count = self.build_mesh(geom_root, finalize=True, filename=filename,
                                     gui_parent = dlg)
             do_clear = count == 0

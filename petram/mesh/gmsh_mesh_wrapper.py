@@ -4,7 +4,7 @@ import gmsh
 import time
 import tempfile
 import multiprocessing as mp
-from Queue import Empty as QueueEmpty
+from six.moves.queue import Empty as QueueEmpty
 
 from collections import OrderedDict
 Algorithm2D= OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 3),
