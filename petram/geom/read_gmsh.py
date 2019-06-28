@@ -84,12 +84,12 @@ def read_pts_groups(geom, finished_lines=None,
     model = geom.model
     
     node_id, node_coords, parametric_coods =  model.mesh.getNodes()
-    print("here", [type(x) for x in node_id])
+
     if len(node_coords) == 0:
         return np.array([]).reshape((-1,3)), {}, {}
     points = np.array(node_coords).reshape(-1, 3)
 
-    node2idx = np.zeros(max(node_id)+1, dtype=int)
+    node2idx = np.zeros(int(max(node_id)+1), dtype=int)
 
     for k, id in enumerate(node_id): node2idx[id] = k
 
@@ -126,7 +126,7 @@ def read_pts_groups(geom, finished_lines=None,
             data = np.array([node2idx[tag] for tag in nodeTags[k]], dtype=int)
             data = data.reshape(-1, num_nodes_per_cell[el_type_name])
             cells[el_type_name] = data
-            tmp = np.zeros(max(elementTags[k])+1, dtype=int)
+            tmp = np.zeros(int(max(elementTags[k])+1), dtype=int)
             for kk, id in enumerate(elementTags[k]): tmp[id] = kk
             el2idx[el_type_name] = tmp
             cell_data[el_type_name] = {'geometrical':
