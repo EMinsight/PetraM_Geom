@@ -23,7 +23,6 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
 from petram.model import Model
 import time
 
-import thread
 from threading import Thread
 try:
     from Queue import Queue, Empty
@@ -319,7 +318,7 @@ class BrepFile(GeomTopBase):
             if v[1] == aname[k]:
                 self.geom_prev_algorithm = k
 
-        self.geom_prev_res = long(v[2])
+        self.geom_prev_res = int(v[2])
         self.brep_file_path = str(v[0])
         
     def get_special_menu(self):
@@ -502,8 +501,8 @@ class GmshGeom(GeomTopBase):
             if v[1] == aname[k]:
                 self.geom_prev_algorithm = k
 
-        self.geom_prev_res = long(v[2])
-        self.maxthreads  =  long(v[3])
+        self.geom_prev_res = int(v[2])
+        self.maxthreads  =  int(v[3])
         self.occ_parallel  = v[4]
         self.skip_final_frag = v[5]
 

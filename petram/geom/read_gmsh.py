@@ -84,6 +84,7 @@ def read_pts_groups(geom, finished_lines=None,
     model = geom.model
     
     node_id, node_coords, parametric_coods =  model.mesh.getNodes()
+    print("here", [type(x) for x in node_id])
     if len(node_coords) == 0:
         return np.array([]).reshape((-1,3)), {}, {}
     points = np.array(node_coords).reshape(-1, 3)
