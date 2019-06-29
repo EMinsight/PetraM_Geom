@@ -81,6 +81,8 @@ def read_loops2(geom):
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
 
+    if finished_lines is None: finished_lines = []
+    if finished_faces is None: finished_faces = []     
     model = geom.model
     
     node_id, node_coords, parametric_coods =  model.mesh.getNodes()
@@ -98,29 +100,40 @@ def read_pts_groups(geom, finished_lines=None,
     cell_data = {}
     el2idx = {}
     for ndim in range(3):
-        if (ndim == 1 and finished_lines is not None
+        if (ndim == 1 and len(finished_lines) != 0
             or
-            ndim == 2 and finished_faces is not None):
+            ndim == 2 and len(finished_faces) != 0):
             finished = finished_faces if ndim==2 else finished_lines
 
-            #print("here we are removing unfinished lines",  dimtags, finished_lines)
             xxx = [model.mesh.getElements(ndim, l) for l in finished]
-            tmp = {}
-            elementTypes = sum([x[0] for x in xxx], [])
-            elementTags =sum([x[1] for x in xxx], [])
-            nodeTags = sum([x[2] for x in xxx], [])
+
+            if isinstance(xxx[0][0], np.ndarray):
+                # newer gmsh comes here
+                elementTypes = np.hstack([x[0] for x in xxx])
+                elementTags = sum([x[1] for x in xxx],[])
+                nodeTags = sum([x[2] for x in xxx],[])
+                elementTags = [list(x) for x in elementTags]
+                nodeTags = [list(x) for x in nodeTags]                
+            else:
+
+                elementTypes = sum([x[0] for x in xxx], [])
+                elementTags =sum([x[1] for x in xxx], [])
+                nodeTags = sum([x[2] for x in xxx], [])
+                
+            tmp = {}                
             dd1 = {};
             dd2 = {}
             for k, el_type in enumerate(elementTypes):
                 if not el_type in dd1: dd1[el_type] = []
-                if not el_type in dd2: dd2[el_type] = []                
+                if not el_type in dd2: dd2[el_type] = []
                 dd1[el_type] = dd1[el_type]+ elementTags[k]
                 dd2[el_type] = dd2[el_type]+ nodeTags[k]
-            elementTypes = dd1.keys()
+            elementTypes = list(dd1)
             elementTags = [dd1[k] for k in elementTypes]
             nodeTags = [dd2[k] for k in elementTypes]
         else:
-            elementTypes, elementTags, nodeTags = model.mesh.getElements(ndim)            
+            elementTypes, elementTags, nodeTags = model.mesh.getElements(ndim)
+
         for k, el_type in enumerate(elementTypes):
             el_type_name = gmsh_element_type[el_type]
             data = np.array([node2idx[tag] for tag in nodeTags[k]], dtype=int)

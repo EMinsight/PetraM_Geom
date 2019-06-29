@@ -351,7 +351,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def update_meshview(self, dlg, viewer, clear=False):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops
-        
+
         if clear:
             viewer.del_figure_data('mesh', self.name())
         elif self.mesher_data is None:

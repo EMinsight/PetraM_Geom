@@ -416,7 +416,7 @@ class GMSHMeshWrapper(object):
     def list_entities(self):
         for x in gmsh.model.list():
             gmsh.model.setCurrent(x)
-            print(x, gmsh.model.getEntities())
+            #print(x, gmsh.model.getEntities())
         gmsh.model.setCurrent(self.current)
 
     def add_sequential_physicals(self, verbose = True, include_lower_dims=False):
@@ -1853,6 +1853,7 @@ def generator(q, filename, sequence, dim, finalize, msh_file, kwargs):
                                              finished_faces = done[2])
                 
     data = ptx, cells, {}, cell_data, {}
+
     q.put((True, (max_dim, done, data)))
     
     
