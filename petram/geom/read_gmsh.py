@@ -40,6 +40,9 @@ num_nodes_per_cell = {
     'quad16': 16,
     }
 
+import petram.debug as debug
+dprint1, dprint2, dprint3 = debug.init_dprints('ReadGMSH')
+
 #dimtags =  gmsh.model.getEntities()
 def read_loops(geom):
     model = geom.model
@@ -81,8 +84,8 @@ def read_loops2(geom):
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
 
-    if finished_lines is None: finished_lines = []
-    if finished_faces is None: finished_faces = []     
+    dprint1("finished faces", finished_faces)
+    #finished_faces is None: finished_faces = []     
     model = geom.model
     
     node_id, node_coords, parametric_coods =  model.mesh.getNodes()
@@ -100,9 +103,9 @@ def read_pts_groups(geom, finished_lines=None,
     cell_data = {}
     el2idx = {}
     for ndim in range(3):
-        if (ndim == 1 and len(finished_lines) != 0
+        if (ndim == 1 and finished_lines is not None and len(finished_lines) != 0
             or
-            ndim == 2 and len(finished_faces) != 0):
+            ndim == 2 and finished_faces is not None and len(finished_faces) != 0):
             finished = finished_faces if ndim==2 else finished_lines
 
             xxx = [model.mesh.getElements(ndim, l) for l in finished]
@@ -171,13 +174,12 @@ def read_pts_groups(geom, finished_lines=None,
             etags = model.getEntitiesForPhysicalGroup(dim=dim, tag=ptag)
             for etag in etags:
                 elType2, elTag2, nodeTag2 = model.mesh.getElements(dim=dim,
-                                                                        tag=etag)
+                                                                   tag=etag)
                 for k, el_type in enumerate(elType2):                       
                     el_type_name = gmsh_element_type[el_type]
                     for elTag in elTag2[k]:
                         if not el_type_name in el2idx: continue                        
                         idx = el2idx[el_type_name][elTag]
                         cell_data[el_type_name]['physical'][idx] = ptag
-
 
     return points, cells, cell_data

@@ -585,12 +585,14 @@ class Geometry(object):
                 self.logfile.write("computing  fragments\n")
             if self.queue is not None:
                 self.queue.put((False, "computing  fragments"))
-            
+                
+            self.factory.synchronize()
             self.factory.fragment(dimtags[:1], dimtags[1:],
                                   removeObject=True, removeTool=True)
             
             self.factory.synchronize()
-            self.factory.removeAllDuplicates()                           
+            self.factory.removeAllDuplicates()
+
             return
         '''
         ## since self.dim returns the highest dim in geometry
@@ -2056,7 +2058,8 @@ class Geometry(object):
                     
                 if progressbar is not None:
                     istep += 1
-                    progressbar.Update(istep, newmsg=ret[1])                    
+                    if istep < progressbar.GetRange():
+                        progressbar.Update(istep, newmsg=ret[1])    
                 
             except QueueEmpty:
                 if not p.is_alive():
