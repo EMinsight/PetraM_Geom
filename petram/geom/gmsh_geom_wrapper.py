@@ -128,6 +128,7 @@ class Geometry(object):
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
         self.maxthreads = kwargs.pop('Maxthreads', 1)
         self.skip_final_frag = kwargs.pop('SkipFrag', False)
+        self.use_1d_preview = kwargs.pop('Use1DPreview', False)
         
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
@@ -217,14 +218,17 @@ class Geometry(object):
         from collections import defaultdict
         
         lcar = defaultdict(lambda: np.inf)
+        esize={}
         
         for dim, tag in self.model.getEntities(1):
             x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)
             s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
+
+            esize[tag] = s
             bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
             for bdim, btag in bdimtags:
                 lcar[btag] = min((lcar[btag], s))
-        return dict(lcar)
+        return dict(lcar), esize
 
     
     def getEntityNumberingInfo(self):
@@ -470,11 +474,11 @@ class Geometry(object):
                                        removeVolume=removeVolume)
         return [VolumeID(v[1]) for v in outTags]        
      
-    def import_shapes(self, fileName, highestDimOnly=True, format=""):
-        out_dimtags = self.factory.importShapes(fileName,
-                                                highestDimOnly=highestDimOnly,
-                                                format="")
-        return dimtag2id(out_dimtags)
+    #def import_shapes(self, fileName, highestDimOnly=True, format=""):
+    #    out_dimtags = self.factory.importShapes(fileName,
+    #                                            highestDimOnly=highestDimOnly,
+    #                                            format="")
+    #    return dimtag2id(out_dimtags)
      
     def _boolean_xxx(self, m, input_entity, tool_entity,
                      removeObject=False, removeTool=False,
@@ -1627,8 +1631,9 @@ class Geometry(object):
         a2 = a2/np.sqrt(np.sum(a2**2))*radius
         if an1 > an2:
            tmp = an2; an2 = an1; an1 = tmp
-        if an2 - an1 > 180:
-           assert False, "angle must be less than 180"
+
+        if an2 - an1 >= 360:
+           assert False, "angle must be less than 360"
 
         an3 = (an1 + an2)/2.0
         pt1 = a1*np.cos(an1*np.pi/180.) + a2*np.sin(an1*np.pi/180.)
@@ -1647,6 +1652,7 @@ class Geometry(object):
             newkey1 = objs.addobj(ca1, 'ln')
             newkey2 = objs.addobj(ca2, 'ln')
             newkeys = [newkey1, newkey2]
+
         else:
             l1 = self.add_line(pc, p1)
             l2 = self.add_line(p2, pc)            
@@ -1872,12 +1878,22 @@ class Geometry(object):
         return self._WorkPlane_build_geom(objs, c1, d1, d2)        
 
     def BrepImport_build_geom(self, objs, *args):
-        cad_file = args[0]
-        highestDimOnly = True
+        cad_file, use_fix , use_fix_param, use_fix_tol = args
         
+        highestDimOnly = False
+        #highestDimOnly = True
         PTs = self.factory.importShapes(cad_file, 
                                         highestDimOnly=highestDimOnly)
-        
+
+        #debug to load one element...
+        for dim, tag in PTs:
+            if dim == 3:
+               self.factory.remove(((dim, tag),), recursive=False)
+            if dim == 2:
+                if tag != 165:
+                   self.factory.remove(((dim, tag),), recursive=True)
+        PTs = ((2, 165),)
+
         # apparently I should use this object (poly.surface)...?
 
         newkeys = []
@@ -1889,6 +1905,13 @@ class Geometry(object):
                pp = dimtag2id([p])
                newkeys.append(objs.addobj(pp[0], 'impt'))
 
+        if use_fix:
+             self.factory.healShapes(dimTags = PTs,
+                                     tolerance = use_fix_tol,
+                                     fixDegenerated = use_fix_param[0],
+                                     fixSmallEdges = use_fix_param[1],
+                                     fixSmallFaces = use_fix_param[2],
+                                     sewFaces = use_fix_param[3])
         return list(objs), newkeys
     
     def CADImport_build_geom(self, objs, *args):
@@ -1941,8 +1964,64 @@ class Geometry(object):
         return gui_data, objs
     
 
-    def generate_preview_mesh(self, filename = ''):
+    def mesh_edge_algorith1(self):
+        '''
+        use characteristic length
+        '''
+        vcl, esize = self.getVertexCL()
+        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
         
+        for tag in vcl:
+           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
+        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
+
+        gmsh.model.mesh.generate(1)
+        
+        return vcl, esize, modelsize
+    
+    def mesh_edge_algorith2(self):
+        vcl, esize = self.getVertexCL()
+        for tag in vcl:
+           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
+        
+        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+
+        emax = max(list(esize.values()))
+        too_small = []
+
+        if self.logfile is not None:
+            self.logfile.write("Running Edge Mesh Alg.2 \n")                     
+        for l in esize:
+            if esize[l] > emax/10.:
+               seg = 5
+            elif esize[l] > emax/100.:
+               seg = 5           
+            elif esize[l] > emax/1000.:
+               seg = 5                       
+            elif esize[l] > emax/10000.:
+               seg = 4                                 
+            elif esize[l] > emax/100000.:
+               seg = 3
+            else:
+               too_small.append(l)
+               seg = 3
+
+               if self.logfile is not None:
+                    self.logfile.write("Edge too small"+ str(l) + "/" + str(esize[l]/emax) + "\n")
+
+            gmsh.model.mesh.setTransfiniteCurve(l, seg, meshType="Bump", coef=1.3)
+            
+        for tag in vcl:
+           gmsh.model.mesh.setSize(((0, tag),), emax/1000)
+           
+        gmsh.model.mesh.generate(1)            
+        return vcl, esize, modelsize
+    
+    def generate_preview_mesh(self, filename = ''):
         if self.queue is not None:
             self.queue.put((False, "generating preview"))
 
@@ -1951,35 +2030,30 @@ class Geometry(object):
         dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
         dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
 
-        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-
-        vcl = self.getVertexCL()
-        for tag in vcl:
-           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-
-
-        #print(geom.model.getEntities())
-        #geom.model.setVisibility(((3,7), ), False, True)
-
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", dim2_size/3.)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-        #gmsh.option.setNumber("Mesh.Mesh.CharacteristicLengthFromCurvature", 1)
-
+        
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads)
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads)
 
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
-        gmsh.model.mesh.generate(1)
+        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)        
+        #ent = gmsh.model.getEntities()
+        #gmsh.model.setVisibility(ent, False, recursive=True)
+        #gmsh.model.setVisibility(((2, 165),), True, recursive=True)   
+
+        # make 1D mesh
+        vcl, esize, modelsize = self.mesh_edge_algorith2()
+
         
-        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)        
-        gmsh.model.mesh.generate(2)
+        if not self.use_1d_preview:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+            #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
+            gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", max(list(esize.values()))/100.)
+            gmsh.option.setNumber("Mesh.Optimize", 0)
+            gmsh.option.setNumber("Mesh.IgnorePeriodicity", 1)
+            gmsh.option.setNumber("Mesh.RefineSteps", 1)
+            gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
+
+            gmsh.model.mesh.generate(2)
         
         if filename != '':
             import os
@@ -2012,6 +2086,10 @@ class Geometry(object):
         import os
 
         #map = self.getEntityNumberingInfo()
+        # make filename safe
+        filename = '_'.join(filename.split("/"))
+        filename = '_'.join(filename.split(":"))
+        filename = '_'.join(filename.split("\\"))        
         
         geom_brep = os.path.join(os.getcwd(), filename+'.brep')
         gmsh.write(geom_brep)
@@ -2037,7 +2115,9 @@ class Geometry(object):
                   'PreviewAlgorithm': self.geom_prev_algorithm,
                   'OCCParallel': self.occ_parallel,
                   'Maxthreads': self.maxthreads,
-                  'SkipFrag': self.skip_final_frag}
+                  'SkipFrag': self.skip_final_frag,
+                  'Use1DPreview': self.use_1d_preview}
+
                  
         q = mp.Queue()
         p = mp.Process(target = generator,
@@ -2055,7 +2135,8 @@ class Geometry(object):
                 if ret[0]: break
                 else:
                     dprint1(ret[1])
-                    
+                    import sys
+                    sys.stdio.flush()
                 if progressbar is not None:
                     istep += 1
                     if istep < progressbar.GetRange():
