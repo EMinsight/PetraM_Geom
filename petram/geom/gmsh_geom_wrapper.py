@@ -2135,8 +2135,6 @@ class Geometry(object):
                 if ret[0]: break
                 else:
                     dprint1(ret[1])
-                    import sys
-                    sys.stdio.flush()
                 if progressbar is not None:
                     istep += 1
                     if istep < progressbar.GetRange():
