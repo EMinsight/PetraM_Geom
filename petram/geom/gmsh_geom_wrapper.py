@@ -1886,6 +1886,7 @@ class Geometry(object):
                                         highestDimOnly=highestDimOnly)
 
         #debug to load one element...
+        '''
         for dim, tag in PTs:
             if dim == 3:
                self.factory.remove(((dim, tag),), recursive=False)
@@ -1893,7 +1894,7 @@ class Geometry(object):
                 if tag != 165:
                    self.factory.remove(((dim, tag),), recursive=True)
         PTs = ((2, 165),)
-
+        '''
         # apparently I should use this object (poly.surface)...?
 
         newkeys = []
