@@ -1137,7 +1137,7 @@ class BrepImport(GeomPB):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix.tol)        
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol)        
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
         
