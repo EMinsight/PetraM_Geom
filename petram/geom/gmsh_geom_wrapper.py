@@ -349,16 +349,18 @@ class Geometry(object):
 
     def add_surface_filling(self, tags):
         tags = list(np.atleast_1d(tags))
-        #print("calling wire")
+        #print("calling wire", tags)
         self.factory.synchronize()
         #print(gmsh.model.getEntities(1))
         wire = self.factory.addWire(tags)
         self.factory.remove([(1,x) for x in tags], recursive=True)
-        #print(wire)
         self.factory.synchronize()
+        #print(wire)        
+        ent1d=[x[1] for x in gmsh.model.getEntities(1)]        
         #print(gmsh.model.getEntities(1))
         s = self.factory.addSurfaceFilling(wire)
-        self.factory.remove([(1,wire),], recursive=True)        
+        if wire in ent1d:
+            self.factory.remove([(1,wire),], recursive=True)        
         self.factory.synchronize()
         #print("boundary", self.model.getBoundary([(2, s)]))
         #print(gmsh.model.getEntities(1))
@@ -882,6 +884,7 @@ class Geometry(object):
         #   else: del objs[x]
            
         if isFilling:
+           print("ptx here", ptx)
            surface = self.add_surface_filling(ptx)
            newobj2 = objs.addobj(surface, 'sf')           
 #           newobj1 = objs.addobj(line, 'ln')
@@ -914,6 +917,10 @@ class Geometry(object):
 
         ptx = get_target1(objs, pts, 'f')                
         sl = self.add_surface_loop(ptx)
+        
+        self.factory.remove([(2,x) for x in ptx], recursive=True)
+        self.factory.synchronize()
+        
         #newobj1 = objs.addobj(sl, 'sl')
         vol = self.add_volume(sl)
         newobj2 = objs.addobj(vol, 'vol')
