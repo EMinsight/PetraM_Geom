@@ -256,6 +256,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
+        self.vt.preprocess_params(self)                
         gui_param = self.vt.make_value_or_expression(self)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)

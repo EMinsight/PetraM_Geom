@@ -107,7 +107,7 @@ def get_target1(objs, targets, cls):
     return [objs[t] if t in objs else cc(t)  for t in targets]
   
 def get_target2(objs, targets):
-    # this is when target type is given
+    # this is when target type is not given
     ret = []
     for t in targets:
         if t in objs:
@@ -902,8 +902,8 @@ class Geometry(object):
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
         #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        ptx = get_target(objs, targets, 'f')        
-        sl = self.add_surface_loop(pts)
+        ptx = get_target1(objs, pts, 'f')        
+        sl = self.add_surface_loop(ptx)
         newobj = objs.addobj(sl, 'sl')
         
         return  list(objs), [newobj]
@@ -912,8 +912,8 @@ class Geometry(object):
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
 
-        ptx = get_target(objs, targets, 'f')                
-        sl = self.add_surface_loop(pts)
+        ptx = get_target1(objs, pts, 'f')                
+        sl = self.add_surface_loop(ptx)
         #newobj1 = objs.addobj(sl, 'sl')
         vol = self.add_volume(sl)
         newobj2 = objs.addobj(vol, 'vol')
@@ -2041,7 +2041,7 @@ class Geometry(object):
         #gmsh.model.setVisibility(((2, 165),), True, recursive=True)   
 
         # make 1D mesh
-        vcl, esize, modelsize = self.mesh_edge_algorith2()
+        vcl, esize, modelsize = self.mesh_edge_algorith1()
 
         
         if not self.use_1d_preview:
