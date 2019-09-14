@@ -123,7 +123,7 @@ class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
 
-        self.geom_prev_res = kwargs.pop('PreviewResolutio', 30)
+        self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
         self.maxthreads = kwargs.pop('Maxthreads', 1)
@@ -214,7 +214,7 @@ class Geometry(object):
             size.append((dim, tag, s))
         return size
      
-    def getVertexCL(self):
+    def getVertexCL(self, mincl=0):
         from collections import defaultdict
         
         lcar = defaultdict(lambda: np.inf)
@@ -227,7 +227,9 @@ class Geometry(object):
             esize[tag] = s
             bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
             for bdim, btag in bdimtags:
-                lcar[btag] = min((lcar[btag], s))
+                mm = min((lcar[btag], s))
+                if mm > mincl:
+                    lcar[btag] = min((lcar[btag], s))
         return dict(lcar), esize
 
     
@@ -288,7 +290,7 @@ class Geometry(object):
         edge_map = dict(zip(map[1], map1[1]))
         face_map = dict(zip(map[2], map1[2]))
         volume_map = dict(zip(map[3], map1[3]))
-        print("objs", objs)
+        #print("objs", objs)
         for key in objs:
             if isinstance(objs[key], VertexID):
                 objs[key] = VertexID(point_map[objs[key]])
@@ -352,8 +354,35 @@ class Geometry(object):
         #print("calling wire", tags)
         self.factory.synchronize()
         #print(gmsh.model.getEntities(1))
+        dimtags = [(1,x) for x in tags]
+
+        ## reorder tags to make a closed loop
+        corners = [ [yy[1] for yy in self.model.getBoundary((x,), combined=False, oriented=False,)]
+                    for x in dimtags]
+        order = [0,]
+        done_c=[corners[0][0], corners[0][1]]
+        while len(order) < len(dimtags):
+            for k, c in enumerate(corners):
+                if k in order: continue
+                if c[0] == done_c[-1] and not c[1] in done_c:
+                    done_c.append(c[1])
+                    order.append(k)
+                    break
+                if c[1] == done_c[-1] and not c[0] in done_c:
+                    done_c.append(c[0])
+                    order.append(k)
+                    break
+                if ((c[1] == done_c[-1] and c[0] == done_c[0]) or
+                    (c[0] == done_c[-1] and c[1] == done_c[0])):
+                    done_c.append(c[0])
+                    order.append(k)
+                    break
+            else: # no break here
+                assert False, "loop is not closed"
+        tags = [tags[x] for x in order]
+       
         wire = self.factory.addWire(tags)
-        self.factory.remove([(1,x) for x in tags], recursive=True)
+        self.factory.remove(dimtags, recursive=True)
         self.factory.synchronize()
         #print(wire)        
         ent1d=[x[1] for x in gmsh.model.getEntities(1)]        
@@ -884,7 +913,6 @@ class Geometry(object):
         #   else: del objs[x]
            
         if isFilling:
-           print("ptx here", ptx)
            surface = self.add_surface_filling(ptx)
            newobj2 = objs.addobj(surface, 'sf')           
 #           newobj1 = objs.addobj(line, 'ln')
@@ -1803,7 +1831,7 @@ class Geometry(object):
         #from petram.geom.gmsh_geom_wrapper import VertexID, LineID, SurfaceID
 
         tt = self.get_unique_entity(tt)
-        print("tt", tt)        
+        
         #print("first rot ???", ax, an, np.sum(ax**2))
         if np.sum(ax**2) == 0.0:
              if an != 0.0:
@@ -1972,7 +2000,7 @@ class Geometry(object):
         return gui_data, objs
     
 
-    def mesh_edge_algorith1(self):
+    def mesh_edge_algorithm1(self):
         '''
         use characteristic length
         '''
@@ -1985,12 +2013,11 @@ class Geometry(object):
         
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
-
         gmsh.model.mesh.generate(1)
         
         return vcl, esize, modelsize
     
-    def mesh_edge_algorith2(self):
+    def mesh_edge_algorithm2(self):
         vcl, esize = self.getVertexCL()
         for tag in vcl:
            gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
@@ -2029,6 +2056,32 @@ class Geometry(object):
         gmsh.model.mesh.generate(1)            
         return vcl, esize, modelsize
     
+    def mesh_edge_algorithm3(self):
+        '''
+        use characteristic length
+        '''
+        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        
+
+        too_small = 3e-3
+        vcl, esize = self.getVertexCL(modelsize*too_small)
+
+        #print(modelsize, vcl, esize)
+        emax = max(list(esize.values()))        
+        for tag in vcl:
+            gmsh.model.mesh.setSize(((0, tag),), modelsize/self.geom_prev_res)            
+            if np.isfinite(vcl[tag]):
+                #gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
+                gmsh.model.mesh.setSize(((0, tag),), vcl[tag])
+
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)                
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
+        gmsh.model.mesh.generate(1)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)        
+        return vcl, esize, modelsize
+    
     def generate_preview_mesh(self, filename = ''):
         if self.queue is not None:
             self.queue.put((False, "generating preview"))
@@ -2048,7 +2101,7 @@ class Geometry(object):
         #gmsh.model.setVisibility(((2, 165),), True, recursive=True)   
 
         # make 1D mesh
-        vcl, esize, modelsize = self.mesh_edge_algorith1()
+        vcl, esize, modelsize = self.mesh_edge_algorithm3()
 
         
         if not self.use_1d_preview:
@@ -2119,7 +2172,7 @@ class Geometry(object):
     def run_generator(self, no_mesh=False, finalize=False, filename = '',
                       progressbar = None):
         
-        kwargs = {'PreviewResolutio': self.geom_prev_res,
+        kwargs = {'PreviewResolution': self.geom_prev_res,
                   'PreviewAlgorithm': self.geom_prev_algorithm,
                   'OCCParallel': self.occ_parallel,
                   'Maxthreads': self.maxthreads,
