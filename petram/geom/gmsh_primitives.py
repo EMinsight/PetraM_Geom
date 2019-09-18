@@ -16,6 +16,7 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 from petram.geom.gmsh_geom_model import use_gmsh_api
+from petram.geom.vtable_geom import *
 
 from petram.geom.gmsh_config import has_gmsh
 
@@ -327,7 +328,7 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
           #                   suffix =('x', 'y', 'z'),
           #                   default = [0,0,0],
           #                   tip = "point on axis" )),
-          ('taxis', VtableElement('taxis', type='float',
+          ('taxis', VtableElement_Direction('taxis', type='float',
                                    guilabel = 'Translation Axis',
                                    suffix =('x', 'y', 'z'),
                                    default = [0, 0, 1],
