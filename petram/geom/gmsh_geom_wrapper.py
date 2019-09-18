@@ -1214,10 +1214,59 @@ class Geometry(object):
         return list(objs), newkey        
     
     def Extrude_build_geom(self, objs, *args):
-        targets,  tax, len = args
+        targets,  tax, length = args
+
         targets = [x.strip() for x in targets.split(',')]
         targetID = get_target2(objs, targets)
-        tax = tax/np.sqrt(np.sum(np.array(tax)**2))*len          
+
+        print("tax", tax)
+        if tax[0] == 'normal'or tax[0] == 'normalp':
+            assert isinstance(targetID[0], SurfaceID), "target must be surface"
+            self.factory.synchronize()                                
+            n1 = np.array(gmsh.model.getNormal(targetID[0], (0, 0)))
+            n2 = np.array(gmsh.model.getNormal(targetID[0], (0, 1)))
+            n3 = np.array(gmsh.model.getNormal(targetID[0], (1, 0)))
+            n1 /= np.sqrt(np.sum(n1**2))
+            n2 /= np.sqrt(np.sum(n2**2))
+            n3 /= np.sqrt(np.sum(n3**2))            
+            
+            if np.any(n1 != n2) or np.any(n1 != n3):
+                assert False, "surface is not flat"
+
+            if tax[0] == 'normal':
+                if tax[1]:
+                    tax = -n1 * length
+                else:
+                    tax = n1 * length
+            else:
+                destID = get_target1(objs, [tax[1],], 'p')[0]
+                ptx_d = np.array(gmsh.model.getValue(0, int(destID), []))
+                dimtags = self.model.getBoundary(((2, targetID[0]),), recursive=True,
+                                            combined=True,  oriented=False,)
+                print("dimtags", dimtags)
+                ptx_s = np.array(gmsh.model.getValue(0, dimtags[0][1], []))
+                if tax[2]:
+                    tax = -n1 * np.sum((ptx_d-ptx_s)*n1)
+                else:
+                    tax = n1 * np.sum((ptx_d-ptx_s)*n1)
+
+        elif tax[0] == 'fromto_points':  
+            self.factory.synchronize()          
+            ptx1ID = get_target1(objs, [tax[1],], 'p')[0]
+            ptx1 = np.array(gmsh.model.getValue(0, int(ptx1ID), []))            
+            ptx2ID = get_target1(objs, [tax[2],], 'p')[0]                        
+            ptx2 = np.array(gmsh.model.getValue(0, int(ptx2ID), []))
+            print('ptx', ptx1, ptx2)
+            n1 = ptx2 - ptx1
+            if not tax[3]:
+                n1 /= np.sqrt(np.sum(n1**2))
+                n1 *= length
+            if tax[4]:
+                n1 *= -1
+            tax = n1 
+        else:
+            tax = np.array(tax).flatten()
+            tax = tax/np.sqrt(np.sum(np.array(tax)**2))*length
         newkeys = []
         for t, idd in zip(targets, targetID):
              #if not t in objs:
