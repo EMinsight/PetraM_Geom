@@ -324,7 +324,21 @@ class Geometry(object):
      
     def add_point(self, p, lcar=0.0, mask=True):
         p = tuple(p)
+        '''
+        self.factory.synchronize()
+        ptx_tags = gmsh.model.getEntities(0)
+        create_new = True
+        if len(ptx_tags) > 0:
+            points = np.vstack([gmsh.model.getValue(0, x[1], []) for x in ptx_tags])
+            dd = np.sum((points-np.array(p))**2, 1)
+            dd = np.sqrt(np.sum((points-np.array(p))**2, 1))
+            if np.min(dd) == 0:
+                idx = np.argmin(dd)
+                pp = ptx_tags[idx][1]
+                #create_new = False
         #if not p in self._point_loc:
+        if create_new:
+        '''
         pp = self.factory.addPoint(p[0], p[1], p[2], lcar)
         self._point_loc[p] = VertexID(pp)
         #print("made point ", pp, p)
@@ -363,11 +377,14 @@ class Geometry(object):
         dimtags = [(1,x) for x in tags]
 
         ## reorder tags to make a closed loop
+        '''
+        this has to be done by coordinates instead of tags !        
         corners = [ [yy[1] for yy in self.model.getBoundary((x,), combined=False, oriented=False,)]
                     for x in dimtags]
         order = [0,]
         done_c=[corners[0][0], corners[0][1]]
         while len(order) < len(dimtags):
+            #print("order", order)
             for k, c in enumerate(corners):
                 if k in order: continue
                 if c[0] == done_c[-1] and not c[1] in done_c:
@@ -383,10 +400,11 @@ class Geometry(object):
                     done_c.append(c[0])
                     order.append(k)
                     break
+
             else: # no break here
                 assert False, "loop is not closed"
         tags = [tags[x] for x in order]
-       
+        '''
         wire = self.factory.addWire(tags)
         self.factory.remove(dimtags, recursive=True)
         self.factory.synchronize()
