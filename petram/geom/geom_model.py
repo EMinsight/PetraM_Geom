@@ -37,3 +37,4 @@ class GeomTopBase(GeomBase):
         v['geom_finalized'] = False
         v['geom_timestamp'] = 0
         return v
+    

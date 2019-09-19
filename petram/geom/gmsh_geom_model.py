@@ -12,6 +12,7 @@ import traceback
 import sys
 import re
 import time
+import multiprocessing as mp
 from collections import defaultdict
 
 import numpy as np
@@ -635,7 +636,28 @@ class GmshGeom(GeomTopBase):
                 
         self._objs = objs        
 
-                   
+    def check_create_new_child(self,gs):
+        if not hasattr(self, '_prev_sequence'):
+            return True
+
+        if len(gs.geom_sequence) < len(self._prev_sequence):
+            return True
+
+        import six        
+        if six.PY2:
+            import cPickle as pickle
+        else:
+            import pickle
+        
+        for k, s in enumerate(self._prev_sequence):
+            s_txt1 = pickle.dumps(s)
+            s_txt2 = pickle.dumps(gs.geom_sequence[k])
+            if s_txt1 != s_txt2:
+                return True
+            else:
+                dprint1("check passed", s[0])
+        return False
+        
     def build_geom4(self, stop1=None, stop2=None, filename = None,
                     finalize = False, no_mesh=False, gui_parent=None):
         '''
@@ -648,35 +670,71 @@ class GmshGeom(GeomTopBase):
         #if self._gmsh4_data is not  None:
         #    self._gmsh4_data[-1].finalize()
 
-        from petram.geom.gmsh_geom_wrapper import Geometry
+        from petram.geom.gmsh_geom_wrapper import GeometrySequence,GMSHGeometryGenerator
+        '''
         geom = Geometry(PreviewResolution = self.geom_prev_res,
                         PreviewAlgorithm = self.geom_prev_algorithm,
                         OCCParallel = int(self.occ_parallel),
                         Maxthreads = self.maxthreads,
                         SkipFrag = self.skip_final_frag,
                         Use1DPreview = self.use_1d_preview)
-        
+
         geom.set_factory('OpenCASCADE')
-        
-        stopname = self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
+        '''
+
+        gs = GeometrySequence()
+        stopname = self.walk_over_geom_chidlren(gs, stop1=stop1, stop2=stop2)
 
         import wx
         if gui_parent is None:
             gui_parent = wx.GetApp().TopWindow
 
-        L = len(geom.geom_sequence) + 3
+        L = len(gs.geom_sequence) + 3
         pgb = wx.ProgressDialog("Generating geometry...",
                                 "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
         def close_dlg(evt, dlg=pgb):
             pgb.Destroy()
         pgb.Bind(wx.EVT_CLOSE, close_dlg)
+
+        if (hasattr(self, "_p") and self._p[0].is_alive()):
+            new_process = self.check_create_new_child(gs)
+        else:
+            new_process = True
+
+        if new_process:
+            if (hasattr(self, "_p") and self._p[0].is_alive()):
+                self._p[0].terminate()
+
+            task_q = mp.Queue() # data to child
+            q =  mp.Queue() # data from child
+            p = GMSHGeometryGenerator(q, task_q)
+            p.start()
+            print("process ID", p.pid)
+            self._p = (p, task_q, q)
+            self._prev_sequence = gs.geom_sequence
+            start_idx = 0
+        else:
+            ll = len(self._prev_sequence)
+            self._prev_sequence = gs.geom_sequence
+            start_idx = ll
+            
+        success, dataset  = gs.run_generator(self, no_mesh = no_mesh, finalize=finalize,
+                                             filename = stopname, progressbar = pgb,
+                                             create_process = new_process,
+                                             process_param = self._p,
+                                             start_idx = start_idx)
+
+        pgb.Destroy()
+
+        if not success:
+            print(dataset) # this is an error message
+            self._p[0].terminate()
+            self._prev_sequence = []
+            return
         
-        gui_data, objs, brep_file, data, vcl = geom.run_generator(no_mesh = no_mesh,
-                                                             finalize=finalize,
-                                                             filename = stopname,
-                                                             progressbar = pgb)
-        pgb.Destroy()        
+        gui_data, objs, brep_file, data, vcl = dataset
+
         self._geom_brep = brep_file
         self.update_GUI_after_geom(gui_data, objs)
 
@@ -684,7 +742,7 @@ class GmshGeom(GeomTopBase):
             return   
         # for the readablity I expend data here, do we need geom?        
         ptx, cells, cell_data, l, s, v = data
-        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, gs)
 
         self._clmax_guess = vcl
 

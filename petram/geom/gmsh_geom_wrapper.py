@@ -123,15 +123,9 @@ class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
 
-        self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
-        self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
-        self.occ_parallel = kwargs.pop('OCCParallel', 0)
-        self.maxthreads = kwargs.pop('Maxthreads', 1)
-        self.skip_final_frag = kwargs.pop('SkipFrag', False)
-        self.use_1d_preview = kwargs.pop('Use1DPreview', False)
-        
         gmsh.option.setNumber("General.Terminal", 1)
-        gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
+        self.process_kwargs(kwargs)
+
         modelname = kwargs.pop("modelname", "model1")
         gmsh.clear()
         gmsh.model.add(modelname)
@@ -156,8 +150,20 @@ class Geometry(object):
             self.logfile = tempfile.NamedTemporaryFile('w', delete = True)
         else:
             self.logfile = None
-        self.queue = kwargs.pop("queue", None)
             
+        self.queue = kwargs.pop("queue", None)
+        self.p = None
+
+    def process_kwargs(self, kwargs):
+        self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
+        self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
+        self.occ_parallel = kwargs.pop('OCCParallel', 0)
+        self.maxthreads = kwargs.pop('Maxthreads', 1)
+        self.skip_final_frag = kwargs.pop('SkipFrag', False)
+        self.use_1d_preview = kwargs.pop('Use1DPreview', False)
+        
+        gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
+        
     def set_factory(self, factory_type):
         pass
 
@@ -2005,14 +2011,10 @@ class Geometry(object):
     '''
     sequence/preview/brep generator
     '''
-    def run_sequence(self):
-        from petram.geom.gmsh_geom_model import GeomObjs
-        objs = GeomObjs()
-        gui_data = dict()
-
+    def run_sequence(self, objs, gui_data, start_idx):
         isWP = False
         
-        for gui_name, gui_param, geom_name in self.geom_sequence:
+        for gui_name, gui_param, geom_name in self.geom_sequence[start_idx:]:
             if self.logfile is not None:
                 self.logfile.write("processing " + gui_name + "\n")
                 self.logfile.write("data " + str(geom_name) + ":" + str(gui_param) + "\n")
@@ -2075,6 +2077,9 @@ class Geometry(object):
         modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
 
         emax = max(list(esize.values()))
+        if len(esize) == 0:
+            return vcl, esize, modelsize
+        
         too_small = []
 
         if self.logfile is not None:
@@ -2116,6 +2121,9 @@ class Geometry(object):
         too_small = 3e-3
         vcl, esize = self.getVertexCL(modelsize*too_small)
 
+        if len(esize) == 0:
+            return vcl, esize, modelsize
+        
         #print(modelsize, vcl, esize)
         emax = max(list(esize.values()))        
         for tag in vcl:
@@ -2153,7 +2161,7 @@ class Geometry(object):
         vcl, esize, modelsize = self.mesh_edge_algorithm3()
 
         
-        if not self.use_1d_preview:
+        if not self.use_1d_preview and len(esize) > 0:
             gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
             #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
             gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -2218,22 +2226,115 @@ class Geometry(object):
             
         return geom_brep
         
-    def run_generator(self, no_mesh=False, finalize=False, filename = '',
-                      progressbar = None):
-        
-        kwargs = {'PreviewResolution': self.geom_prev_res,
-                  'PreviewAlgorithm': self.geom_prev_algorithm,
-                  'OCCParallel': self.occ_parallel,
-                  'Maxthreads': self.maxthreads,
-                  'SkipFrag': self.skip_final_frag,
-                  'Use1DPreview': self.use_1d_preview}
+class GMSHGeometryGenerator(mp.Process):
+    def __init__(self, q, task_q):
+        self.q = q
+        self.task_q = task_q
+        self.mw = None
+        mp.Process.__init__(self)
 
-                 
-        q = mp.Queue()
+    def run(self):
+        while True:
+            time.sleep(0.1)
+            try:
+               task = self.task_q.get(True)
+            except EOFError:
+                self.result_queue.put((-1, None))                
+                #self.task_queue.task_done()
+                continue
+               
+            if task[0] == -1:
+                #self.task_queue.task_done()
+                break
+            if task[0] == 1:
+                try:
+                    self.generator(*task[1])
+                except:
+                    import traceback
+                    txt = traceback.format_exc()
+                    traceback.print_exc()
+                    self.q.put((True, ('fail', txt)))
+                    #self.task_queue.task_done()
+                    break
+        print("exiting prcesss")
+        
+    def generator(self, sequence, no_mesh, finalize, filename, start_idx,  kwargs):
+
+        kwargs['write_log'] = True
+        kwargs['queue'] = self.q
+        q = self.q
+        print("entities", gmsh.model.getEntities(), self.mw)
+        
+        if self.mw is None:
+            from petram.geom.gmsh_geom_model import GeomObjs            
+            self.mw = Geometry(**kwargs)
+            self.objs = GeomObjs()
+            self.gui_data = dict()
+        else:
+            self.mw.process_kwargs(kwargs)
+            
+        q.put((self.mw.logfile.name))
+
+        self.mw.geom_sequence = sequence
+        self.mw.run_sequence(self.objs, self.gui_data, start_idx)
+
+        if finalize:
+            filename = filename
+            brep_file = self.mw.generate_brep(self.objs, filename = filename, finalize = True)
+        else:
+            filename = sequence[-1][0]
+            self.mw.generate_brep(self.objs, filename = filename, finalize = False)
+            brep_file = ''
+
+        if no_mesh:
+            q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
+
+        else:
+            vcl = self.mw.generate_preview_mesh()
+
+            from petram.geom.read_gmsh import read_pts_groups, read_loops        
+            ptx, cells, cell_data = read_pts_groups(gmsh)
+            l, s, v = read_loops(gmsh)
+
+            data = ptx, cells, cell_data, l, s, v
+            q.put((True, (self.gui_data, self.objs, brep_file, data, vcl)))
+
+
+class GeometrySequence(object):
+    def __init__(self):
+        self.geom_sequence = []
+        self.p = None
+
+        
+    def add_sequence(self, gui_name, gui_param, geom_name):
+        self.geom_sequence.append((gui_name, gui_param, geom_name))
+
+
+    def run_generator(self, gui,
+                      no_mesh=False, finalize=False, filename = '',
+                      progressbar = None, create_process = True,
+                      process_param = None, start_idx = 0):
+        
+        kwargs = {'PreviewResolution': gui.geom_prev_res,
+                  'PreviewAlgorithm': gui.geom_prev_algorithm,
+                  'OCCParallel': gui.occ_parallel,
+                  'Maxthreads': gui.maxthreads,
+                  'SkipFrag': gui.skip_final_frag,
+                  'Use1DPreview': gui.use_1d_preview}
+
+        p = process_param[0]
+        task_q = process_param[1]
+        q = process_param[2]            
+
+        args = (self.geom_sequence, no_mesh, finalize, filename, start_idx, kwargs)
+        
+        task_q.put((1, args))
+        '''
         p = mp.Process(target = generator,
                        args = (q, self.geom_sequence, no_mesh,
                                finalize, filename, kwargs))
         p.start()
+        '''
         logfile = q.get(True)
         dprint1("log file: ", logfile)
 
@@ -2263,51 +2364,19 @@ class Geometry(object):
                     if progressbar.WasCancelled():
                        if p.is_alive():
                            p.terminate()
+                           self.p = None
                        progressbar.Destroy()
                        assert False, "Geometry Generation Aborted"
                     
             time.sleep(0.03)
-        return ret[1]
+        if ret[1][0] == 'fail':
+            return False, ret[1][0]
+        else:
+            return True, ret[1]
+    
         
-
-def generator(q, sequence, no_mesh, finalize, filename,  kwargs):
- 
-    
-    kwargs['write_log'] = True
-    kwargs['queue'] = q
-    
-    mw = Geometry(**kwargs)
-    
-    logfile = mw.logfile
-    q.put((logfile.name))
-
-    mw.geom_sequence = sequence
-    mw.out_queue = q
-    
-    gui_data, objs= mw.run_sequence()
-
-    if finalize:
-        filename = filename
-        brep_file = mw.generate_brep(objs, filename = filename, finalize = True)
-    else:
-        filename = sequence[-1][0]
-        mw.generate_brep(objs, filename = filename, finalize = False)
-        brep_file = ''
-
-    if no_mesh:
-        q.put((True, (gui_data, objs, brep_file, None, None)))
-
-    else:
-        vcl = mw.generate_preview_mesh()
-
-        from petram.geom.read_gmsh import read_pts_groups, read_loops        
-        ptx, cells, cell_data = read_pts_groups(gmsh)
-        l, s, v = read_loops(gmsh)
-    
-        data = ptx, cells, cell_data, l, s, v
-        q.put((True, (gui_data, objs, brep_file, data, vcl)))
-
-
+        
+            
     
 '''
    Not yet implemented...
