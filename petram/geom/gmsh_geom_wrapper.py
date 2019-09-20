@@ -117,7 +117,7 @@ def get_target2(objs, targets):
            if t.startswith("l"): ret.append(LineID(int(t[1:])))
            if t.startswith("f"): ret.append(SurfaceID(int(t[1:])))
            if t.startswith("v"): ret.append(VolumeID(int(t[1:])))         
-    return ret 
+    return ret
 
 class Geometry(object):
     def __init__(self, *args, **kwargs):
@@ -1300,12 +1300,9 @@ class Geometry(object):
                           #rotation_axis=rax,
                           #point_on_axis=pax
              from petram.geom.gmsh_geom_model import use_gmsh_api
-             if use_gmsh_api:
-                 newkeys.append(objs.addobj(ret[1], t))
-                 newkeys.append(objs.addobj(ret[0], 'ex'))             
-             else:
-                 newkeys.append(objs.addobj(ret[0], t))
-                 newkeys.append(objs.addobj(ret[1], 'ex'))             
+             
+             newkeys.append(objs.addobj(ret[1], t))
+             newkeys.append(objs.addobj(ret[0], 'ex'))             
 
         return list(objs), newkeys
     
@@ -1325,12 +1322,9 @@ class Geometry(object):
                                 angle = angle*np.pi/180.)
              
              from petram.geom.gmsh_geom_model import use_gmsh_api
-             if use_gmsh_api:
-                 newkeys.append(objs.addobj(ret[1], t))
-                 newkeys.append(objs.addobj(ret[0], 'ex'))             
-             else:
-                 newkeys.append(objs.addobj(ret[0], t))
-                 newkeys.append(objs.addobj(ret[1], 'ex'))
+
+             newkeys.append(objs.addobj(ret[1], t))
+             newkeys.append(objs.addobj(ret[0], 'ex'))             
                  
         return list(objs), newkeys
 
@@ -2281,7 +2275,6 @@ class GMSHGeometryGenerator(mp.Process):
         kwargs['write_log'] = True
         kwargs['queue'] = self.q
         q = self.q
-        print("entities", gmsh.model.getEntities(), self.mw)
         
         if self.mw is None:
             from petram.geom.gmsh_geom_model import GeomObjs            

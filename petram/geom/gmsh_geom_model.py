@@ -126,6 +126,14 @@ def get_geom_key(obj):
     if debug: print(geom_key_dict)
     return key
 
+def get_twoletter_keys(t):
+    if t == 'p': return 'pt'
+    elif t == 'l': return 'ln'    
+    elif t == 'f': return 'fs'
+    elif t == 'v': return 'vl'
+    else:
+        return t
+
 class GeomObjs(dict):
     def duplicate(self):
         if not hasattr(self, "_past_keys"):
@@ -136,6 +144,7 @@ class GeomObjs(dict):
         
     def addobj(self, obj, name):
         key = ''.join([i for i in name if not i.isdigit()])
+        key = get_twoletter_keys(key)        
         if not hasattr(self, "_past_keys"):
             self._past_keys = []
         keys = self._past_keys
@@ -145,6 +154,7 @@ class GeomObjs(dict):
            if t == key:
               n = int(''.join([i for i in k if i.isdigit()]))
               nums.append(n)
+
         if len(nums) == 0:
            newkey = key+str(1)
         else:

@@ -664,7 +664,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("Face Set Point Size", (0, tag), size)
+            #print("Face Set Point Size", (0, tag), size)
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
