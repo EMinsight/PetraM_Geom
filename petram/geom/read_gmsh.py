@@ -77,7 +77,8 @@ def read_loops2(geom):
     model = geom.model
     nidx, coord, pcoord = geom.model.mesh.getNodes(dim=0)
     tags = [tag for dim, tag in geom.model.getEntities(0)]
-    p = {t: nidx[k]-1  for k, t in enumerate(tags)}
+    p = {t: int(nidx[k]-1)  for k, t in enumerate(tags)}
+
     ptx = np.array(coord).reshape(-1, 3)
     return ptx, p, l, s, v
 

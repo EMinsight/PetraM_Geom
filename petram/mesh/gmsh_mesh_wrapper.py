@@ -971,30 +971,33 @@ class GMSHMeshWrapper(object):
         axan = kwargs.pop('axan', None)        
         geom_data = (ptx, l, s, None)
         tag1 = [x for dim, x in dimtags]
-        tag2 = [x for dim, x in dimtags2]        
+        tag2 = [x for dim, x in dimtags2]
         ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
         
         params = (ax, an, px, d, affine, p_pairs, l_pairs)
+        #print("transformation param", params)
         return done, params
     
     @process_text_tags_sd(dim=2)
     def copyface_1D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        
+        gmsh.model.occ.synchronize()
+        gmsh.model.mesh.rebuildNodeCache()
         ax, an, px, d, affine, p_pairs, l_pairs = params
         
         ents = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
         mdata = get_nodes_elements(ents, normalize=True)
-        
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
 
         R = affine[:3,:3]
         D = affine[:3,-1]
 
-        info1 = self.geom_info        
+        info1 = self.geom_info
+
         node_map2 = {}
         for p in p_pairs:
             node_map2[info1[1][p]+1] = info1[1][p_pairs[p]]+1
@@ -1005,7 +1008,7 @@ class GMSHMeshWrapper(object):
 
             tag = l_pairs[tag]
             if tag in done[1]:
-                print("Line is already meshed (CopyFace failed): "+str(tag)+ "... continuing")
+                print("Line is already meshed (CopyFace1D skip edge): "+str(tag)+ "... continuing")
                 continue
                 
             ntag, pos, ppos = ndata            
@@ -1029,7 +1032,8 @@ class GMSHMeshWrapper(object):
 
             tmp = gmsh.model.mesh.getNodes(1, tag, includeBoundary=True)[2][-2:]
             p1_0 = gmsh.model.getValue(1, tag, [tmp[0]])
-            p1_1 = gmsh.model.getValue(1, tag, [tmp[1]])            
+            p1_1 = gmsh.model.getValue(1, tag, [tmp[1]])
+
             p2_0 = info1[0][info1[1][nodes2[0]]]
             p2_1 = info1[0][info1[1][nodes2[1]]]            
 
@@ -1046,8 +1050,11 @@ class GMSHMeshWrapper(object):
             for i, j in zip(ntag, ntag2): node_map2[i] = j
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
             
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ppos)
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)        
+            #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ppos)
+            #gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, ppos)
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)        
+            
             done[1].append(tag)
             
         return done, params            
@@ -1062,8 +1069,10 @@ class GMSHMeshWrapper(object):
             edata = gmsh.model.mesh.getElements(dim, tag)
             mdata.append((dim, tag, ndata, edata))
             
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        #noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
 
         R = affine[:3,:3]
         D = affine[:3,-1]
@@ -1076,14 +1085,14 @@ class GMSHMeshWrapper(object):
         ## add edge mapping    
         ents_1D = self.expand_dimtags(dimtags, return_dim = 1)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_s = sum([x[0] for x in tmp], [])
-        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_s = sum([list(x[0]) for x in tmp], [])
+        pos_s = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
         pos_s = (np.dot(R, pos_s.transpose()).transpose() + D)
         
         ents_1D = self.expand_dimtags(dimtags2, return_dim = 1)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_d = sum([x[0] for x in tmp], [])
-        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_d = sum([list(x[0]) for x in tmp], [])
+        pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
         
         idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
@@ -1107,15 +1116,16 @@ class GMSHMeshWrapper(object):
             pos = np.array(pos).reshape(-1,3).transpose()
             pos = (np.dot(R, pos).transpose() + D).flatten()
 
-            #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ndata[2])
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, [])
+            #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, [])
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, [])
             etypes, etags, nodes = edata
 
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
 
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)        
+            #gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)        
             done[2].append(tag)
             
         return done, params            
@@ -1170,7 +1180,7 @@ class GMSHMeshWrapper(object):
         gmsh.model.occ.synchronize()
         
         # for debug the intermediate geometry
-        gmsh.write('tmp_'+ws +  '.brep')            
+        #gmsh.write('tmp_'+ws +  '.brep')            
 
         info1 = self.geom_info
         info2 = self.read_geom_info()
@@ -1199,26 +1209,36 @@ class GMSHMeshWrapper(object):
 
         ents1 = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
         ents2 = list(set(gmsh.model.getBoundary(dimtags2, combined = False, oriented=False)))
+
+        all_edges = list(lmap)
+        meshed_edges = [k for k in all_edges if k in done[1]]
+        tobe_meshed_edges = [k for k in all_edges if not k in done[1]]        
+        
         mdata = []
-        for dim, tag in ents1+ents2:
-            ndata = gmsh.model.mesh.getNodes(dim, tag)
-            edata = gmsh.model.mesh.getElements(dim, tag)
-            mdata.append((dim, tag, ndata, edata))
+        for tag in meshed_edges:
+            ndata = gmsh.model.mesh.getNodes(1, tag)
+            edata = gmsh.model.mesh.getElements(1, tag)
+            mdata.append((1, tag, ndata, edata))
 
         self.switch_model(ws)
 
-        self.show_all()
+        lateral_edge_digtags = [(1, lmap[key]) for key in tobe_meshed_edges]
+        self.show_only(lateral_edge_digtags)
         gmsh.model.mesh.generate(1)
         
         node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}        
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        #noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
+        
 
         # copy 1D elements on the source and dest surface
         copied_line = []
         for d in mdata:
             dim, tag, ndata, edata = d 
             if dim == 2: break
+
             tag = abs(lmap[tag])
             ntag, pos, ppos = ndata
             ntag2 = range(noffset, noffset+len(ntag))
@@ -1235,8 +1255,8 @@ class GMSHMeshWrapper(object):
 
             # do I need to pay attetion the direction on parametricCoords here???
 
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], ndata[2])            
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
             copied_line.append(tag)
 
         # gather data to transfer
@@ -1249,11 +1269,15 @@ class GMSHMeshWrapper(object):
             ndata = gmsh.model.mesh.getNodes(dim, tag)
             edata = gmsh.model.mesh.getElements(dim, tag)
             mdata.append((dim, tag, ndata, edata))
-        '''    
+        ''' 
+        #gmsh.write("debug_1d.msh")
+        
         # send back 1D data
         self.switch_model('main1')
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
+        #noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
 
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
@@ -1263,8 +1287,9 @@ class GMSHMeshWrapper(object):
             if dim != 1: continue
 
             tag = abs(lmap_r[tag0])
+            if tag in done[1]: continue
             #print("copy from ", dim, tag0, "to", tag)
-            
+
             ntag, pos, ppos = ndata
             etypes, etags, nodes = edata
             
@@ -1297,8 +1322,8 @@ class GMSHMeshWrapper(object):
             
             for i, j in zip(ntag, ntag2): node_map3[i] = j                        
             nodes2 = [[node_map3[x] for x in item] for item in nodes]
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ppos)
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, ppos)
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
             
             done[1].append(tag)
             
@@ -1311,38 +1336,47 @@ class GMSHMeshWrapper(object):
         ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info = params
         pmap, pmap_r, lmap, lmap_r, smap, smap_r, vmap, vmap_r = maps
 
+        all_faces = list(smap)
+        meshed_faces = [k for k in all_faces if k in done[2]]
+        tobe_meshed_faces = [k for k in all_faces if not k in done[2]]        
+        
         # gather source/dest info
         mdata = []
-        for dim, tag in list(dimtags)+list(dimtags2):
-            ndata = gmsh.model.mesh.getNodes(dim, tag)
-            edata = gmsh.model.mesh.getElements(dim, tag)
-            mdata.append((dim, tag, ndata, edata))
+        for tag in meshed_faces:
+            ndata = gmsh.model.mesh.getNodes(2, tag)
+            edata = gmsh.model.mesh.getElements(2, tag)
+            mdata.append((2, tag, ndata, edata))
 
-        ## add edge mapping from main1   
-        ents_1D = self.expand_dimtags(list(dimtags)+list(dimtags2), return_dim = 1)
+        ## add edge mapping from main1
+        ents_1D = self.expand_dimtags(vdimtags, return_dim = 1)
+        #ents_1D = self.expand_dimtags(list(dimtags)+list(dimtags2), return_dim = 1)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_s = sum([x[0] for x in tmp], [])
-        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_s = sum([list(x[0]) for x in tmp], [])
+        pos_s = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
         
         self.switch_model(ws)
         src_dst = ex_info[0]+ ex_info[1]
-        src_dst_side = ex_info[0]+ ex_info[1]+ex_info[2]        
-        self.show_all()
-        self.hide(src_dst)
-        # this mesh sides....
+        src_dst_side = ex_info[0]+ ex_info[1]+ex_info[2]
+        #self.show_all()
+        #self.hide(src_dst)
+        self.show_only([(2, smap[key]) for key in tobe_meshed_faces])
+        # this meshes un-meshed  sides ....
         gmsh.model.mesh.generate(2)
-        
-        ents_1D = list(set(gmsh.model.getBoundary(src_dst, combined=False, oriented=False)))
+
+        ents_1D = gmsh.model.getEntities(1)        
+        #ents_1D = list(set(gmsh.model.getBoundary(src_dst, combined=False, oriented=False)))
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_d = sum([x[0] for x in tmp], [])
-        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_d = sum([list(x[0]) for x in tmp], [])
+        pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
         node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}                
         idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
         for i, nt in zip(idx, ntags_s):
             node_map1[nt] = ntags_d[i]
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
+        #noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
 
         # copy 2D elements on the source/destination surface
         for d in mdata:
@@ -1360,10 +1394,11 @@ class GMSHMeshWrapper(object):
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map1[x] for x in item] for item in nodes]
 
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], ndata[2])            
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
 
         self.show_all()
+        #gmsh.write("debug_2d.msh")        
         gmsh.model.mesh.generate(3)
 
         tmp = gmsh.model.getEntities(3)
@@ -1385,17 +1420,22 @@ class GMSHMeshWrapper(object):
         
         ents_1D = gmsh.model.getEntities(1)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_s = sum([x[0] for x in tmp], [])
-        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_s = sum([list(x[0]) for x in tmp], [])
+        pos_s = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
+        #gmsh.write("debug.msh")
         self.switch_model('main1')
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        
+        #noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
+        
 
         ents_1D = self.expand_dimtags(vdimtags, return_dim = 1)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_d = sum([x[0] for x in tmp], [])
-        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_d = sum([list(x[0]) for x in tmp], [])
+        pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
         
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
@@ -1407,6 +1447,8 @@ class GMSHMeshWrapper(object):
             dim, tag, ndata, edata = d 
             if dim != 2: break
             tag = smap_r[tag]
+            if tag in done[2]: continue
+            
             ntag, pos, ppos = ndata
             ntag2 = range(noffset, noffset+len(ntag))
             noffset = noffset+len(ntag)
@@ -1418,8 +1460,8 @@ class GMSHMeshWrapper(object):
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map3[x] for x in item] for item in nodes]
 
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], [])#ndata[2])            
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], [])#ndata[2])            
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
             done[2].append(tag)
             
         params = ax, an, px, d, affine, p_pairs, l_pairs, maps, ws, info1, info2, ex_info, mdata3D            
@@ -1437,17 +1479,20 @@ class GMSHMeshWrapper(object):
 
         ents_1D = list(gmsh.model.getEntities(1))+list(gmsh.model.getEntities(2))
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_s = sum([x[0] for x in tmp], [])
-        pos_s = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_s = sum([list(x[0]) for x in tmp], [])
+        pos_s = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
         self.switch_model('main1')
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        #noffset = max(gmsh.model.mesh.getNodes()[0])+1
+        #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
+        noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
+        eoffset = int(max(np.hstack(gmsh.model.mesh.getElements()[1]))+1)
+
 
         ents_1D = self.expand_dimtags(vdimtags, return_dim = 1)+self.expand_dimtags(vdimtags, return_dim = 2)
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_d = sum([x[0] for x in tmp], [])
-        pos_d = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
+        ntags_d = sum([list(x[0]) for x in tmp], [])
+        pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
         
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
@@ -1470,8 +1515,8 @@ class GMSHMeshWrapper(object):
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map3[x] for x in item] for item in nodes]
 
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])            
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], ndata[2])            
+            gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
             done[3].append(tag)            
         return done, params
 

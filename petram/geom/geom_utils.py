@@ -147,6 +147,7 @@ def find_translate_between_surface(src, dst, geom=None,
     n1 = normal2points(p1)
     n2 = normal2points(p2)
 
+    #print(p1, p2, n1, n2, axan)
     if axan is None:
         ax = np.cross(n1, n2)
         ax = ax/np.linalg.norm(ax)    
@@ -205,6 +206,7 @@ def find_translate_between_surface(src, dst, geom=None,
     #print("l1", [(ll, l[ll]) for ll in l1])
     #print("l2", [(ll, l[ll]) for ll in l2])    
     l2dict = {tuple(sorted(l[ll])):ll for ll in l2}
+
     l_pairs = {ll:l2dict[tuple(sorted((p_pairs[l[ll][0]],p_pairs[l[ll][1]])))] for ll in l1}
 
     affine = np.zeros((4,4), dtype=float)
