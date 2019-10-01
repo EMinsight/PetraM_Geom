@@ -179,7 +179,7 @@ class Geometry(object):
         zmin =  np.inf
         
         def update_maxmin(dim, tag, xmin, ymin, zmin, xmax, ymax, zmax):
-            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)           
+            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)
             xmax = np.max([xmax, x2])
             ymax = np.max([ymax, y2])
             zmax = np.max([zmax, z2])
@@ -2068,7 +2068,7 @@ class Geometry(object):
         use characteristic length
         '''
         vcl, esize = self.getVertexCL()
-        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()
         modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
         
         for tag in vcl:
@@ -2084,8 +2084,8 @@ class Geometry(object):
         vcl, esize = self.getVertexCL()
         for tag in vcl:
            gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-        
-        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+
+        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()           
         modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
 
         emax = max(list(esize.values()))
@@ -2126,9 +2126,9 @@ class Geometry(object):
         '''
         use characteristic length
         '''
-        xmin, xmax, ymin, ymax, zmin,zmax = self.getBoundingBox()
+
+        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()                   
         modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        
 
         too_small = 3e-3
         vcl, esize = self.getVertexCL(modelsize*too_small)
