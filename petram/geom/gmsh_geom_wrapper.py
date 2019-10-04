@@ -1270,9 +1270,9 @@ class Geometry(object):
                 print("dimtags", dimtags)
                 ptx_s = np.array(gmsh.model.getValue(0, dimtags[0][1], []))
                 if tax[2]:
-                    tax = -n1 * np.sum((ptx_d-ptx_s)*n1)
+                    tax = -n1 * np.sum((ptx_d-ptx_s)*n1) * length
                 else:
-                    tax = n1 * np.sum((ptx_d-ptx_s)*n1)
+                    tax = n1 * np.sum((ptx_d-ptx_s)*n1) * length
 
         elif tax[0] == 'fromto_points':  
             self.factory.synchronize()          
@@ -1979,6 +1979,22 @@ class Geometry(object):
 
         return self._WorkPlane_build_geom(objs, c1, d1, d2)        
 
+    def healCAD_build_geom(self, objs, *args):
+        targets, use_fix_param, use_fix_tol = args
+
+        targets = [x.strip() for x in targets.split(',')]
+        targetID = get_target2(objs, targets)
+        dimtags = get_dimtag(targetID)
+
+        outdimtags = self.factory.healShapes(dimTags = dimtags,
+                                     tolerance = use_fix_tol,
+                                     fixDegenerated = use_fix_param[0],
+                                     fixSmallEdges = use_fix_param[1],
+                                     fixSmallFaces = use_fix_param[2],
+                                     sewFaces = use_fix_param[3])
+        print("heal outdimtags", outdimtags)
+        return list(objs), []
+        
     def BrepImport_build_geom(self, objs, *args):
         cad_file, use_fix , use_fix_param, use_fix_tol = args
         

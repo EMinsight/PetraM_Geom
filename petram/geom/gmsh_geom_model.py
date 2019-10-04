@@ -459,11 +459,11 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, CADImport, Fillet, Chamfer, Array, ArrayRot
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, CADImport, Fillet, Chamfer, Array, ArrayRot]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, Fillet, Chamfer, Array, ArrayRot
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, Fillet, Chamfer, Array, ArrayRot]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
@@ -477,7 +477,7 @@ class GmshGeom(GeomTopBase):
                 ("", Array), ("!", ArrayRot),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
-                ("Import...", BrepImport),("!", CADImport),
+                ("Import...", BrepImport),("", CADImport),("!", healCAD),
                 ]
                 
     def get_special_menu(self):

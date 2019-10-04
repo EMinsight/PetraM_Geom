@@ -36,7 +36,7 @@ class VtableElement_Direction(VtableElement):
                  [None,  "(Note) Face must be flat-plane", 2,  {}],]
         elp5 = [ ["Point(to)",    None, 0,  {}],
                  [None, True, 3,  {"text": "Reverse direction"}],                    
-                 [None,  "(Note) Face must be flat-plane. Distance below is ignored", 2,  {}],]                
+                 [None,  "(Note) Face must be flat-plane. Length below is mulitplier", 2,  {}],]                
         ret[3].append({'elp': elp3})
         ret[3].append({'elp': elp4})
         ret[3].append({"elp": elp5})

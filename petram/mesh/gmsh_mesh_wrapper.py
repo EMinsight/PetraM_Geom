@@ -1,4 +1,5 @@
 from __future__ import print_function
+import os
 import numpy as np
 import gmsh
 import time
@@ -94,7 +95,7 @@ def process_text_tags_sd(dim=1):
 
 def process_text_tags_vsd(dim=3):
     '''
-    convert two text tags input to dimtags
+    convert three text tags input to dimtags
     tags = '1,2,3'
     '''
     def func2(method):
@@ -470,7 +471,16 @@ class GMSHMeshWrapper(object):
                 continue                                        
             value = gmsh.model.addPhysicalGroup(0, [x[1]], tag=k+1)                
             gmsh.model.setPhysicalName(0, value, 'point'+str(value))
-        
+            
+    def merge_text(self, geo_text):
+        handle, geo_filename = tempfile.mkstemp(suffix='.geo')
+        text = geo_text.encode()
+        print("writing this", text)
+        os.write(handle, text)
+        os.close(handle)
+        gmsh.merge(geo_filename)
+        os.remove(geo_filename)
+    
     '''
     Low-level implementation at each mesh dim
     '''
@@ -951,15 +961,42 @@ class GMSHMeshWrapper(object):
         self.show_only(dimtags)
         gmsh.model.mesh.generate(3)
         done[3].extend([x for dim, x in dimtags])
-        return done, params        
+        return done, params
+    
+    # merge text
+    def _merge_xdim(self, mydim,  *args, **kwargs):
+        text = kwargs.pop("text")
+        dim = kwargs.pop("dim")        
+        if not dim[mydim]: return
+        self.merge_text(text)
         
-    # copy edge    
+    def mergetxt_0D(self, done, params, *args, **kwargs):
+        self._merge_xdim(0,  *args, **kwargs)
+        return done, params
+    
+    def mergetxt_1D(self, done, params, *args, **kwargs):
+        self._merge_xdim(1,  *args, **kwargs)        
+        return done, params
+    
+    def mergetxt_2D(self, done, params, *args, **kwargs):
+        self._merge_xdim(2,  *args, **kwargs)                
+        return done, params
+    
+    def mergetxt_3D(self,done, params,  *args, **kwargs):
+        self._merge_xdim(3,  *args, **kwargs)                        
+        return done, params
+    
+    # copy edge
+    @process_text_tags_sd(dim=2)            
     def copy_edge_0D(self, vtag, tag1, tag2, nlayers):
         pass
+    @process_text_tags_sd(dim=2)                
     def copy_edge_1D(self, vtag, tag1, tag2, nlayers):
         pass
+    @process_text_tags_sd(dim=2)                
     def copy_edge_2D(self, vtag, tag1, tag2, nlayers):
         pass
+    @process_text_tags_sd(dim=2)                
     def copy_edge_3D(self, vtag, tag1, tag2, nlayers):
         pass
 

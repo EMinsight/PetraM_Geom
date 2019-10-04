@@ -245,7 +245,7 @@ class FreeEdge(GmshMeshActionBase):
         except:
             pass
         return ret, 'edge'
-    
+'''    
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Surface# (To)',
                                    default = "", 
@@ -274,7 +274,7 @@ class Translate(GmshMeshActionBase):
     def add_meshcommand(self, mesher):
         gid, src_id = self.vt.make_value_or_expression(self)
         mesher.add('translate', gid, src=src_id, transform=self.name())
-        
+'''       
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Surface# (To)',
                                    default = "", 
@@ -315,7 +315,47 @@ class CopyFace(GmshMeshActionBase):
             pass
         return ret, 'face'
     
+merge_loc = [None, None, 36, {"col": 4, 
+                              "labels":["0D","1D","2D","3D"]}]
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Target',
+                                   default = "", 
+                                   tip = "Entity number" )),)
+class MergeText(GmshMeshActionBase):
+    vt = Vtable(tuple())
+    def panel1_param(self):
+        ll = super(MergeText, self).panel1_param()
+        
+        ll.extend([["Text", "", 235, {"nlines":15}],
+                    merge_loc,])
 
+        return ll
+      
+    def attribute_set(self, v):
+        v = super(MergeText, self).attribute_set(v)
+        v["merge_txt"] = ""
+        v["merge_dim"] = [True]+[False]*3
+        return v
+        
+    def get_panel1_value(self):
+        v = super(MergeText, self).get_panel1_value()
+        v.extend([self.merge_txt, self.merge_dim])
+        return  v
+
+    def preprocess_params(self, engine):
+        return
+
+    def import_panel1_value(self, v):
+        super(MergeText, self).import_panel1_value(v[:-2])
+        self.merge_txt = str(v[-2])
+        self.merge_dim = [x[1] for x in v[-1]]
+
+    def panel1_tip(self):
+        return [None, None, None, None]
+    
+    def add_meshcommand(self, mesher):
+        self.vt.preprocess_params(self)                        
+        mesher.add('mergetxt', text = self.merge_txt, dim = self.merge_dim)
 
 rsdata =  (('geom_id', VtableElement('geom_id', type='string',
                                     guilabel = 'Surfaces',
