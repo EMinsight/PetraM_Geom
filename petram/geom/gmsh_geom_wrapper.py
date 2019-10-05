@@ -1996,10 +1996,8 @@ class Geometry(object):
         return list(objs), []
         
     def BrepImport_build_geom(self, objs, *args):
-        cad_file, use_fix , use_fix_param, use_fix_tol = args
+        cad_file, use_fix , use_fix_param, use_fix_tol, highestDimOnly = args
         
-        highestDimOnly = False
-        #highestDimOnly = True
         PTs = self.factory.importShapes(cad_file, 
                                         highestDimOnly=highestDimOnly)
 
