@@ -2308,8 +2308,8 @@ class GMSHGeometryGenerator(mp.Process):
             brep_file = self.mw.generate_brep(self.objs, filename = filename, finalize = True)
         else:
             filename = sequence[-1][0]
-            self.mw.generate_brep(self.objs, filename = filename, finalize = False)
-            brep_file = ''
+            brep_file = self.mw.generate_brep(self.objs, filename = filename, finalize = False)
+            #brep_file = ''
 
         if no_mesh:
             q.put((True, (self.gui_data, self.objs, brep_file, None, None)))

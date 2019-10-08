@@ -229,7 +229,12 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
         gmsh.option.setNumber("Mesh.MaxNumThreads3D", self.maxthreads[3])
         gmsh.option.setNumber("Mesh.Optimize", 0)
-        
+
+        self.target_entities0 = (gmsh.model.getEntities(3),
+                           gmsh.model.getEntities(2),
+                           gmsh.model.getEntities(1),
+                           gmsh.model.getEntities(0))
+        self.target_entities = gmsh.model.getEntities()
         # 
         self.vertex_geom_size = get_vertex_geom_zie()
         # set default vertex mesh size
@@ -316,7 +321,12 @@ class GMSHMeshWrapper(object):
     def show_only(self, dimtags, recursive=False):
         self.hide_all()
         gmsh.model.setVisibility(dimtags, True, recursive = recursive)
-        
+        ent = gmsh.model.getEntities()
+        vent = [x for x in ent if not x in self.target_entities]
+        print("hiding virtual", vent)
+        if len(vent) > 0:
+            gmsh.model.setVisibility(vent, False, recursive = True)
+            
     def hide(self, dimtags, recursive=False):
         gmsh.model.setVisibility(dimtags, False, recursive = recursive)
         
@@ -325,7 +335,8 @@ class GMSHMeshWrapper(object):
         gmsh.model.setVisibility(ent, False)
         
     def show_all(self):
-        ent = gmsh.model.getEntities()
+        ent = self.target_entities0
+        #ent = gmsh.model.getEntities()
         gmsh.model.setVisibility(ent, True)
 
     def delete_all_except(self, dim, tags):
@@ -667,6 +678,7 @@ class GMSHMeshWrapper(object):
         dimtags.extend([(1, x) for x in embedl])
         dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
+
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
         for dim, tag in dimtags:
@@ -674,7 +686,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
-            #print("Face Set Point Size", (0, tag), size)
+            print("Face Set Point Size", (0, tag), size)
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
@@ -693,7 +705,9 @@ class GMSHMeshWrapper(object):
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]        
         self.show_only(dimtags)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)        
         gmsh.model.mesh.generate(1)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                
         done[1].extend([x for dim, x in tags])                                
         return done, params
     

@@ -1183,7 +1183,7 @@ class BrepImport(GeomPB):
         
     def get_panel1_value(self):
         value = [self.use_fix, [self.use_fix_param, self.use_fix_tol]]
-        return [None, self.cad_file, value]
+        return [None, self.cad_file, value, self.highestdimonly]        
         
     def preprocess_params(self, engine):
         return

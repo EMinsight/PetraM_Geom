@@ -6,11 +6,9 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GmshMeshActions')
 from petram.phys.vtable import VtableElement, Vtable
 from petram.mesh.gmsh_mesh_model import GmshMeshActionBase
 
-
-
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Line#',
-                                   default = "remaining", 
+                                   default = "remaining",
                                    tip = "Line ID" )),
         ('num_seg', VtableElement('num_seg', type='int',
                                    guilabel = 'Number of segments',
@@ -31,6 +29,8 @@ class TransfiniteLine(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
+        gid = self.eval_enitity_id(gid)
+        
         mesher.add('transfinite_edge', gid, nseg=nseg,
                    progression = p,  bump = b)
 
@@ -45,7 +45,7 @@ class TransfiniteLine(GmshMeshActionBase):
     
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Surface#',
-                                   default = "", 
+                                   default = "",
                                    tip = "Surface ID" )),
         ('edge1', VtableElement('edge1', type='string',
                                  guilabel = '1st corner',
@@ -67,6 +67,8 @@ class TransfiniteSurface(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, e1, e2, e3, e4 = self.vt.make_value_or_expression(self)
+        gid = self.eval_enitity_id(gid)
+        
         c = [int(x)  for x in (e1,e2,e3,e4) if x.strip()!= '']
         mesher.add('transfinite_surface', gid, corner = c)
 
@@ -92,6 +94,7 @@ class CharacteristicLength(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, cl= self.vt.make_value_or_expression(self)
+        gid = self.eval_enitity_id(gid)        
         mesher.add('cl', gid, cl)
 
     def get_element_selection(self):
@@ -141,6 +144,8 @@ class FreeVolume(GmshMeshActionBase):
     def add_meshcommand(self, mesher):
         values = self.vt.make_value_or_expression(self)
         gid, clmax, clmin, res, embed_s, embed_l, embed_p = values
+        gid, embed_s, embed_l, embed_p = self.eval_enitity_id(gid, embed_s, embed_l, embed_p)
+        
         mesher.add('freevolume', gid,
                    maxsize = clmax,
                    minsize = clmin,
@@ -187,6 +192,7 @@ class FreeFace(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, clmax, clmin, res, embed_l, embed_p= self.vt.make_value_or_expression(self)
+        gid, embed_l, embed_p = self.eval_enitity_id(gid, embed_l, embed_p)        
         mesher.add('freeface', gid,
                    maxsize = clmax,
                    minsize = clmin,
@@ -232,6 +238,8 @@ class FreeEdge(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, clmax, clmin, res = self.vt.make_value_or_expression(self)
+        gid  = self.eval_enitity_id(gid)
+        
         mesher.add('freeedge', gid,
                    maxsize = clmax,
                    minsize = clmin,
@@ -298,6 +306,8 @@ class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
         gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
+        gid  = self.eval_enitity_id(gid)
+        
         mesher.add('copyface',
                    src_id,                   
                    gid,
@@ -317,10 +327,6 @@ class CopyFace(GmshMeshActionBase):
     
 merge_loc = [None, None, 36, {"col": 4, 
                               "labels":["0D","1D","2D","3D"]}]
-data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Target',
-                                   default = "", 
-                                   tip = "Entity number" )),)
 class MergeText(GmshMeshActionBase):
     vt = Vtable(tuple())
     def panel1_param(self):
@@ -357,6 +363,36 @@ class MergeText(GmshMeshActionBase):
         self.vt.preprocess_params(self)                        
         mesher.add('mergetxt', text = self.merge_txt, dim = self.merge_dim)
 
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Surfaces',
+                                   default = "", 
+                                   tip = "Entity number" )),)
+class CompoundSurface(GmshMeshActionBase):
+    vt = Vtable(data)
+    def add_meshcommand(self, mesher):
+        gid = self.vt.make_value_or_expression(self)[0]        
+        gid  = self.eval_enitity_id(gid)
+
+        # generate something like... Compound Surface{1, 5, 10};
+        text = "Compound Surface{ " + gid + "};"        
+        mesher.add('mergetxt', text = text , dim = [True, False, False, False])
+
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                   guilabel = 'Curves',
+                                   default = "", 
+                                   tip = "Entity number" )),)
+        
+class CompoundCurve(GmshMeshActionBase):
+    vt = Vtable(data)
+    def add_meshcommand(self, mesher):
+        gid = self.vt.make_value_or_expression(self)[0]                
+        gid  = self.eval_enitity_id(gid)
+
+        # generate something like... Compound Curve{1, 5, 10};        
+        text = "Compound Curve{ " + gid + "};"
+        mesher.add('mergetxt', text = text , dim = [True, False, False, False])
+        
+        
 rsdata =  (('geom_id', VtableElement('geom_id', type='string',
                                     guilabel = 'Surfaces',
                                     default = "",
@@ -370,6 +406,8 @@ class RecombineSurface(GmshMeshActionBase):
     vt = Vtable(rsdata)
     def add_meshcommand(self, mesher):
         gid = self.vt.make_value_or_expression(self)[0]
+        gid  = self.eval_enitity_id(gid)
+        
         mesher.add('recombine_surface', gid)
 
 edata =  (('ex_target', VtableElement('ex_target', type='string',
@@ -410,6 +448,8 @@ class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
         gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
+        
         kwargs = process_hint_ex(hint)
         mesher.add('extrude_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)
 
@@ -443,6 +483,8 @@ class RevolveMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
         gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
+        
         kwargs = process_hint_rv(hint)
         mesher.add('revolve_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)        
 

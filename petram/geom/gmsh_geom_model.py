@@ -271,7 +271,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         gui_param = self.vt.make_value_or_expression(self)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
-        
+'''        
 class BrepFile(GeomTopBase):
     has_2nd_panel = False
     def __init__(self, *args, **kwargs):
@@ -337,9 +337,6 @@ class BrepFile(GeomTopBase):
         return [('Load File', self.onBuildAll, None),]
     
     def onBuildAll(self, evt):
-        '''
-        filename : export geometry to a real file (for debug)
-        '''
         import gmsh
         
         if not hasattr(self, "_gmsh4_data"):
@@ -417,7 +414,7 @@ class BrepFile(GeomTopBase):
         viewer._s_v_loop['mesh'] = s, v
 
         evt.Skip()
-        
+'''        
 
 class GmshGeom(GeomTopBase):
     has_2nd_panel = False

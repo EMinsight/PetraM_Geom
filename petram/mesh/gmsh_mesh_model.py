@@ -65,6 +65,15 @@ class GMeshTop(Mesh):
                 return
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('mesh', self)
+        
+    def get_default_ns(self):
+        '''
+        this method is overwriten when model wants to
+        set its own default namespace. For example, when
+        RF module set freq and omega
+        '''
+        return {"remaining":"remaining", "all":"all"}
+    
     
 class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
@@ -189,8 +198,44 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             
     def get_embed(self):
         return [], [], []
-            
 
+    def _eval_enitity_id(self, text):
+        '''
+        "remaining" -> "remaining"
+        "all" -> "all"
+        something else  -> global vaiable
+
+        failure -> pass thorough
+        '''
+        if len(text.strip()) == 0: return ''
+        try:
+             # try to inteprete as integer numbers naively...
+             values = list(set([int(x) for x in text.split(',')]))
+             values = ','.join([str(x) for x in values])
+             return values
+        except:
+             pass
+
+        # then convert it using namespace                   
+        g, l = self.namespace
+        ll = {}
+        try:                       
+            values = eval(text, g, ll)
+        except:
+            assert False, "can not interpret entity number : " + text                  
+
+        if not isinstance(values, str):
+            assert False, "entity id field must be text"
+
+        return values
+
+    def eval_enitity_id(self, *text):
+        if len(text) == 1:
+            return self._eval_enitity_id(text[0])
+        
+        return [self._eval_enitity_id(x) for x in text]
+    
+    
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel = 'Max size(def)',
                                 default_txt = '',
@@ -278,8 +323,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  None, None])
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, CopyFace, RecombineSurface, ExtrudeMesh, RevolveMesh, MergeText
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh, MergeText]
+        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, CopyFace, RecombineSurface, ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve, CompoundSurface
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
 
     def get_special_menu(self):
         from petram.geom.gmsh_geom_model import use_gmsh_api

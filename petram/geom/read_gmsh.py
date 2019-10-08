@@ -60,10 +60,16 @@ def read_loops(geom):
     for dim, tag in dimtags:
         s[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
+
     dimtags =  model.getEntities(1)
     for dim, tag in dimtags:
         l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
+        if len(l[tag]) == 0:
+             print('line :' + str(tag) + ' has no boundary (loop)')
+             node, coord, pc  = model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)
+             l[tag].append(node[0])
+        
     return l, s, v
 
 def read_loops2(geom):
