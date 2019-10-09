@@ -323,7 +323,7 @@ class GMSHMeshWrapper(object):
         gmsh.model.setVisibility(dimtags, True, recursive = recursive)
         ent = gmsh.model.getEntities()
         vent = [x for x in ent if not x in self.target_entities]
-        print("hiding virtual", vent)
+        #print("hiding virtual", vent)
         if len(vent) > 0:
             gmsh.model.setVisibility(vent, False, recursive = True)
             
@@ -486,7 +486,7 @@ class GMSHMeshWrapper(object):
     def merge_text(self, geo_text):
         handle, geo_filename = tempfile.mkstemp(suffix='.geo')
         text = geo_text.encode()
-        print("writing this", text)
+        #print("writing this", text)
         os.write(handle, text)
         os.close(handle)
         gmsh.merge(geo_filename)
@@ -636,7 +636,7 @@ class GMSHMeshWrapper(object):
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
 
         self.show_only(dimtags)
-        print("2D meshing for ", dimtags)
+        #print("2D meshing for ", dimtags)
         gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in tags])                
         return done, params
@@ -686,7 +686,7 @@ class GMSHMeshWrapper(object):
             if size > maxsize: size = maxsize
             if size < minsize: size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("Face Set Point Size", (0, tag), size)
+            #print("Face Set Point Size", (0, tag), size)
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params

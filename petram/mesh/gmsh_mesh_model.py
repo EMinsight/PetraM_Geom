@@ -260,7 +260,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def mesher_data(self):
         if hasattr(self, "_mesher_data"):
             return self._mesher_data
-        return Noen
+        return None
     
     def attribute_set(self, v):
         v['geom_group'] = 'GmshGeom1'
@@ -553,70 +553,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
 
         self.update_meshview(dlg, viewer, clear=do_clear)
-        #filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'        
-        #self.onUpdateMeshView(evt, bin='',
-        #                      geo_text = self._txt_rolled[:],
-        #                      filename = filename)
         
-    '''
-        from petram.geom.gmsh_geom_model import use_gmsh_api
-
-        if use_gmsh_api:
-            import gmsh
-            geom_root = self.geom_root
-            geom = geom_root._gmsh4_data[-1]
-            max_dim = 0
-
-            print("Writing Physical Group")
-            geom.model.geo.synchronize()
-            geom.model.geo.synchronize()            
-            ent = geom.model.getEntities(dim=3)
-            print("Adding " + str(len(ent)) + " Volume(s)" + str(ent))
-            if len(ent) > 0: max_dim = 3
-            for k, x in enumerate(ent):
-                if len(geom.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
-                    continue
-                value = geom.model.addPhysicalGroup(3, [x[1]], tag=k+1)
-                geom.model.setPhysicalName(3, value, 'volume'+str(value))
-                  
-            ent = geom.model.getEntities(dim=2)
-            print("Adding " + str(len(ent)) + " Surface(s)")
-            if max_dim == 0 and len(ent) > 0: max_dim = 2                  
-            for k, x in enumerate(ent):
-                if len(geom.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
-                    continue
-                value = geom.model.addPhysicalGroup(2, [x[1]], tag=k+1)
-                geom.model.setPhysicalName(2, value, 'surface'+str(value))
-
-            if self.gen_all_phys_entity or max_dim < 3:
-                ent = geom.model.getEntities(dim=1)
-                print("Adding " + str(len(ent)) + " Line(s)")
-                if max_dim == 0 and len(ent) > 0: max_dim = 1              
-                for k, x in enumerate(ent):
-                    if len(geom.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
-                        continue                    
-                    value = geom.model.addPhysicalGroup(1, [x[1]], tag=k+1)                
-                    geom.model.setPhysicalName(1, value, 'line'+str(value))
-                      
-            if self.gen_all_phys_entity or max_dim < 2:
-                ent = geom.model.getEntities(dim=0)
-                print("Adding " + str(len(ent)) + " Point(s)")
-                for k, x in enumerate(ent):
-                    if len(geom.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
-                        continue                                        
-                    value = geom.model.addPhysicalGroup(0, [x[1]], tag=k+1)                
-                    geom.model.setPhysicalName(0, value, 'point'+str(value))
-                
-            dlg = evt.GetEventObject().GetTopLevelParent()
-            viewer = dlg.GetParent()
-            engine = viewer.engine
-        
-            filename = os.path.join(viewer.model.owndir(), self.name())
-            geom.write(filename +  '.msh')                
-        else:
-            self.onGenerateMsh(evt)
-        evt.Skip()
-    '''
     def gather_embed(self):
         children = [x for x in self.walk()]
         children = children[1:]
