@@ -248,6 +248,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.import_selected_panel_value()
+        
         mm = dlg.get_selected_mm()
         if mm is None: return
 
@@ -256,6 +258,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.import_selected_panel_value()
         mm = dlg.get_selected_mm()
         if mm is None: return
         

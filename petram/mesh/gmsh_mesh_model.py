@@ -145,12 +145,14 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -529,6 +531,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.import_selected_panel_value()
+        
         viewer = dlg.GetParent()
         engine = viewer.engine
         engine.build_ns()
