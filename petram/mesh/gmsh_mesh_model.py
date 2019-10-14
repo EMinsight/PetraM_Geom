@@ -65,6 +65,15 @@ class GMeshTop(Mesh):
                 return
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('mesh', self)
+        
+    def get_default_ns(self):
+        '''
+        this method is overwriten when model wants to
+        set its own default namespace. For example, when
+        RF module set freq and omega
+        '''
+        return {"remaining":"remaining", "all":"all"}
+    
     
 class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
@@ -136,12 +145,14 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop1 = mm)
         evt.Skip()
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop2 = mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -189,8 +200,44 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             
     def get_embed(self):
         return [], [], []
-            
 
+    def _eval_enitity_id(self, text):
+        '''
+        "remaining" -> "remaining"
+        "all" -> "all"
+        something else  -> global vaiable
+
+        failure -> pass thorough
+        '''
+        if len(text.strip()) == 0: return ''
+        try:
+             # try to inteprete as integer numbers naively...
+             values = list(set([int(x) for x in text.split(',')]))
+             values = ','.join([str(x) for x in values])
+             return values
+        except:
+             pass
+
+        # then convert it using namespace                   
+        g, l = self.namespace
+        ll = {}
+        try:                       
+            values = eval(text, g, ll)
+        except:
+            assert False, "can not interpret entity number : " + text                  
+
+        if not isinstance(values, str):
+            assert False, "entity id field must be text"
+
+        return values
+
+    def eval_enitity_id(self, *text):
+        if len(text) == 1:
+            return self._eval_enitity_id(text[0])
+        
+        return [self._eval_enitity_id(x) for x in text]
+    
+    
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel = 'Max size(def)',
                                 default_txt = '',
@@ -215,7 +262,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def mesher_data(self):
         if hasattr(self, "_mesher_data"):
             return self._mesher_data
-        return Noen
+        return None
     
     def attribute_set(self, v):
         v['geom_group'] = 'GmshGeom1'
@@ -232,8 +279,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         from petram.mesh.gmsh_mesh_wrapper import Algorithm2D, Algorithm3D
 
-        c1 = Algorithm2D.keys()
-        c2 = Algorithm3D.keys()
+        c1 = list(Algorithm2D)
+        c2 = list(Algorithm3D)
 
         from wx import CB_READONLY
         setting1 = {"style":CB_READONLY, "choices": c1}
@@ -278,8 +325,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  None, None])
         
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, Rotate, Translate, CopyFace, RecombineSurface, ExtrudeMesh, RevolveMesh
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh]
+        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, CopyFace, RecombineSurface, ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve, CompoundSurface
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, RecombineSurface, ExtrudeMesh,  RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
 
     def get_special_menu(self):
         from petram.geom.gmsh_geom_model import use_gmsh_api
@@ -351,7 +398,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def update_meshview(self, dlg, viewer, clear=False):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops
-        
+
         if clear:
             viewer.del_figure_data('mesh', self.name())
         elif self.mesher_data is None:
@@ -444,7 +491,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
-            
+
+        do_clear = True
         try:
             count = self.build_mesh(geom_root, nochild =True,
                                     gui_parent = dlg)
@@ -483,6 +531,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.import_selected_panel_value()
+        
         viewer = dlg.GetParent()
         engine = viewer.engine
         engine.build_ns()
@@ -490,9 +540,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         geom_root = self.geom_root
         if not geom_root.is_finalized:
             geom_root.onBuildAll(evt)
+            
+        do_clear = True            
         try:
             filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'
-            do_clear = True
             count = self.build_mesh(geom_root, finalize=True, filename=filename,
                                     gui_parent = dlg)
             do_clear = count == 0
@@ -506,70 +557,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
 
         self.update_meshview(dlg, viewer, clear=do_clear)
-        #filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'        
-        #self.onUpdateMeshView(evt, bin='',
-        #                      geo_text = self._txt_rolled[:],
-        #                      filename = filename)
         
-    '''
-        from petram.geom.gmsh_geom_model import use_gmsh_api
-
-        if use_gmsh_api:
-            import gmsh
-            geom_root = self.geom_root
-            geom = geom_root._gmsh4_data[-1]
-            max_dim = 0
-
-            print("Writing Physical Group")
-            geom.model.geo.synchronize()
-            geom.model.geo.synchronize()            
-            ent = geom.model.getEntities(dim=3)
-            print("Adding " + str(len(ent)) + " Volume(s)" + str(ent))
-            if len(ent) > 0: max_dim = 3
-            for k, x in enumerate(ent):
-                if len(geom.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
-                    continue
-                value = geom.model.addPhysicalGroup(3, [x[1]], tag=k+1)
-                geom.model.setPhysicalName(3, value, 'volume'+str(value))
-                  
-            ent = geom.model.getEntities(dim=2)
-            print("Adding " + str(len(ent)) + " Surface(s)")
-            if max_dim == 0 and len(ent) > 0: max_dim = 2                  
-            for k, x in enumerate(ent):
-                if len(geom.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
-                    continue
-                value = geom.model.addPhysicalGroup(2, [x[1]], tag=k+1)
-                geom.model.setPhysicalName(2, value, 'surface'+str(value))
-
-            if self.gen_all_phys_entity or max_dim < 3:
-                ent = geom.model.getEntities(dim=1)
-                print("Adding " + str(len(ent)) + " Line(s)")
-                if max_dim == 0 and len(ent) > 0: max_dim = 1              
-                for k, x in enumerate(ent):
-                    if len(geom.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
-                        continue                    
-                    value = geom.model.addPhysicalGroup(1, [x[1]], tag=k+1)                
-                    geom.model.setPhysicalName(1, value, 'line'+str(value))
-                      
-            if self.gen_all_phys_entity or max_dim < 2:
-                ent = geom.model.getEntities(dim=0)
-                print("Adding " + str(len(ent)) + " Point(s)")
-                for k, x in enumerate(ent):
-                    if len(geom.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
-                        continue                                        
-                    value = geom.model.addPhysicalGroup(0, [x[1]], tag=k+1)                
-                    geom.model.setPhysicalName(0, value, 'point'+str(value))
-                
-            dlg = evt.GetEventObject().GetTopLevelParent()
-            viewer = dlg.GetParent()
-            engine = viewer.engine
-        
-            filename = os.path.join(viewer.model.owndir(), self.name())
-            geom.write(filename +  '.msh')                
-        else:
-            self.onGenerateMsh(evt)
-        evt.Skip()
-    '''
     def gather_embed(self):
         children = [x for x in self.walk()]
         children = children[1:]

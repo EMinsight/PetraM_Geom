@@ -12,6 +12,7 @@ import traceback
 import sys
 import re
 import time
+import multiprocessing as mp
 from collections import defaultdict
 
 import numpy as np
@@ -23,7 +24,6 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
 from petram.model import Model
 import time
 
-import thread
 from threading import Thread
 try:
     from Queue import Queue, Empty
@@ -126,6 +126,14 @@ def get_geom_key(obj):
     if debug: print(geom_key_dict)
     return key
 
+def get_twoletter_keys(t):
+    if t == 'p': return 'pt'
+    elif t == 'l': return 'ln'    
+    elif t == 'f': return 'fs'
+    elif t == 'v': return 'vl'
+    else:
+        return t
+
 class GeomObjs(dict):
     def duplicate(self):
         if not hasattr(self, "_past_keys"):
@@ -136,6 +144,7 @@ class GeomObjs(dict):
         
     def addobj(self, obj, name):
         key = ''.join([i for i in name if not i.isdigit()])
+        key = get_twoletter_keys(key)        
         if not hasattr(self, "_past_keys"):
             self._past_keys = []
         keys = self._past_keys
@@ -145,6 +154,7 @@ class GeomObjs(dict):
            if t == key:
               n = int(''.join([i for i in k if i.isdigit()]))
               nums.append(n)
+
         if len(nums) == 0:
            newkey = key+str(1)
         else:
@@ -238,6 +248,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.import_selected_panel_value()
+        
         mm = dlg.get_selected_mm()
         if mm is None: return
 
@@ -246,6 +258,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
+        dlg.import_selected_panel_value()
         mm = dlg.get_selected_mm()
         if mm is None: return
         
@@ -257,10 +270,11 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
+        self.vt.preprocess_params(self)                
         gui_param = self.vt.make_value_or_expression(self)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
-        
+'''        
 class BrepFile(GeomTopBase):
     has_2nd_panel = False
     def __init__(self, *args, **kwargs):
@@ -319,16 +333,13 @@ class BrepFile(GeomTopBase):
             if v[1] == aname[k]:
                 self.geom_prev_algorithm = k
 
-        self.geom_prev_res = long(v[2])
+        self.geom_prev_res = int(v[2])
         self.brep_file_path = str(v[0])
         
     def get_special_menu(self):
         return [('Load File', self.onBuildAll, None),]
     
     def onBuildAll(self, evt):
-        '''
-        filename : export geometry to a real file (for debug)
-        '''
         import gmsh
         
         if not hasattr(self, "_gmsh4_data"):
@@ -406,7 +417,7 @@ class BrepFile(GeomTopBase):
         viewer._s_v_loop['mesh'] = s, v
 
         evt.Skip()
-        
+'''        
 
 class GmshGeom(GeomTopBase):
     has_2nd_panel = False
@@ -444,14 +455,15 @@ class GmshGeom(GeomTopBase):
         v['occ_parallel'] = False
         v['maxthreads'] = 1
         v['skip_final_frag'] = False
+        v['use_1d_preview'] = False
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, CADImport, Fillet, Chamfer, Array, ArrayRot
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, CADImport, Fillet, Chamfer, Array, ArrayRot]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, Fillet, Chamfer, Array, ArrayRot
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, Fillet, Chamfer, Array, ArrayRot]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
@@ -465,7 +477,7 @@ class GmshGeom(GeomTopBase):
                 ("", Array), ("!", ArrayRot),
                 ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
-                ("Import...", BrepImport),("!", CADImport),
+                ("Import...", BrepImport),("", CADImport),("!", healCAD),
                 ]
                 
     def get_special_menu(self):
@@ -485,7 +497,8 @@ class GmshGeom(GeomTopBase):
                 ["Preview Resolution", 30,  400, None],
                 ["Preview #threads", self.maxthreads, 400, None],                
                 [None, self.occ_parallel, 3, {"text":"OCC parallel boolean"}],
-                [None, self.skip_final_frag, 3, {"text":"Skip fragmentationn"}],                
+                [None, self.skip_final_frag, 3, {"text":"Skip fragmentationn"}],
+                [None, self.use_1d_preview, 3, {"text":"Use line preview"}],                                
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
@@ -494,7 +507,7 @@ class GmshGeom(GeomTopBase):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
         txt = aname[self.geom_prev_algorithm]
         return [None, txt, self.geom_prev_res, self.maxthreads, self.occ_parallel,
-                self.skip_final_frag, self]
+                self.skip_final_frag, self.use_1d_preview, self]
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
@@ -502,10 +515,11 @@ class GmshGeom(GeomTopBase):
             if v[1] == aname[k]:
                 self.geom_prev_algorithm = k
 
-        self.geom_prev_res = long(v[2])
-        self.maxthreads  =  long(v[3])
+        self.geom_prev_res = int(v[2])
+        self.maxthreads  =  int(v[3])
         self.occ_parallel  = v[4]
         self.skip_final_frag = v[5]
+        self.use_1d_preview = v[6]        
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -632,7 +646,28 @@ class GmshGeom(GeomTopBase):
                 
         self._objs = objs        
 
-                   
+    def check_create_new_child(self,gs):
+        if not hasattr(self, '_prev_sequence'):
+            return True
+
+        if len(gs.geom_sequence) < len(self._prev_sequence):
+            return True
+
+        import six        
+        if six.PY2:
+            import cPickle as pickle
+        else:
+            import pickle
+        
+        for k, s in enumerate(self._prev_sequence):
+            s_txt1 = pickle.dumps(s)
+            s_txt2 = pickle.dumps(gs.geom_sequence[k])
+            if s_txt1 != s_txt2:
+                return True
+            else:
+                dprint1("check passed", s[0])
+        return False
+        
     def build_geom4(self, stop1=None, stop2=None, filename = None,
                     finalize = False, no_mesh=False, gui_parent=None):
         '''
@@ -645,34 +680,71 @@ class GmshGeom(GeomTopBase):
         #if self._gmsh4_data is not  None:
         #    self._gmsh4_data[-1].finalize()
 
-        from petram.geom.gmsh_geom_wrapper import Geometry
+        from petram.geom.gmsh_geom_wrapper import GeometrySequence,GMSHGeometryGenerator
+        '''
         geom = Geometry(PreviewResolution = self.geom_prev_res,
                         PreviewAlgorithm = self.geom_prev_algorithm,
                         OCCParallel = int(self.occ_parallel),
                         Maxthreads = self.maxthreads,
-                        SkipFrag = self.skip_final_frag)
-        
+                        SkipFrag = self.skip_final_frag,
+                        Use1DPreview = self.use_1d_preview)
+
         geom.set_factory('OpenCASCADE')
-        
-        stopname = self.walk_over_geom_chidlren(geom, stop1=stop1, stop2=stop2)
+        '''
+
+        gs = GeometrySequence()
+        stopname = self.walk_over_geom_chidlren(gs, stop1=stop1, stop2=stop2)
 
         import wx
         if gui_parent is None:
             gui_parent = wx.GetApp().TopWindow
 
-        L = len(geom.geom_sequence) + 3
+        L = len(gs.geom_sequence) + 3
         pgb = wx.ProgressDialog("Generating geometry...",
                                 "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
         def close_dlg(evt, dlg=pgb):
             pgb.Destroy()
         pgb.Bind(wx.EVT_CLOSE, close_dlg)
+
+        if (hasattr(self, "_p") and self._p[0].is_alive()):
+            new_process = self.check_create_new_child(gs)
+        else:
+            new_process = True
+
+        if new_process:
+            if (hasattr(self, "_p") and self._p[0].is_alive()):
+                self._p[0].terminate()
+
+            task_q = mp.Queue() # data to child
+            q =  mp.Queue() # data from child
+            p = GMSHGeometryGenerator(q, task_q)
+            p.start()
+            print("process ID", p.pid)
+            self._p = (p, task_q, q)
+            self._prev_sequence = gs.geom_sequence
+            start_idx = 0
+        else:
+            ll = len(self._prev_sequence)
+            self._prev_sequence = gs.geom_sequence
+            start_idx = ll
+            
+        success, dataset  = gs.run_generator(self, no_mesh = no_mesh, finalize=finalize,
+                                             filename = stopname, progressbar = pgb,
+                                             create_process = new_process,
+                                             process_param = self._p,
+                                             start_idx = start_idx)
+
+        pgb.Destroy()
+
+        if not success:
+            print(dataset) # this is an error message
+            self._p[0].terminate()
+            self._prev_sequence = []
+            return
         
-        gui_data, objs, brep_file, data, vcl = geom.run_generator(no_mesh = no_mesh,
-                                                             finalize=finalize,
-                                                             filename = stopname,
-                                                             progressbar = pgb)
-        pgb.Destroy()        
+        gui_data, objs, brep_file, data, vcl = dataset
+
         self._geom_brep = brep_file
         self.update_GUI_after_geom(gui_data, objs)
 
@@ -680,7 +752,7 @@ class GmshGeom(GeomTopBase):
             return   
         # for the readablity I expend data here, do we need geom?        
         ptx, cells, cell_data, l, s, v = data
-        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, gs)
 
         self._clmax_guess = vcl
 

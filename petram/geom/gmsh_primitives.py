@@ -16,6 +16,7 @@ from petram.phys.vtable import VtableElement, Vtable
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
 from petram.geom.gmsh_geom_model import use_gmsh_api
+from petram.geom.vtable_geom import *
 
 from petram.geom.gmsh_config import has_gmsh
 
@@ -271,6 +272,7 @@ class Line(GeomPB):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
+        self.vt.preprocess_params(self)                        
         gui_param = list(self._make_value_or_expression()) + [self.make_spline]
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
@@ -326,7 +328,7 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
           #                   suffix =('x', 'y', 'z'),
           #                   default = [0,0,0],
           #                   tip = "point on axis" )),
-          ('taxis', VtableElement('taxis', type='float',
+          ('taxis', VtableElement_Direction('taxis', type='float',
                                    guilabel = 'Translation Axis',
                                    suffix =('x', 'y', 'z'),
                                    default = [0, 0, 1],
@@ -1025,7 +1027,73 @@ class WorkPlaneByPoints(GeomPB):
     @classmethod    
     def fancy_tree_name(self):
         return 'WorkPlane'
+
+cad_fix_cb = [None, None, 36, {"col": 4, 
+                                 "labels":["Degenerated",
+                                           "SmallEdges",
+                                           "SmallFaces",
+                                           "sewFaces"]}]
+cad_fix_tol = ["Tolerance", 1e-8, 300, None]
+cad_fix_elp0 = [cad_fix_cb, cad_fix_tol]
+
+cad_fix_elp = [None, None, 27, [{"text": "import fixer"}, {"elp": cad_fix_elp0}]]
+
+class healCAD(GeomPB):
+    vt = Vtable(tuple())
+    def panel1_param(self):
+        from wx import BU_EXACTFIT
+        b1 = {"label": "S", "func": self.onBuildBefore,
+              "noexpand": True, "style": BU_EXACTFIT}
+        b2 = {"label": "R", "func": self.onBuildAfter,
+              "noexpand": True, "style": BU_EXACTFIT}
+        wc = "ANY|*|STEP|*.stp|IGES|*.igs"
+
+
+        ll = [[None, None, 241, {'buttons':[b1,b2],
+                                 'alignright':True,
+                                 'noexpand': True},],
+              ["Entity", "", 0, {}],
+              cad_fix_cb,
+              cad_fix_tol]              
+
+        return ll
       
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        v["fix_entity"] = ""
+        v["use_fix"] = False
+        v["use_fix_param"] = [True]*4
+        v["use_fix_tol"] = 1e-8
+        return v
+        
+    def get_panel1_value(self):
+        return  [None, self.fix_entity, self.use_fix_param, self.use_fix_tol]
+
+    def preprocess_params(self, engine):
+        return
+
+    def import_panel1_value(self, v):
+        self.fix_entity = str(v[1])
+        self.use_fix_param = [x[1] for x in v[2]]
+        self.use_fix_tol = float(v[3])
+        
+
+    def panel1_tip(self):
+        return [None, None, None, None]
+  
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = (self.fix_entity, self.use_fix_param, self.use_fix_tol)
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
+
+    @classmethod    
+    def fancy_menu_name(self):
+        return "healCAD"
+
+# we make BREP import separately so that we can add Brep specific
+# interface later....
+    
 class CADImport(GeomPB):
     vt = Vtable(tuple())
     def panel1_param(self):
@@ -1034,33 +1102,49 @@ class CADImport(GeomPB):
               "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
-        wc = "ANY|*|STEP|*.stp|IGES|*.igs"        
+        wc = "ANY|*|STEP|*.stp|IGES|*.igs"
+
+
         ll = [[None, None, 241, {'buttons':[b1,b2],
                                  'alignright':True,
                                  'noexpand': True},],
-              ["File(STEP/IGES)", None, 45, {'wildcard':wc}],]
+              ["File(STEP/IGES)", None, 45, {'wildcard':wc}],
+              cad_fix_elp,
+              [None, True, 3, {'text':"Highest Dim Only"}],              
+              ]
+
         return ll
       
     def attribute_set(self, v):
         v = super(GeomPB, self).attribute_set(v)
         v["cad_file"] = ""
+        v["use_fix"] = False
+        v["use_fix_param"] = [True]*4
+        v["use_fix_tol"] = 1e-8
+        v["highestdimonly"] = True
         return v
         
     def get_panel1_value(self):
-        return [None, self.cad_file, None]
+        value = [self.use_fix, [self.use_fix_param, self.use_fix_tol]]
+        return [None, self.cad_file, value, self.highestdimonly]
 
     def preprocess_params(self, engine):
         return
 
     def import_panel1_value(self, v):
         self.cad_file = str(v[1])
+        self.use_fix = v[2][0]
+        self.use_fix_param = [x[1] for x in v[2][1][0]]
+        self.use_fix_tol = float(v[2][1][1])
+        self.highestdimonly = bool(v[3])
+        
 
     def panel1_tip(self):
         return [None, None, None]
   
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.cad_file,)
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol, self.highestdimonly)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
@@ -1082,29 +1166,41 @@ class BrepImport(GeomPB):
         ll = [[None, None, 241, {'buttons':[b1,b2],
                                  'alignright':True,
                                  'noexpand': True},],
-              ["File(.brep)", None, 45, {'wildcard':wc}],]
+              ["File(.brep)", None, 45, {'wildcard':wc}],
+              cad_fix_elp,
+              [None, True, 3, {'text':"Highest Dim Only"}],
+              ]
         return ll
       
     def attribute_set(self, v):
         v = super(GeomPB, self).attribute_set(v)
         v["cad_file"] = ""
+        v["use_fix"] = False
+        v["use_fix_param"] = [True]*4
+        v["use_fix_tol"] = 1e-8
+        v["highestdimonly"] = True        
         return v
         
     def get_panel1_value(self):
-        return [None, self.cad_file, None]
-
+        value = [self.use_fix, [self.use_fix_param, self.use_fix_tol]]
+        return [None, self.cad_file, value, self.highestdimonly]        
+        
     def preprocess_params(self, engine):
         return
 
     def import_panel1_value(self, v):
         self.cad_file = str(v[1])
+        self.use_fix = v[2][0]
+        self.use_fix_param = [x[1] for x in v[2][1][0]]
+        self.use_fix_tol = float(v[2][1][1])
+        self.highestdimonly = bool(v[3])        
 
     def panel1_tip(self):
         return [None, None, None]
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.cad_file,)
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol, self.highestdimonly)        
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
         

@@ -40,6 +40,9 @@ num_nodes_per_cell = {
     'quad16': 16,
     }
 
+import petram.debug as debug
+dprint1, dprint2, dprint3 = debug.init_dprints('ReadGMSH')
+
 #dimtags =  gmsh.model.getEntities()
 def read_loops(geom):
     model = geom.model
@@ -57,10 +60,16 @@ def read_loops(geom):
     for dim, tag in dimtags:
         s[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
+
     dimtags =  model.getEntities(1)
     for dim, tag in dimtags:
         l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
+        if len(l[tag]) == 0:
+             print('line :' + str(tag) + ' has no boundary (loop)')
+             node, coord, pc  = model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)
+             l[tag].append(node[0])
+        
     return l, s, v
 
 def read_loops2(geom):
@@ -74,21 +83,25 @@ def read_loops2(geom):
     model = geom.model
     nidx, coord, pcoord = geom.model.mesh.getNodes(dim=0)
     tags = [tag for dim, tag in geom.model.getEntities(0)]
-    p = {t: nidx[k]-1  for k, t in enumerate(tags)}
+    p = {t: int(nidx[k]-1)  for k, t in enumerate(tags)}
+
     ptx = np.array(coord).reshape(-1, 3)
     return ptx, p, l, s, v
 
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
 
+    dprint1("finished faces", finished_faces)
+    #finished_faces is None: finished_faces = []     
     model = geom.model
     
     node_id, node_coords, parametric_coods =  model.mesh.getNodes()
+
     if len(node_coords) == 0:
         return np.array([]).reshape((-1,3)), {}, {}
     points = np.array(node_coords).reshape(-1, 3)
 
-    node2idx = np.zeros(max(node_id)+1, dtype=int)
+    node2idx = np.zeros(int(max(node_id)+1), dtype=int)
 
     for k, id in enumerate(node_id): node2idx[id] = k
 
@@ -97,35 +110,46 @@ def read_pts_groups(geom, finished_lines=None,
     cell_data = {}
     el2idx = {}
     for ndim in range(3):
-        if (ndim == 1 and finished_lines is not None
+        if (ndim == 1 and finished_lines is not None and len(finished_lines) != 0
             or
-            ndim == 2 and finished_faces is not None):
+            ndim == 2 and finished_faces is not None and len(finished_faces) != 0):
             finished = finished_faces if ndim==2 else finished_lines
 
-            #print("here we are removing unfinished lines",  dimtags, finished_lines)
             xxx = [model.mesh.getElements(ndim, l) for l in finished]
-            tmp = {}
-            elementTypes = sum([x[0] for x in xxx], [])
-            elementTags =sum([x[1] for x in xxx], [])
-            nodeTags = sum([x[2] for x in xxx], [])
+
+            if isinstance(xxx[0][0], np.ndarray):
+                # newer gmsh comes here
+                elementTypes = np.hstack([x[0] for x in xxx])
+                elementTags = sum([x[1] for x in xxx],[])
+                nodeTags = sum([x[2] for x in xxx],[])
+                elementTags = [list(x) for x in elementTags]
+                nodeTags = [list(x) for x in nodeTags]                
+            else:
+
+                elementTypes = sum([x[0] for x in xxx], [])
+                elementTags =sum([x[1] for x in xxx], [])
+                nodeTags = sum([x[2] for x in xxx], [])
+                
+            tmp = {}                
             dd1 = {};
             dd2 = {}
             for k, el_type in enumerate(elementTypes):
                 if not el_type in dd1: dd1[el_type] = []
-                if not el_type in dd2: dd2[el_type] = []                
+                if not el_type in dd2: dd2[el_type] = []
                 dd1[el_type] = dd1[el_type]+ elementTags[k]
                 dd2[el_type] = dd2[el_type]+ nodeTags[k]
-            elementTypes = dd1.keys()
+            elementTypes = list(dd1)
             elementTags = [dd1[k] for k in elementTypes]
             nodeTags = [dd2[k] for k in elementTypes]
         else:
-            elementTypes, elementTags, nodeTags = model.mesh.getElements(ndim)            
+            elementTypes, elementTags, nodeTags = model.mesh.getElements(ndim)
+
         for k, el_type in enumerate(elementTypes):
             el_type_name = gmsh_element_type[el_type]
             data = np.array([node2idx[tag] for tag in nodeTags[k]], dtype=int)
             data = data.reshape(-1, num_nodes_per_cell[el_type_name])
             cells[el_type_name] = data
-            tmp = np.zeros(max(elementTags[k])+1, dtype=int)
+            tmp = np.zeros(int(max(elementTags[k])+1), dtype=int)
             for kk, id in enumerate(elementTags[k]): tmp[id] = kk
             el2idx[el_type_name] = tmp
             cell_data[el_type_name] = {'geometrical':
@@ -141,12 +165,14 @@ def read_pts_groups(geom, finished_lines=None,
             finished = finished_faces if ndim==2 else finished_lines
             #print("here we are removing unfinished lines",  dimtags, finished_lines)
             dimtags = [dt for dt in dimtags if dt[1] in finished]
+
         for dim, tag in dimtags:
             elType2, elTag2, nodeTag2 = model.mesh.getElements(dim=dim,
                                                                tag=tag)
             for k, el_type in enumerate(elType2):                       
                 el_type_name = gmsh_element_type[el_type]
                 for elTag in elTag2[k]:
+                   if not el_type_name in el2idx: continue
                    idx = el2idx[el_type_name][elTag]
                    cell_data[el_type_name]['geometrical'][idx] = tag
 
@@ -155,12 +181,12 @@ def read_pts_groups(geom, finished_lines=None,
             etags = model.getEntitiesForPhysicalGroup(dim=dim, tag=ptag)
             for etag in etags:
                 elType2, elTag2, nodeTag2 = model.mesh.getElements(dim=dim,
-                                                                        tag=etag)
+                                                                   tag=etag)
                 for k, el_type in enumerate(elType2):                       
                     el_type_name = gmsh_element_type[el_type]
                     for elTag in elTag2[k]:
+                        if not el_type_name in el2idx: continue                        
                         idx = el2idx[el_type_name][elTag]
                         cell_data[el_type_name]['physical'][idx] = ptag
-
 
     return points, cells, cell_data
