@@ -4,9 +4,10 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 
 from petram.model import Model
 
+# this is needed for backward compatibility    
+from petram.mfem_model import MFEM_GeomRoot
 #try:
-    # this is needed for backward compatibility    
-#    from petram.mfem_model import MFEM_GeomRoot 
+#    from petram.mfem_model import MFEM_GeomRoot
 #except:    
 #    class MFEM_GeomRoot(GeomBase):
 #        can_delete = False
