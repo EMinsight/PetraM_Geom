@@ -4,8 +4,8 @@ dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 
 from petram.model import Model
 
-# this is needed for backward compatibility    
-from petram.mfem_model import MFEM_GeomRoot
+
+
 #try:
 #    from petram.mfem_model import MFEM_GeomRoot
 #except:    
@@ -39,3 +39,5 @@ class GeomTopBase(GeomBase):
         v['geom_timestamp'] = 0
         return v
     
+# this is needed for backward compatibility        
+from petram.mfem_model import MFEM_GeomRoot
