@@ -183,6 +183,7 @@ class GMSHMeshWrapper(object):
         if name == 'extrude_face':
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         elif name == 'revolve_face':
+            kwargs['revolve']=True
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         else:
             pass
@@ -321,11 +322,16 @@ class GMSHMeshWrapper(object):
     def show_only(self, dimtags, recursive=False):
         self.hide_all()
         gmsh.model.setVisibility(dimtags, True, recursive = recursive)
+        
         ent = gmsh.model.getEntities()
-        vent = [x for x in ent if not x in self.target_entities]
-        #print("hiding virtual", vent)
-        if len(vent) > 0:
-            gmsh.model.setVisibility(vent, False, recursive = True)
+
+        # we hide the surfaces genrated from virtual operation always.
+        if self.current == 'main1':
+           vent = [x for x in ent if not x in self.target_entities]            
+           #vent = [x for x in ent if not x in self.target_entities]
+           #print("hiding virtual", vent)
+           if len(vent) > 0:
+               gmsh.model.setVisibility(vent, False, recursive = True)
             
     def hide(self, dimtags, recursive=False):
         gmsh.model.setVisibility(dimtags, False, recursive = recursive)
@@ -335,8 +341,10 @@ class GMSHMeshWrapper(object):
         gmsh.model.setVisibility(ent, False)
         
     def show_all(self):
-        ent = self.target_entities0
-        #ent = gmsh.model.getEntities()
+        if self.current == 'main1':
+           ent = self.target_entities
+        else:
+           ent = gmsh.model.getEntities()
         gmsh.model.setVisibility(ent, True)
 
     def delete_all_except(self, dim, tags):
@@ -1017,16 +1025,26 @@ class GMSHMeshWrapper(object):
     # copy face
     @process_text_tags_sd(dim=2)        
     def copyface_0D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        from petram.geom.geom_utils import find_translate_between_surface
+        from petram.geom.geom_utils import find_translate_between_surface 
+        from petram.geom.geom_utils import find_rotation_between_surface
+        
         ptx, p, l, s, v = self.geom_info
-        axan = kwargs.pop('axan', None)        
+        axan = kwargs.pop('axan', None)
+        revolve = kwargs.pop('revolve', False)        
         geom_data = (ptx, l, s, None)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
-        ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+
+        if revolve:
+            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
+        else:
+            ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+                                                            tag1, tag2,
+                                                            geom_data=geom_data,
+                                                            axan = axan)        
         
         params = (ax, an, px, d, affine, p_pairs, l_pairs)
         #print("transformation param", params)
@@ -1190,6 +1208,7 @@ class GMSHMeshWrapper(object):
     @process_text_tags_vsd(dim=3)            
     def extrude_face_0D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         from petram.geom.geom_utils import find_translate_between_surface
+        from petram.geom.geom_utils import find_rotation_between_surface        
         from petram.geom.geom_utils import map_points_in_geom_info
         from petram.geom.geom_utils import map_lines_in_geom_info
         from petram.geom.geom_utils import map_surfaces_in_geom_info
@@ -1202,12 +1221,18 @@ class GMSHMeshWrapper(object):
         ptx, p, l, s, v = self.geom_info
         geom_data = (ptx, l, s, None)
         tag1 = [x for dim, x in dimtags]
-        tag2 = [x for dim, x in dimtags2]        
-        ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+        tag2 = [x for dim, x in dimtags2]
+
+        if revolve:
+            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
-        
+        else:
+            ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+                                                            tag1, tag2,
+                                                            geom_data=geom_data,
+                                                            axan = axan)
         ws = self.prep_workspace()
 
         self.delete_all_except(2, tag1)
@@ -1299,7 +1324,6 @@ class GMSHMeshWrapper(object):
             vtags = [x for xx, x in gmsh.model.getBoundary(((1, tag),))]
             
             etypes, etags, nodes = edata
-
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map1[x] for x in item] for item in nodes]
@@ -1346,6 +1370,7 @@ class GMSHMeshWrapper(object):
             
             ntag2 = range(noffset, noffset+len(ntag)-2)
             noffset = noffset+len(ntag)-2
+            
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
 
@@ -1658,7 +1683,7 @@ class GMSHMeshWrapper(object):
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map1[x] for x in item] for item in nodes]
             gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-        print("node map here", node_map1)
+        #print("node map here", node_map1)
         # copy 1D elements on the destination surface
         l_pairs2 = {x:lmap[l_pairs[x]] for x in l_pairs}
         R = affine[:3,:3]

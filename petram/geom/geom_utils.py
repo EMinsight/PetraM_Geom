@@ -217,3 +217,120 @@ def find_translate_between_surface(src, dst, geom=None,
     px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
     #print("px, d", px, d)
     return ax, an, px, d, affine, p_pairs, l_pairs
+
+def find_rotation_between_surface(src, dst, geom=None,
+                                   geom_data = None,
+                                   min_angle = 0.1,
+                                   mind_eps = 1e-10,
+                                   axan = None):
+    
+    if geom is not None:
+        ptx, cells, cell_data, l, s, v, geom = geom._gmsh4_data
+    else:
+        ptx, l, s, cell_data = geom_data
+
+    l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
+    l2 = np.unique(np.hstack([s[k] for k in dst]).flatten())
+    p1p = np.unique(np.hstack([l[k] for k in l1]).flatten())
+    p2p = np.unique(np.hstack([l[k] for k in l2]).flatten())
+
+    if cell_data is None:
+        i1 = p1p-1
+        i2 = p2p-1
+    else:
+        i1 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p1p]).flatten()
+        i2 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p2p]).flatten()
+    p1 = ptx[i1,:]
+    p2 = ptx[i2,:]
+    n1 = normal2points(p1)
+    n2 = normal2points(p2)
+
+    #print(p1, p2, n1, n2, axan)
+    if axan is None:
+        M = np.vstack((n1, n2))
+        b = np.array([np.sum(n1*p1[0]), np.sum(n2*p2[0])])
+        
+        from scipy.linalg import null_space
+        from numpy.linalg import lstsq
+
+
+        ax =null_space(M).flatten()
+        px, res, rank, s = lstsq(M, b, rcond=None)
+        
+        pp1 = px - p1[0] - np.sum((px-p1[0])*ax)*ax
+        pp2 = px - p2[0] - np.sum((px-p2[0])*ax)*ax
+
+        pp1 = pp1/np.linalg.norm(pp1)
+        pp2 = pp2/np.linalg.norm(pp2)
+
+        s = np.mean(np.cross(pp1, pp2)[ax!=0]/ax[ax!=0])
+        c = np.sum(pp1 * pp2)
+        #xx = np.sum(n2*n1)
+        #yy = np.sum(n2*n3)
+        #an = np.arcsin(np.linalg.norm(ax))
+        an = np.arctan2(s, c)
+
+        
+        #print("p2, axis angle", px, ax, an)        
+    else:
+        ax, an = axan
+        ax = np.array(ax, dtype=float)
+        ax = ax/np.linalg.norm(ax)            
+        an = np.pi/180.*an
+        
+
+    def find_mapping(ax, an, p1, p2):
+        if an != 0.0:
+            R = rotation_mat(ax, -an)
+        else:
+            R = np.diag([1,1,1.])
+
+    # check two possible orientation        
+        p3 = np.dot(R, p2.transpose()).transpose()
+        
+        # try all transpose
+        #print("p1, p3 (1)", p1, p3)        
+        for i in range(len(p1)):
+            d = p3[0]- p1[i]
+            p3t = p3 - d
+            mind = np.array([np.min(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1])
+            if np.all(mind < mind_eps): 
+                 mapping = [np.argmin(np.sqrt(np.sum((p3t - pp)**2,1))) for pp in p1]
+                 trans = d
+                 return d, mapping, R
+        return None, None, None
+    
+    if abs(an*180./np.pi) < min_angle:
+        an = 0.0
+    if abs(abs(an*180./np.pi)-180.) < min_angle:
+        an = 0.0
+        
+    d, mapping, R = find_mapping(ax, an, p1, p2)
+
+    if d is None:
+        if an > 0.:
+            an = -np.pi + an
+        else:
+            an = np.pi + an
+        d, mapping, R = find_mapping(ax, an, p1, p2)        
+        if d is None:        
+            assert False, "auto trans failed (no mapping between vertices)"
+
+    p_pairs = dict(zip(p1p, p2p[mapping]))  #point mapping
+
+    #print("l1", [(ll, l[ll]) for ll in l1])
+    #print("l2", [(ll, l[ll]) for ll in l2])    
+    l2dict = {tuple(sorted(l[ll])):ll for ll in l2}
+
+    l_pairs = {ll:l2dict[tuple(sorted((p_pairs[l[ll][0]],p_pairs[l[ll][1]])))] for ll in l1}
+
+
+    affine = np.zeros((4,4), dtype=float)
+    affine[:3,:3] = np.linalg.inv(R)
+    affine[:3,-1] = np.dot(np.linalg.inv(R), d)
+    affine[-1,-1] = 1.0
+    
+    if axan is None:
+        px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
+    #print("px, d", px, d)
+    return ax, an, px, d, affine, p_pairs, l_pairs
