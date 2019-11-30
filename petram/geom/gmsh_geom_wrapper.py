@@ -161,6 +161,10 @@ class Geometry(object):
         self.maxthreads = kwargs.pop('Maxthreads', 1)
         self.skip_final_frag = kwargs.pop('SkipFrag', False)
         self.use_1d_preview = kwargs.pop('Use1DPreview', False)
+        self.use_curvature = kwargs.pop('UseCurvature', False)        
+        self.long_edge_thr = kwargs.pop('LongEdgeThr', 0.1)
+        self.small_edge_thr = kwargs.pop('SmallEdgeThr', 0.001)
+        self.small_edge_seg = kwargs.pop('SmallEdgeSeg', 3)
         
         gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
         
@@ -236,8 +240,30 @@ class Geometry(object):
                 mm = min((lcar[btag], s))
                 if mm > mincl:
                     lcar[btag] = min((lcar[btag], s))
+
+        lcar = dict(lcar)
+        for tag in list(lcar):
+            if lcar[tag] == np.inf: del lcar[tag]
+        #for dim, tag in self.model.getEntities(0):
+        #    if not tag in lcar:
+        #        lcar[tag] = mincl
+
         return dict(lcar), esize
 
+    def show_only(self, dimtags, recursive=False):
+        self.hide_all()
+        gmsh.model.setVisibility(dimtags, True, recursive = recursive)
+        
+    def hide(self, dimtags, recursive=False):
+        gmsh.model.setVisibility(dimtags, False, recursive = recursive)
+        
+    def hide_all(self):
+        ent = gmsh.model.getEntities()
+        gmsh.model.setVisibility(ent, False)
+        
+    def show_all(self):
+        ent = gmsh.model.getEntities()
+        gmsh.model.setVisibility(ent, True)
     
     def getEntityNumberingInfo(self):
         '''
@@ -2144,27 +2170,92 @@ class Geometry(object):
         xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()                   
         modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
 
-        too_small = 3e-3
+        too_large = self.long_edge_thr
+        too_small = self.small_edge_thr
         vcl, esize = self.getVertexCL(modelsize*too_small)
 
         if len(esize) == 0:
             return vcl, esize, modelsize
         
         #print(modelsize, vcl, esize)
-        emax = max(list(esize.values()))        
-        for tag in vcl:
-            gmsh.model.mesh.setSize(((0, tag),), modelsize/self.geom_prev_res)            
-            if np.isfinite(vcl[tag]):
-                #gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-                gmsh.model.mesh.setSize(((0, tag),), vcl[tag])
 
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
+        emax = max(list(esize.values()))
+
+        print("Max/Min CL size", modelsize*too_large, modelsize*too_small)
+        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize*too_large)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", modelsize*too_small)        
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)                
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        
+        ### if curse mesh large edge first ###
+        do_first = []
+        too_small2=5e-2
+
+        for tag in list(vcl):
+            vcl[tag] = np.max([vcl[tag]/self.geom_prev_res, modelsize*too_small])
+        #print(vcl)        
+        
+        max_seg = 30
+        for dim, tag in self.model.getEntities(1):      
+            bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
+            ll = [vcl[vtag] for dim,vtag in bdimtags if vtag in vcl]
+            if len(ll) == 0: continue
+            if esize[tag] > np.max(ll)*max_seg:
+                do_first.append((1, tag))
+                for dim,vtag in bdimtags:
+                    gmsh.model.mesh.setSize(((0, tag),), esize[tag]/max_seg)
+            if esize[tag] < modelsize*too_small:
+                do_first.append((1, tag))
+                gmsh.model.mesh.setTransfiniteCurve(tag, self.small_edge_seg, meshType="Bump", coef=1)
+                
+        self.show_only(do_first)
+        gmsh.model.mesh.generate(1)
+
+        self.show_all()
+        self.hide(do_first)
+        
+        for tag in vcl:
+            gmsh.model.mesh.setSize(((0, tag),), modelsize/self.geom_prev_res)
+            if np.isfinite(vcl[tag]):
+                gmsh.model.mesh.setSize(((0, tag),), vcl[tag])
+                
+        print(self.use_curvature)
+        if self.use_curvature:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
+        else:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)            
         gmsh.model.mesh.generate(1)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)        
         return vcl, esize, modelsize
     
+    def mesh_face_algorithm1(self, esize):
+        do_first = []
+        size_thr = 0.01
+
+        max_edge = np.max(list(esize.values()))
+        for dim, tag in self.model.getEntities(2):      
+            bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
+            ll = [esize[etag] for dim,etag in bdimtags]
+            if len(ll) == 0: continue
+            if np.max(ll) > max_edge * size_thr:
+                do_first.append((2, tag))
+
+        self.show_only(do_first)
+
+        if self.use_curvature:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
+        else:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)            
+            
+        gmsh.model.mesh.generate(2)
+        
+        self.show_all()
+        self.hide(do_first)
+        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                            
+        gmsh.model.mesh.generate(2)
+        
     def generate_preview_mesh(self, filename = ''):
         if self.queue is not None:
             self.queue.put((False, "generating preview"))
@@ -2178,7 +2269,6 @@ class Geometry(object):
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads)
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads)
 
-        #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)        
         #ent = gmsh.model.getEntities()
         #gmsh.model.setVisibility(ent, False, recursive=True)
         #gmsh.model.setVisibility(((2, 165),), True, recursive=True)   
@@ -2197,7 +2287,12 @@ class Geometry(object):
             gmsh.option.setNumber("Mesh.RefineSteps", 1)
             gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
 
-            gmsh.model.mesh.generate(2)
+            if self.use_curvature:
+                gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
+            else:
+                gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)            
+            
+            self.mesh_face_algorithm1(esize)
         
         if filename != '':
             import os
@@ -2345,7 +2440,11 @@ class GeometrySequence(object):
                   'OCCParallel': gui.occ_parallel,
                   'Maxthreads': gui.maxthreads,
                   'SkipFrag': gui.skip_final_frag,
-                  'Use1DPreview': gui.use_1d_preview}
+                  'Use1DPreview': gui.use_1d_preview,
+                  'UseCurvature': gui.use_curvature,
+                  'LongEdgeThr': gui.long_edge_thr,
+                  'SmallEdgeThr': gui.small_edge_thr,
+                  'SmallEdgeSeg': gui.small_edge_seg}                  
 
         p = process_param[0]
         task_q = process_param[1]

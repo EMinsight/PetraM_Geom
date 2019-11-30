@@ -451,11 +451,15 @@ class GmshGeom(GeomTopBase):
         v = super(GmshGeom, self).attribute_set(v)
         v['geom_timestamp'] = 0
         v['geom_prev_algorithm'] = 2
-        v['geom_prev_res'] = 30
+        v['geom_prev_res'] = 3
         v['occ_parallel'] = False
         v['maxthreads'] = 1
         v['skip_final_frag'] = False
         v['use_1d_preview'] = False
+        v['use_curvature'] = False
+        v['long_edge_thr'] = 0.3        
+        v['small_edge_thr'] = 0.001
+        v['small_edge_seg'] = 1
         return v
         
     def get_possible_child(self):
@@ -495,10 +499,14 @@ class GmshGeom(GeomTopBase):
                                                      "choices": ["Auto", "MeshAdpat",
                                                                  "Delaunay", "Frontal"]}],
                 ["Preview Resolution", 30,  400, None],
-                ["Preview #threads", self.maxthreads, 400, None],                
+                ["Long  Edge Thr.", self.long_edge_thr, 300, None],                
+                ["Small Edge Thr.", self.small_edge_thr, 300, None],
+                ["Small Edge #Seg.", self.small_edge_seg, 400, None],                
+                ["Preview #threads", self.maxthreads, 400, None],
                 [None, self.occ_parallel, 3, {"text":"OCC parallel boolean"}],
                 [None, self.skip_final_frag, 3, {"text":"Skip fragmentationn"}],
-                [None, self.use_1d_preview, 3, {"text":"Use line preview"}],                                
+                [None, self.use_1d_preview, 3, {"text":"Use line preview"}],
+                [None, self.use_curvature, 3, {"text":"Consider curvature in preview generation"}],                                                
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
                                    "noexpand": True}],]
@@ -506,8 +514,10 @@ class GmshGeom(GeomTopBase):
     def get_panel1_value(self):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
         txt = aname[self.geom_prev_algorithm]
-        return [None, txt, self.geom_prev_res, self.maxthreads, self.occ_parallel,
-                self.skip_final_frag, self.use_1d_preview, self]
+        return [None, txt, self.geom_prev_res, self.long_edge_thr,
+                self.small_edge_thr, self.small_edge_seg,
+                self.maxthreads, self.occ_parallel,
+                self.skip_final_frag, self.use_1d_preview, self.use_curvature, self]
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
@@ -516,10 +526,14 @@ class GmshGeom(GeomTopBase):
                 self.geom_prev_algorithm = k
 
         self.geom_prev_res = int(v[2])
-        self.maxthreads  =  int(v[3])
-        self.occ_parallel  = v[4]
-        self.skip_final_frag = v[5]
-        self.use_1d_preview = v[6]        
+        self.long_edge_thr = float(v[3])
+        self.small_edge_thr = float(v[4])
+        self.small_edge_seg = int(v[5])                
+        self.maxthreads  =  int(v[6])
+        self.occ_parallel  = v[7]
+        self.skip_final_frag = v[8]
+        self.use_1d_preview = v[9]
+        self.use_curvature = v[10]
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
