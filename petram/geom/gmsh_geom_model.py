@@ -460,6 +460,7 @@ class GmshGeom(GeomTopBase):
         v['long_edge_thr'] = 0.3        
         v['small_edge_thr'] = 0.001
         v['small_edge_seg'] = 1
+        v['max_seg'] = 30
         return v
         
     def get_possible_child(self):
@@ -501,7 +502,8 @@ class GmshGeom(GeomTopBase):
                 ["Preview Resolution", 30,  400, None],
                 ["Long  Edge Thr.", self.long_edge_thr, 300, None],                
                 ["Small Edge Thr.", self.small_edge_thr, 300, None],
-                ["Small Edge #Seg.", self.small_edge_seg, 400, None],                
+                ["Small Edge #Seg.", self.small_edge_seg, 400, None],
+                ["Max #seg in Preview", self.max_seg, 400, None],
                 ["Preview #threads", self.maxthreads, 400, None],
                 [None, self.occ_parallel, 3, {"text":"OCC parallel boolean"}],
                 [None, self.skip_final_frag, 3, {"text":"Skip fragmentationn"}],
@@ -515,7 +517,7 @@ class GmshGeom(GeomTopBase):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
         txt = aname[self.geom_prev_algorithm]
         return [None, txt, self.geom_prev_res, self.long_edge_thr,
-                self.small_edge_thr, self.small_edge_seg,
+                self.small_edge_thr, self.small_edge_seg, self.max_seg,
                 self.maxthreads, self.occ_parallel,
                 self.skip_final_frag, self.use_1d_preview, self.use_curvature, self]
        
@@ -528,12 +530,13 @@ class GmshGeom(GeomTopBase):
         self.geom_prev_res = int(v[2])
         self.long_edge_thr = float(v[3])
         self.small_edge_thr = float(v[4])
-        self.small_edge_seg = int(v[5])                
-        self.maxthreads  =  int(v[6])
-        self.occ_parallel  = v[7]
-        self.skip_final_frag = v[8]
-        self.use_1d_preview = v[9]
-        self.use_curvature = v[10]
+        self.small_edge_seg = int(v[5])
+        self.max_seg = int(v[6])                        
+        self.maxthreads  =  int(v[7])
+        self.occ_parallel  = v[8]
+        self.skip_final_frag = v[9]
+        self.use_1d_preview = v[10]
+        self.use_curvature = v[11]
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()

@@ -600,21 +600,22 @@ class GeomPB_Bool(GeomPB):
                     self.delete_tool,  3, {"text":""}])
         ll.append(["Keep highest dim only",
                     self.keep_highest,  3, {"text":""}])
+        ll.append([None, "Note: Use prefix v(volume), f(face), l(line), p(point)"  ,2, None])
         return ll
         
     def get_panel1_value(self):
         v = GeomPB.get_panel1_value(self)
-        return v + [self.delete_input, self.delete_tool, self.keep_highest]
+        return v + [self.delete_input, self.delete_tool, self.keep_highest, None]
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        GeomPB.import_panel1_value(self, v[:-3])        
-        self.delete_input = v[-3]
-        self.delete_tool = v[-2]
-        self.keep_highest = v[-1]  
+        GeomPB.import_panel1_value(self, v[:-4])        
+        self.delete_input = v[-4]
+        self.delete_tool = v[-3]
+        self.keep_highest = v[-2]  
 
     def panel1_tip(self):
         tip = GeomPB.panel1_tip(self)

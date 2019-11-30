@@ -165,6 +165,7 @@ class Geometry(object):
         self.long_edge_thr = kwargs.pop('LongEdgeThr', 0.1)
         self.small_edge_thr = kwargs.pop('SmallEdgeThr', 0.001)
         self.small_edge_seg = kwargs.pop('SmallEdgeSeg', 3)
+        self.max_seg = kwargs.pop('MaxSeg', 30)
         
         gmsh.option.setNumber("Geometry.OCCParallel", self.occ_parallel)        
         
@@ -2196,15 +2197,14 @@ class Geometry(object):
             vcl[tag] = np.max([vcl[tag]/self.geom_prev_res, modelsize*too_small])
         #print(vcl)        
         
-        max_seg = 30
         for dim, tag in self.model.getEntities(1):      
             bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
             ll = [vcl[vtag] for dim,vtag in bdimtags if vtag in vcl]
             if len(ll) == 0: continue
-            if esize[tag] > np.max(ll)*max_seg:
+            if esize[tag] > np.max(ll)*self.max_seg:
                 do_first.append((1, tag))
                 for dim,vtag in bdimtags:
-                    gmsh.model.mesh.setSize(((0, tag),), esize[tag]/max_seg)
+                    gmsh.model.mesh.setSize(((0, tag),), esize[tag]/self.max_seg)
             if esize[tag] < modelsize*too_small:
                 do_first.append((1, tag))
                 gmsh.model.mesh.setTransfiniteCurve(tag, self.small_edge_seg, meshType="Bump", coef=1)
@@ -2444,7 +2444,8 @@ class GeometrySequence(object):
                   'UseCurvature': gui.use_curvature,
                   'LongEdgeThr': gui.long_edge_thr,
                   'SmallEdgeThr': gui.small_edge_thr,
-                  'SmallEdgeSeg': gui.small_edge_seg}                  
+                  'SmallEdgeSeg': gui.small_edge_seg,
+                  'MaxSeg': gui.max_seg}                          
 
         p = process_param[0]
         task_q = process_param[1]
