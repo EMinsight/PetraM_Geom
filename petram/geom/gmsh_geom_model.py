@@ -464,11 +464,11 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,  Fillet, Chamfer, Array, ArrayRot
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,  Fillet, Chamfer, Array, ArrayRot
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
@@ -480,7 +480,7 @@ class GmshGeom(GeomTopBase):
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
                 ("", Array), ("!", ArrayRot),
-                ("Boolean...", Union),("",Intersection),("",Difference),("!",Fragments),
+                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlain),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
                 ("Import...", BrepImport),("", CADImport),("!", healCAD),
                 ]
@@ -760,7 +760,7 @@ class GmshGeom(GeomTopBase):
             self._prev_sequence = []
             return
         
-        gui_data, objs, brep_file, data, vcl = dataset
+        gui_data, objs, brep_file, data, vcl, esize = dataset
 
         self._geom_brep = brep_file
         self.update_GUI_after_geom(gui_data, objs)
@@ -771,10 +771,15 @@ class GmshGeom(GeomTopBase):
         ptx, cells, cell_data, l, s, v = data
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, gs)
 
-        self._clmax_guess = vcl
-
+        values = vcl.values()
+        if len(values) > 0:
+            self._clmax_guess = (max(values), min(values))
+        else:
+            self._clmax_guess =  1e20, 0
+            
+        self._vcl = vcl
+        self._esize = esize
         return
-
 
     def build_geom(self, stop1=None, stop2=None, filename = None,
                    finalize = False, gui_parent=None):

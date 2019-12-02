@@ -6,7 +6,6 @@ Custom  Vtable for geometry
 
 
 class VtableElement_Direction(VtableElement):
-
     def add_attribute(self, v):
         v = VtableElement.add_attribute(self, v) 
         v['use_normal'] = False
@@ -103,6 +102,84 @@ class VtableElement_Direction(VtableElement):
         else:
             pass
         return ret
+    
+class VtableElement_Plain(VtableElement):
+    def add_attribute(self, v):
+        v = VtableElement.add_attribute(self, v) 
+        v['use_face_parallel'] = False
+        v['face_parallel_txt1'] = ''
+        v['face_parallel_txt2'] = ''                
+        v['use_3_points'] = False
+        v['by_3_points_txt1'] = ''
+        v['by_3_points_txt2'] = ''
+        v['by_3_points_txt3'] = ''
+        
+        return v
+    
+    def panel_param(self, obj, validator = None):
+        ret = VtableElement.panel_param(self, obj, validator = validator)
+        ret[3] = list(ret[3])
+        ret[3][0]['choices'].append('By 3 points') 
+        ret[3][0]['choices'].append('Face parallel and point')
+        elp3 = [["Point 1",  None, 0,  {}],
+                ["Point 2",    None, 0,  {}],
+                ["Point 3",    None, 0,  {}],]
+        elp4 = [["Face",  None, 0,  {}],
+                ["Point",  None, 0,  {}],]
+        ret[3].append({'elp': elp3})
+        ret[3].append({'elp': elp4})
+
+        return ret    
+
+    def get_panel_value(self, obj):
+        ret = VtableElement.get_panel_value(self, obj)        
+        if obj.use_face_parallel:
+            ret[0] = 'Face parallel and point'
+        elif obj.use_3_points:
+            ret[0] = 'By 3 points'
+        else:
+            pass
+
+        ret.append([obj.by_3_points_txt1,
+                    obj.by_3_points_txt2,
+                    obj.by_3_points_txt3,])
+        ret.append([obj.face_parallel_txt1,
+                    obj.face_parallel_txt2,])
+
+        return ret
+    
+    def import_panel_value(self, obj, v):
+        obj.use_3_points = False
+        obj.use_face_parallel = False
+        if v[0] == 'Face parallel and point':
+            setattr(obj, 'use_m_'+self.name, False)
+            obj.use_face_parallel = True
+            obj.face_parallel_txt1 = v[4][0]
+            obj.face_parallel_txt2 = v[4][1]            
+        elif v[0] == 'By 3 points':
+            setattr(obj, 'use_m_'+self.name, False)            
+            obj.use_3_points = True
+            obj.by_3_points_txt1 = v[3][0]
+            obj.by_3_points_txt2 = v[3][1]
+            obj.by_3_points_txt3 = v[3][2]            
+        else:
+            VtableElement.import_panel_value(self, obj, v)
+
+    def make_value_or_expression(self, obj):
+        ret = VtableElement.make_value_or_expression(self, obj)
+        if obj.use_face_parallel:
+             ret = ['face_parallel',
+                     obj.face_parallel_txt1,
+                     obj.face_parallel_txt2]                    
+        elif obj.use_3_points:
+             ret = ['3_points',
+                     obj.by_3_points_txt1,
+                     obj.by_3_points_txt2,
+                     obj.by_3_points_txt3,]
+        else:
+            ret = ['by_abc', ret]
+        return ret
+    
 class VtableElement_ToPoint(VtableElement):
     pass
 

@@ -119,6 +119,30 @@ def get_target2(objs, targets):
            if t.startswith("v"): ret.append(VolumeID(int(t[1:])))         
     return ret
 
+def find_combined_bbox(model, dimtags):
+    xmax = -np.inf
+    xmin =  np.inf
+    ymax = -np.inf
+    ymin =  np.inf
+    zmax = -np.inf
+    zmin =  np.inf
+
+    def update_maxmin(dim, tag, xmin, ymin, zmin, xmax, ymax, zmax):
+        x1, y1, z1, x2, y2, z2 = model.getBoundingBox(dim, tag)           
+        xmax = np.max([xmax, x2])
+        ymax = np.max([ymax, y2])
+        zmax = np.max([zmax, z2])
+        xmin = np.min([xmin, x1])
+        ymin = np.min([ymin, y1])
+        zmin = np.min([zmin, z1])
+        return xmin, ymin, zmin, xmax, ymax, zmax
+
+    for dim, tag in dimtags:
+        xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
+                                                           xmin, ymin, zmin,
+                                                           xmax, ymax, zmax)
+    return xmin, ymin, zmin, xmax, ymax, zmax
+
 class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
@@ -623,30 +647,12 @@ class Geometry(object):
         out_entity = self._boolean_xxx('fuse', input_entity, tool_entity,
                                  removeObject=removeObject, removeTool=removeTool,
                                  delete=delete)
-        self.factory.synchronize()                
+        
+        self.factory.synchronize()
 
-        xmax = -np.inf
-        xmin =  np.inf
-        ymax = -np.inf
-        ymin =  np.inf
-        zmax = -np.inf
-        zmin =  np.inf
-        
-        def update_maxmin(dim, tag, xmin, ymin, zmin, xmax, ymax, zmax):
-            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)           
-            xmax = np.max([xmax, x2])
-            ymax = np.max([ymax, y2])
-            zmax = np.max([zmax, z2])
-            xmin = np.min([xmin, x1])
-            ymin = np.min([ymin, y1])
-            zmin = np.min([zmin, z1])
-            return xmin, ymin, zmin, xmax, ymax, zmax
-        
         out_dimtag = get_dimtag(out_entity)
-        for dim, tag in out_dimtag:
-            xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
-                                                               xmin, ymin, zmin,
-                                                               xmax, ymax, zmax)
+        xmin, ymin, zmin, xmax, ymax, zmax = find_combined_bbox(self.model, out_dimtag)
+        
         dprint1("bounding box", xmin, ymin, zmin, xmax, ymax, zmax)
         
         dx = xmax-xmin
@@ -803,6 +809,51 @@ class Geometry(object):
         #print('output', outdimtags)                                                     
         return dimtag2id(outdimtags)
 
+    def add_box(self, points):
+        p1, p2, p3, p4, p5, p6, p7, p8 = points
+        lcar = 0.0
+        
+        p1 = self.add_point(p1, lcar)
+        p2 = self.add_point(p2, lcar)
+        p3 = self.add_point(p3, lcar)
+        p4 = self.add_point(p4, lcar)
+        p5 = self.add_point(p5, lcar)        
+        p6 = self.add_point(p6, lcar)
+        p7 = self.add_point(p7, lcar)
+        p8 = self.add_point(p8, lcar)
+
+        l1 = self.add_line(p1, p2)
+        l2 = self.add_line(p2, p5)
+        l3 = self.add_line(p5, p3)
+        l4 = self.add_line(p3, p1)
+        l5 = self.add_line(p1, p4)
+        l6 = self.add_line(p2, p7)
+        l7 = self.add_line(p5, p8)
+        l8 = self.add_line(p3, p6)
+        l9  = self.add_line(p4, p7)
+        l10 = self.add_line(p7, p8)
+        l11 = self.add_line(p8, p6)        
+        l12 = self.add_line(p6, p4)
+        
+        
+        ll1 = self.add_curve_loop([l1, l2, l3, l4])
+        ll2 = self.add_curve_loop([l5, l9, l6, l1])        
+        ll3 = self.add_curve_loop([l6, l10, l7, l2])
+        ll4 = self.add_curve_loop([l7, l11, l8, l3])        
+        ll5 = self.add_curve_loop([l8, l12, l5, l4])
+        ll6 = self.add_curve_loop([l9, l10, l11, l12])
+        
+        rec1 = self.add_plane_surface(ll1)
+        rec2 = self.add_plane_surface(ll2)
+        rec3 = self.add_plane_surface(ll3)
+        rec4 = self.add_plane_surface(ll4)
+        rec5 = self.add_plane_surface(ll5)
+        rec6 = self.add_plane_surface(ll6)
+
+        sl = self.add_surface_loop([rec1, rec2, rec3, rec4, rec5, rec6])
+        v1 = self.add_volume(sl)
+        return v1
+        
     '''
     high level interface: 
       methods below directroy corresponds to GUI interface
@@ -1050,7 +1101,8 @@ class Geometry(object):
         return  list(objs), [newkey]
     
         #self._objkeys = objs.keys()
-        #self._newobjs = [newkey]        
+        #self._newobjs = [newkey]
+
 
     def Box_build_geom(self, objs, *args):
         c1,  e1,  e2,  e3 = args
@@ -1058,6 +1110,16 @@ class Geometry(object):
         c1 = np.array(c1);
         e1 = np.array(e1);
         e2 = np.array(e2);
+        p1 = c1
+        p2 = c1+e1
+        p3 = c1+e2
+        p4 = c1+e3
+        p5 = c1+e1+e2
+        p6 = c1+e2+e3
+        p7 = c1+e3+e1
+        p8 = c1+e3+e2+e1
+
+        '''
         p1 = self.add_point(c1, lcar)
         p2 = self.add_point(c1+e1, lcar)
         p3 = self.add_point(c1+e2, lcar)
@@ -1066,37 +1128,8 @@ class Geometry(object):
         p6 = self.add_point(c1+e2+e3, lcar)
         p7 = self.add_point(c1+e3+e1, lcar)
         p8 = self.add_point(c1+e3+e2+e1, lcar)
-        
-        l1 = self.add_line(p1, p2)
-        l2 = self.add_line(p2, p5)
-        l3 = self.add_line(p5, p3)
-        l4 = self.add_line(p3, p1)
-        l5 = self.add_line(p1, p4)
-        l6 = self.add_line(p2, p7)
-        l7 = self.add_line(p5, p8)
-        l8 = self.add_line(p3, p6)
-        l9  = self.add_line(p4, p7)
-        l10 = self.add_line(p7, p8)
-        l11 = self.add_line(p8, p6)        
-        l12 = self.add_line(p6, p4)
-        
-        
-        ll1 = self.add_curve_loop([l1, l2, l3, l4])
-        ll2 = self.add_curve_loop([l5, l9, l6, l1])        
-        ll3 = self.add_curve_loop([l6, l10, l7, l2])
-        ll4 = self.add_curve_loop([l7, l11, l8, l3])        
-        ll5 = self.add_curve_loop([l8, l12, l5, l4])
-        ll6 = self.add_curve_loop([l9, l10, l11, l12])
-        
-        rec1 = self.add_plane_surface(ll1)
-        rec2 = self.add_plane_surface(ll2)
-        rec3 = self.add_plane_surface(ll3)
-        rec4 = self.add_plane_surface(ll4)
-        rec5 = self.add_plane_surface(ll5)
-        rec6 = self.add_plane_surface(ll6)
-
-        sl = self.add_surface_loop([rec1, rec2, rec3, rec4, rec5, rec6])
-        v1 = self.add_volume(sl)
+        '''
+        v1 = self.add_box((p1, p2, p3, p4, p5, p6, p7, p8,))
         
         newkey = objs.addobj(v1, 'bx')
         
@@ -1914,6 +1947,123 @@ class Geometry(object):
                 
         return list(objs), newkeys
     
+    def SplitByPlain_build_geom(self, objs, *args):
+        print(args)
+        def project_ptx_2_plain(normal, cptx, p):
+            dp = p - cptx
+            dp = dp - np.sum(dp*normal)*normal
+            return dp + cptx
+            
+        def containing_bbox(normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax):
+            corners = (np.array([xmin, ymin, zmin]),
+                       np.array([xmin, ymin, zmax]),
+                       np.array([xmin, ymax, zmin]),
+                       np.array([xmax, ymin, zmin]),
+                       np.array([xmax, ymax, zmin]),
+                       np.array([xmin, ymax, zmax]),
+                       np.array([xmax, ymin, zmax]),
+                       np.array([xmax, ymax, zmax]),)
+            # projected point
+            p = [project_ptx_2_plain(normal, cptx, pp) for pp in corners]
+            
+            # distance from plain
+            d = [np.sum((pp-cptx)*normal) for pp in corners]
+            dist1 = np.max(d)
+
+            # distance on the plain            
+            d = [np.sqrt(np.sum((pp-cptx)**2)) for pp in p]
+            idx = np.argmax(d)
+            dist2 = np.max(d)
+
+            size = np.max((dist1, dist2))*1.2
+
+            n1 = (p[idx] - cptx)
+            n2 = np.cross(normal, n1)
+
+            c1 = cptx - n1*size - n2*size
+            e1 = 2*n1*size
+            e2 = 2*n2*size
+            e3 = normal*size
+            box = (c1, c1+e1, c1+e2, c1+e3, c1+e1+e2, c1+e2+e3, c1+e3+e1,
+                   c1+e3+e2+e1)
+            
+            return box
+
+        targets = [x.strip() for x in args[0].split(',')]          
+        tt = get_target2(objs, targets)
+
+        dimtags = [id2dimtag(i) for i in tt]                                         
+        xmin, ymin, zmin, xmax, ymax, zmax = find_combined_bbox(self.model, dimtags)
+        
+        if args[1][0] == '3_points':
+            # args[1] = ['3_points', '1', '7', '8']
+            
+            ptx1ID = get_target1(objs, [args[1][1],], 'p')[0]
+            ptx2ID = get_target1(objs, [args[1][2],], 'p')[0]
+            ptx3ID = get_target1(objs, [args[1][3],], 'p')[0]            
+            ptx1 = np.array(gmsh.model.getValue(0, int(ptx1ID), []))
+            ptx2 = np.array(gmsh.model.getValue(0, int(ptx2ID), []))
+            ptx3 = np.array(gmsh.model.getValue(0, int(ptx3ID), []))
+            
+            n = np.cross(ptx1-ptx2, ptx1-ptx3)
+            if np.sum(n**2)==0:
+                assert False, "three points does not span a surface."
+            normal = n/np.sqrt(np.sum(n**2))
+            cptx = (ptx1 + ptx2 + ptx3)/3.0
+        elif args[1][0] == 'by_abc':
+            data = np.array(args[1][1]).flatten()
+            xmin, ymin, zmin, xmax, ymax, zmax = find_combined_bbox(self.model, dimtags)
+            normal = data[:3]
+            xx = np.array([(xmin+xmax)/2, (ymin+ymax)/2.0, (zmin+zmax)/2.0])
+            s = data[-1]-np.sum(normal*xx)
+            cptx = xx + s*normal
+        elif args[1][0] == 'face_parallel':
+            faceID = get_target1(objs, [args[1][1],], 'f')[0]
+            ptxID = get_target1(objs, [args[1][2],], 'p')[0]
+            cptx = np.array(gmsh.model.getValue(0, int(ptxID), []))            
+
+            n1 = np.array(gmsh.model.getNormal(faceID, (0, 0)))
+            n2 = np.array(gmsh.model.getNormal(faceID, (0, 1)))
+            n3 = np.array(gmsh.model.getNormal(faceID, (1, 0)))
+            n1 /= np.sqrt(np.sum(n1**2))
+            n2 /= np.sqrt(np.sum(n2**2))
+            n3 /= np.sqrt(np.sum(n3**2))            
+            
+            if np.any(n1 != n2) or np.any(n1 != n3):
+                assert False, "surface is not flat"
+            normal = n1
+
+        else:
+            assert False, "unknown option:" + args
+            
+        points = containing_bbox(normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
+        v = self.add_box(points)
+
+        print(tt, v)
+        ret1 = self.boolean_difference(tt, (v,),
+                                       removeObject = False,
+                                       removeTool =  False)
+        ret2 = self.boolean_intersection(tt, (v,),
+                                         removeObject = True,
+                                         removeTool = True)
+        newkeys = []
+        for rr in ret1 + ret2:
+            if rr.dim == tt[0].dim:
+                newkeys.append(objs.addobj(rr, 'splt'))
+            else:
+                if keep_highest:
+                     self.remove([rr], recursive=True)
+                else:
+                     newkeys.append(objs.addobj(rr,  get_geom_key(rr)))                
+        
+        for x in targets: 
+            if x in objs: del objs[x]
+            
+        return list(objs), newkeys
+        
+
+        return  list(objs), []
+    
     def _WorkPlane_build_geom(self, objs, c1, a1, a2):
         x1 = np.array([1., 0., 0.])
         
@@ -2299,13 +2449,7 @@ class Geometry(object):
             geom_msh = os.path.join(os.getcwd(), filename+'.msh')
             gmsh.write(geom_msh)
 
-        values = vcl.values()
-        if len(values) > 0:
-            a =  max(values)
-            b =  min(values)
-            return a, b
-        else:
-            return 1e20, 0
+        return vcl, esize
     
     def generate_brep(self, objs, filename = '', finalize=False):
         
@@ -2410,14 +2554,14 @@ class GMSHGeometryGenerator(mp.Process):
             q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
 
         else:
-            vcl = self.mw.generate_preview_mesh()
+            vcl, esize = self.mw.generate_preview_mesh()
 
             from petram.geom.read_gmsh import read_pts_groups, read_loops        
             ptx, cells, cell_data = read_pts_groups(gmsh)
             l, s, v = read_loops(gmsh)
 
             data = ptx, cells, cell_data, l, s, v
-            q.put((True, (self.gui_data, self.objs, brep_file, data, vcl)))
+            q.put((True, (self.gui_data, self.objs, brep_file, data, vcl, esize)))
 
 
 class GeometrySequence(object):

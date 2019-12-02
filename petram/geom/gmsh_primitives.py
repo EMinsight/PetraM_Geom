@@ -323,11 +323,6 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Target',
                                       default = "",
                                       tip = "extrusion target")),
-          #('paxis', VtableElement('paxis', type='float',
-          #                   guilabel = 'Point on Axis',
-          #                   suffix =('x', 'y', 'z'),
-          #                   default = [0,0,0],
-          #                   tip = "point on axis" )),
           ('taxis', VtableElement_Direction('taxis', type='float',
                                    guilabel = 'Translation Axis',
                                    suffix =('x', 'y', 'z'),
@@ -939,6 +934,20 @@ class Array2D(GeomPB):
     def fancy_menu_name(self):
         return 'Array'
 
+edata =  (('ex_target', VtableElement('ex_target', type='string',
+                                      guilabel = 'Target',
+                                      default = "",
+                                      tip = "target object")),
+          ('taxis', VtableElement_Plain('taxis', type='float',
+                                        guilabel = 'cut plain',
+                                        suffix = ('a', 'b', 'c', 'd'),
+                                        default = [1, 0,  0, 0],
+                                        tip = "Cutting Plain" )),)
+
+class SplitByPlain(GeomPB):    
+    vt = Vtable(edata)
+
+    
 data0 = (('center', VtableElement('center', type='float',
                                  guilabel = 'Center',
                                  suffix =('x', 'y', 'z'),
@@ -948,12 +957,12 @@ data0 = (('center', VtableElement('center', type='float',
                                  guilabel = '1st Axis',
                                  suffix =('x', 'y', 'z'),
                                  default = [0, 1, 0], 
-                                 tip = "Center of WP" )),
+                                 tip = "1st Axis" )),
          ('ax2', VtableElement('ax2', type='float',
                                  guilabel = '2nd Axis',
                                  suffix =('x', 'y', 'z'),
                                  default = [0, 0, 1], 
-                                 tip = "Center of WP" )),)
+                                 tip = "2nd Axis" )),)
 
 class WorkPlane(GeomPB):
     vt = Vtable(data0)
