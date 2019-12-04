@@ -147,9 +147,12 @@ def find_translate_between_surface(src, dst, geom=None,
     n1 = normal2points(p1)
     n2 = normal2points(p2)
 
-    #print(p1, p2, n1, n2, axan)
     if axan is None:
-        ax = np.cross(n1, n2)
+        ax = n1
+        an = 0.0
+
+
+        '''
         ax = ax/np.linalg.norm(ax)    
         n3 = np.cross(ax, n1)
         xx = np.sum(n2*n1)
@@ -157,6 +160,7 @@ def find_translate_between_surface(src, dst, geom=None,
         #an = np.arcsin(np.linalg.norm(ax))
         an = np.arctan2(yy, xx)
         #print("p2, axis angle", xx, yy, p2, ax, an)        
+        '''
     else:
         ax, an = axan
         ax = np.array(ax, dtype=float)

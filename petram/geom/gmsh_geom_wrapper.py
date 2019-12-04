@@ -889,6 +889,7 @@ class Geometry(object):
            return
 
         dist = np.sqrt(np.sum((pos[:-1,:]- pos[1:,:])**2,1))
+        print(dist)
         if min(dist) == 0.0:
            assert False, "minimum distance between point is 0.0"
         if max(dist) > min(dist)*1e4:

@@ -253,36 +253,38 @@ class FreeEdge(GmshMeshActionBase):
         except:
             pass
         return ret, 'edge'
-'''    
-data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Surface# (To)',
-                                   default = "", 
-                                   tip = "Surface number" )),
-        ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Source# (From)',
-                                  default = "", 
-                                  tip = "Surface number" )),)
-class Rotate(GmshMeshActionBase):
-    vt = Vtable(data)    
-    def add_meshcommand(self, mesher):
-        gid, src_id = self.vt.make_value_or_expression(self)
-        mesher.add('rotate', gid, src=src_id, transform=self.name())
-        
-data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Point# (To)',
-                                   default = "", 
-                                   tip = "Point number" )),
-        ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Point# (From)',
-                                  default = "", 
-                                  tip = "Point number" )),)
 
-class Translate(GmshMeshActionBase):
-    vt = Vtable(data)    
-    def add_meshcommand(self, mesher):
-        gid, src_id = self.vt.make_value_or_expression(self)
-        mesher.add('translate', gid, src=src_id, transform=self.name())
-'''       
+# Transform Hint (extrude)
+#    d     : dx, dy, dz : 3 float
+#    l1, l2,,,,: set of edges : end points determines d (N.I.)
+def process_hint_ex(text):
+    try:
+        text = str(text)
+        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]        
+        values = [float(x) for x in values]
+        if len(values) == 3:
+            return {'axan': (values, 0.0)}
+        else:
+            assert False, "enter direction of translation"
+    except:
+        pass
+    return {}
+    
+# Transform Hint (revolve)
+#    ax an : ax_x, ax_y, ax_z, angle(deg): 4 float
+#    l1, angle  : l1 direction of axis, angle (deg) (N.I.)
+#    s1, angle  : normal to face s1, angle (deg) (N.I.)
+def process_hint_rv(text):
+    try:
+        text = str(text)
+        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]        
+        values = [float(x) for x in values]
+        if len(values) == 4:
+            return {'axan': (values[0:3], values[-1])}
+    except:
+        pass
+    return {}
+
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Surface# (To)',
                                    default = "", 
@@ -292,7 +294,7 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                   default = "", 
                                   tip = "Surface number" )),
         ('mapper', VtableElement('mapper', type='string',
-                                  guilabel = 'Transform',
+                                  guilabel = 'Transform Hint',                                 
                                   default = "", 
                                   tip = "Coordinate transformatin " )),
         ('cp_cl', VtableElement('cp_cl', type='bool',
@@ -305,14 +307,38 @@ data = (('geom_id', VtableElement('geom_id', type='string',
 class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
-        gid, src_id, transform, cp_cl = self.vt.make_value_or_expression(self)
+        gid, src_id, hint, cp_cl = self.vt.make_value_or_expression(self)
         gid  = self.eval_enitity_id(gid)
+       
+        kwargs = process_hint_ex(hint)
+        kwargs['copy_cl'] = cp_cl
+
+        mesher.add('copyface', src_id, gid,
+                   **kwargs)
         
-        mesher.add('copyface',
-                   src_id,                   
-                   gid,
-                   transfomr = transform,
-                   copy_cl = cp_cl)
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)                
+        ret, mode = self.element_selection_empty()
+        try:
+            dest = [int(x) for x in self.geom_id.split(',')]
+            src  = [int(x) for x in self.src_id.split(',')]
+            ret['face'] = dest + src
+        except:
+            pass
+        return ret, 'face'
+    
+class CopyFaceRotate(GmshMeshActionBase):
+    vt = Vtable(data)        
+    def add_meshcommand(self, mesher):
+        gid, src_id, hint, cp_cl = self.vt.make_value_or_expression(self)
+        gid  = self.eval_enitity_id(gid)
+                    
+        kwargs = process_hint_rv(hint)
+        kwargs['copy_cl'] = cp_cl
+        kwargs['revolve'] = True
+                    
+        mesher.add('copyface', src_id, gid,
+                   **kwargs)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -430,19 +456,6 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
                                    guilabel = 'Transform Hint',
                                    default = "", 
                                    tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),)
-# Transform Hint (extrude)
-#    d     : dx, dy, dz : 3 float
-#    l1, l2,,,,: set of edges : end points determines d (N.I.)
-def process_hint_ex(text):
-    try:
-        text = str(text)
-        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]        
-        values = [float(x) for x in values]
-        if len(values) == 3:
-            return {'d': values}
-    except:
-        pass
-    return {}
     
 class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
@@ -464,20 +477,6 @@ class ExtrudeMesh(GmshMeshActionBase):
             pass
         return ret, 'face'
 
-# Transform Hint (revolve)
-#    ax an : ax_x, ax_y, ax_z, angle(deg): 4 float
-#    l1, angle  : l1 direction of axis, angle (deg) (N.I.)
-#    s1, angle  : normal to face s1, angle (deg) (N.I.)
-def process_hint_rv(text):
-    try:
-        text = str(text)
-        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]        
-        values = [float(x) for x in values]
-        if len(values) == 4:
-            return {'axan': (values[0:3], values[-1])}
-    except:
-        pass
-    return {}
     
 class RevolveMesh(GmshMeshActionBase):
     vt = Vtable(edata)
