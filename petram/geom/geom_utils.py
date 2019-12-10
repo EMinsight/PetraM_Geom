@@ -178,7 +178,6 @@ def find_translate_between_surface(src, dst, geom=None,
         p3 = np.dot(R, p2.transpose()).transpose()
         
         # try all transpose
-        #print("p1, p3 (1)", p1, p3)        
         for i in range(len(p1)):
             d = p3[0]- p1[i]
             p3t = p3 - d
