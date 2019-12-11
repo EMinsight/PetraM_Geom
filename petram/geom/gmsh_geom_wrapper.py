@@ -2178,7 +2178,6 @@ class Geometry(object):
         
         PTs = self.factory.importShapes(cad_file, 
                                         highestDimOnly=highestDimOnly)
-
         #debug to load one element...
         '''
         for dim, tag in PTs:
@@ -2210,7 +2209,12 @@ class Geometry(object):
         return list(objs), newkeys
     
     def CADImport_build_geom(self, objs, *args):
-        return self.BrepImport_build_geom(objs, *args)
+        unit = args[-1]
+        gmsh.option.setString("Geometry.OCCTargetUnit", unit)
+        args = args[:-1]
+        ret = self.BrepImport_build_geom(objs, *args)
+        gmsh.option.setString("Geometry.OCCTargetUnit", "")
+        return ret
         
     '''
     sequence/preview/brep generator
@@ -2345,7 +2349,10 @@ class Geometry(object):
         too_small2=5e-2
 
         for tag in list(vcl):
-            vcl[tag] = np.max([vcl[tag]/self.geom_prev_res, modelsize*too_small])
+            s = np.max([vcl[tag]/self.geom_prev_res, modelsize*too_small])
+            if s > modelsize*too_large:
+                s = modelsize*too_large
+            vcl[tag] = s
         #print(vcl)        
         
         for dim, tag in self.model.getEntities(1):      
@@ -2361,6 +2368,7 @@ class Geometry(object):
                 gmsh.model.mesh.setTransfiniteCurve(tag, self.small_edge_seg, meshType="Bump", coef=1)
                 
         self.show_only(do_first)
+        print("do_first")
         gmsh.model.mesh.generate(1)
 
         self.show_all()

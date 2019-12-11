@@ -1120,7 +1120,9 @@ class CADImport(GeomPB):
                                  'noexpand': True},],
               ["File(STEP/IGES)", None, 45, {'wildcard':wc}],
               cad_fix_elp,
-              [None, True, 3, {'text':"Highest Dim Only"}],              
+              [None, True, 3, {'text':"Highest Dim Only"}],
+              ["Unit", None, 0,  {}],
+              [None, "Unit: "", M, MM, INCH, KM, CM, FT, MIL, UM..." ,2, None],
               ]
 
         return ll
@@ -1132,11 +1134,12 @@ class CADImport(GeomPB):
         v["use_fix_param"] = [True]*4
         v["use_fix_tol"] = 1e-8
         v["highestdimonly"] = True
+        v["import_unit"] = ""
         return v
         
     def get_panel1_value(self):
         value = [self.use_fix, [self.use_fix_param, self.use_fix_tol]]
-        return [None, self.cad_file, value, self.highestdimonly]
+        return [None, self.cad_file, value, self.highestdimonly, self.import_unit, None]
 
     def preprocess_params(self, engine):
         return
@@ -1147,14 +1150,15 @@ class CADImport(GeomPB):
         self.use_fix_param = [x[1] for x in v[2][1][0]]
         self.use_fix_tol = float(v[2][1][1])
         self.highestdimonly = bool(v[3])
-        
+        self.import_unit = v[4]
 
     def panel1_tip(self):
         return [None, None, None]
   
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol, self.highestdimonly)
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol,
+                     self.highestdimonly, self.import_unit)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
@@ -1188,7 +1192,7 @@ class BrepImport(GeomPB):
         v["use_fix"] = False
         v["use_fix_param"] = [True]*4
         v["use_fix_tol"] = 1e-8
-        v["highestdimonly"] = True        
+        v["highestdimonly"] = True
         return v
         
     def get_panel1_value(self):
@@ -1203,14 +1207,14 @@ class BrepImport(GeomPB):
         self.use_fix = v[2][0]
         self.use_fix_param = [x[1] for x in v[2][1][0]]
         self.use_fix_tol = float(v[2][1][1])
-        self.highestdimonly = bool(v[3])        
+        self.highestdimonly = bool(v[3])
 
     def panel1_tip(self):
         return [None, None, None]
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol, self.highestdimonly)        
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol, self.highestdimonly,)        
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
         
