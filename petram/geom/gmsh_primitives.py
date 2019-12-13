@@ -572,7 +572,11 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
           ('recursive', VtableElement('recursive', type='bool',
                                       guilabel = 'Recursive',
                                       default = True,
-                                      tip = "delete recursively")), )
+                                      tip = "delete recursively")), 
+          ('inverse_sel', VtableElement('inverse_sel', type='bool',
+                                      guilabel = 'Select keep',
+                                      default = False,
+                                      tip = "selected object is kept")), )
 
 class Remove(GeomPB):
     vt = Vtable(data0)  

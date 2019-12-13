@@ -571,6 +571,8 @@ class GmshGeom(GeomTopBase):
         evt.Skip()
         
     def onUpdateGeoView4(self, evt, filename = None):
+        if self._gmsh4_data is None: return
+        
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
         ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
@@ -731,6 +733,10 @@ class GmshGeom(GeomTopBase):
 
         if new_process:
             if (hasattr(self, "_p") and self._p[0].is_alive()):
+                self._p[1].close()
+                self._p[2].close()
+                self._p[1].cancel_join_thread()
+                self._p[2].cancel_join_thread()                
                 self._p[0].terminate()
 
             task_q = mp.Queue() # data to child
@@ -756,8 +762,9 @@ class GmshGeom(GeomTopBase):
 
         if not success:
             print(dataset) # this is an error message
-            self._p[0].terminate()
+            #self._p[0].terminate()
             self._prev_sequence = []
+            del self._p
             return
         
         gui_data, objs, brep_file, data, vcl, esize = dataset
@@ -821,31 +828,66 @@ class GmshGeom(GeomTopBase):
         if path != '':
             from shutil import copyfile
             copyfile(self._geom_brep, path)
-
-    '''
-    def load_gui_figure_data(self, viewer):
-        import meshio
-        filename = os.path.join(viewer.model.owndir(), self.name())
-        msh_filename = filename + '.msh'
-        if not os.path.exists(msh_filename):
-            return 'geom', self.name(), None
-        ret = meshio.read(msh_filename)
-
-        filename = os.path.join(viewer.model.owndir(), self.name())
-        filename = filename + '.geo_unrolled'
-        if os.path.exists(filename):
-            fid = open(filename, 'r')
-            unrolled = [l.strip() for l in fid.readlines()]
-            fid.close()
-            viewer._s_v_loop['geom'] = read_loops(unrolled)        
-            viewer._s_v_loop['mesh'] = viewer._s_v_loop['geom']
-
-        return 'geom', self.name(), ret
-    '''
+            
     def is_viewmode_grouphead(self):
         return True
-    
 
+    def get_faceedges(self, faces):
+        s2l = self._gmsh4_data[4]
+        edges = [s2l[k] for k in faces]
+        return edges
+    
+    def get_facevertices(self, faces):
+        edges = self.get_faceedges(faces)
+        l2p = self._gmsh4_data[3]
+        points = [self.get_edgevertices(k) for k in edges]
+        return points
+    
+    def get_edgevertices(self, edges):
+        l2p = self._gmsh4_data[3]
+        points = sum([l2p[kk] for kk in edges],[])
+        return points
+
+    def get_edgecontaining_faces(self, edge):
+        from petram.mesh.mesh_utils import line2surf
+        l2s = line2surf(self._gmsh4_data[4])
+
+        return l2s[edge]
+    
+    def get_vertexcontaining_edges(self, vertex):
+        from petram.mesh.mesh_utils import line2surf
+        p2l = line2surf(self._gmsh4_data[3])
+
+        return p2l[vertex]
+
+    def find_tinyedges(self, thr = 1e-5):
+        '''
+        find shot edges
+        '''
+        if not hasattr(self, '_esize'): return None
+        el_max = max(list(self._esize.values()))
+        edges = np.array([x for x in self._esize if self._esize[x] < el_max*thr])
+        ratio = np.array([self._esize[x]/el_max for x in edges])
+
+        idx = np.argsort(ratio)
+        return list(edges[idx]), list(ratio[idx])
+    
+    def find_tinyfaces(self, thr = 1e-5):
+        '''
+        find faces those all edges are small
+        '''
+        if not hasattr(self, '_esize'): return None
+        if not hasattr(self, '_gmsh4_data'): return None
+        
+        el_limit = max(list(self._esize.values()))*thr
+
+        s2l = self._gmsh4_data[4]
+        l2p = self._gmsh4_data[3]        
+        tinyfaces = [k for k in s2l if np.all([self._esize[x] < el_limit for x in s2l[k]])]
+        edges = self.get_faceedges(tinyfaces)
+        points = self.get_facevertices(tinyfaces)
+
+        return tinyfaces, edges, points
     
 def check_dim(unrolled):
     for line in unrolled:

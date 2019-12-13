@@ -25,7 +25,10 @@ class Polygon(object):
 class GeomIDBase(int):
    def __repr__(self):
        return self.__class__.__name__+"("+str(int(self))+")"
-
+   def to_dimtag(self):
+       print ((self.dim, int(self)))
+       return (self.dim, int(self))
+   
 class VertexID(GeomIDBase):
    dim = 0
    def __add__(self, v):
@@ -77,7 +80,7 @@ def id2dimtag(en):
         return (3, int(en))
     else:
         assert False, "Illegal entity"+str(en)
-
+    
 def get_dimtag(entity):
     dimtags = []
     for en in entity:
@@ -713,6 +716,45 @@ class Geometry(object):
             dimtags.append(id2dimtag(en))
         self.factory.remove(dimtags, recursive=recursive)
         return []
+
+    def inverse_remove(self, entity):
+        dimtags = []
+        for en in entity:
+            dimtags.append(id2dimtag(en))
+
+        if len(set([x[0] for x in dimtags])) != 1:
+            assert False, "Can not choose objects with different dims"
+        dim = dimtags[0][0]
+        tags = [x[1] for x in dimtags]
+        
+        self.factory.synchronize()                       
+        if dim == 3:
+           ent3d = [x for x in self.model.getEntities(3) if not x[1] in tags]
+           self.factory.remove(ent3d, recursive=True)
+        elif dim == 2:
+           ent3d = self.model.getEntities(3)
+           self.factory.remove(ent3d, recursive=False)
+           ent2d = [x for x in self.model.getEntities(2) if not x[1] in tags]
+           self.factory.remove(ent2d, recursive=True)
+        elif dim == 1:
+           ent3d = self.model.getEntities(3)
+           self.factory.remove(ent3d, recursive=False)
+           ent2d = self.model.getEntities(2)
+           self.factory.remove(ent2d, recursive=False)
+           ent1d = [x for x in self.model.getEntities(1) if not x[1] in tags]           
+           self.factory.remove(ent1d, recursive=True)
+        else: # dim == 0:
+           ent3d = self.model.getEntities(3)
+           self.factory.remove(ent3d, recursive=False)
+           ent2d = self.model.getEntities(2)
+           self.factory.remove(ent2d, recursive=False)
+           ent1d = self.model.getEntities(1)
+           self.factory.remove(ent1d, recursive=False)
+           ent0d = [x for x in self.model.getEntities(0) if not x[0] in tags]           
+           self.factory.remove(ent0d, recursive=True)
+        self.factory.synchronize()               
+        return dimtag2id(dimtags)                                
+    
      
     def copy(self, entity):
         dimtags = []
@@ -1555,17 +1597,26 @@ class Geometry(object):
             newkeys.append(objs.addobj(r, 'cp'))
 
         return list(objs), newkeys
+    
 
     def Remove_build_geom(self, objs, *args):
-        targets, recursive = args
+        targets, recursive, inverse_sel = args
         targets = [x.strip() for x in targets.split(',')]
 
         newkeys = []
         tt = get_target2(objs, targets)
-        self.remove(tt, recursive=recursive)
-        for t in targets:
-           if t in objs: del objs[t]
 
+        if inverse_sel:
+            ret = self.inverse_remove(tt)
+            for t in list(objs): del objs[t]
+            for rr in ret:
+               newkeys.append(objs.addobj(rr, 'kpt'))            
+        else:
+            self.remove(tt, recursive=recursive)
+
+            for t in targets:
+                if t in objs: del objs[t]
+                
         return list(objs), newkeys           
     
     def Difference_build_geom(self, objs, *args):
@@ -2040,7 +2091,6 @@ class Geometry(object):
         points = containing_bbox(normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
         v = self.add_box(points)
 
-        print(tt, v)
         ret1 = self.boolean_difference(tt, (v,),
                                        removeObject = False,
                                        removeTool =  False)
@@ -2157,21 +2207,91 @@ class Geometry(object):
 
         return self._WorkPlane_build_geom(objs, c1, d1, d2)        
 
+    def get_toplevel_enteties(self):
+        non_top = []
+
+        ret_3D = self.model.getEntities(3)
+        tmp = ret_3D
+        if len(tmp) != 0:
+             non_top = list(self.model.getBoundary(tmp, combined=False, oriented=False))
+             
+        ret_2D = [x for x in self.model.getEntities(2) if x not in non_top]
+
+        tmp = non_top + ret_2D
+        if len(tmp) != 0:
+           non_top = self.model.getBoundary(tmp, combined=False, oriented=False)
+           
+        ret_1D = [x for x in self.model.getEntities(1) if x not in non_top]
+
+        tmp = non_top + ret_1D
+        if len(tmp) != 0:
+           non_top = self.model.getBoundary(tmp, combined=False, oriented=False)
+
+        ret_0D = [x for x in self.model.getEntities(0) if x not in non_top]
+        
+        ret = ret_3D + ret_2D + ret_1D + ret_0D
+        return ret 
+
+    def healShapes(self, dimtags, fix_tol,  fixDegenerated = False, 
+                                     fixSmallEdges = False,
+                                     fixSmallFaces = False,
+                                     sewFaces = False):
+
+        self.factory.synchronize()
+        top_level = self.get_toplevel_enteties()
+        if dimtags is None:
+            dimtags = top_level
+
+        ret = []
+        removed = []
+        
+        for dimtag in dimtags:
+           if not dimtag in top_level:
+               print("skipping " + str(dimtag) + " since it is not top level entitiy")
+               continue
+           outdimtags = self.factory.healShapes(dimTags = [dimtag],
+                                                tolerance = fix_tol,
+                                                fixDegenerated = fixDegenerated,
+                                                fixSmallEdges = fixSmallEdges,
+                                                fixSmallFaces = fixSmallFaces,
+                                                sewFaces = sewFaces)
+           #print("heal outdimtags", outdimtags)
+           self.factory.synchronize()
+           self.factory.remove([dimtag], recursive=True)
+           ret.append(outdimtags[0])
+           removed.append(dimtag)
+           
+        self.factory.synchronize()
+        return  ret, removed
+           
+        
+
     def healCAD_build_geom(self, objs, *args):
         targets, use_fix_param, use_fix_tol = args
 
-        targets = [x.strip() for x in targets.split(',')]
-        targetID = get_target2(objs, targets)
-        dimtags = get_dimtag(targetID)
+        self.factory.synchronize()
 
-        outdimtags = self.factory.healShapes(dimTags = dimtags,
-                                     tolerance = use_fix_tol,
-                                     fixDegenerated = use_fix_param[0],
-                                     fixSmallEdges = use_fix_param[1],
-                                     fixSmallFaces = use_fix_param[2],
-                                     sewFaces = use_fix_param[3])
-        print("heal outdimtags", outdimtags)
-        return list(objs), []
+        targets = [x.strip() for x in targets.split(',') if len(x.strip())!=0]
+        if len(targets) == 0:
+            dimtags = None
+        else:
+            targetID = get_target2(objs, targets)
+            dimtags = get_dimtag(targetID)
+
+        ret, removed = self.healShapes(dimtags, use_fix_tol, fixDegenerated = use_fix_param[0],
+                                                fixSmallEdges = use_fix_param[1],
+                                                fixSmallFaces = use_fix_param[2],
+                                                sewFaces = use_fix_param[3])
+        
+        for k in list(objs):
+            if objs[k].to_dimtag() in removed: del objs[k]
+
+        newkeys = []
+        ret = dimtag2id(ret)                                           
+        for rr in ret:
+            newkeys.append(objs.addobj(rr, 'hld'))
+
+        return list(objs), newkeys
         
     def BrepImport_build_geom(self, objs, *args):
         cad_file, use_fix , use_fix_param, use_fix_tol, highestDimOnly = args
@@ -2192,20 +2312,19 @@ class Geometry(object):
 
         newkeys = []
 
-        dim = max([p[0] for p in PTs])
-        
+
+        if use_fix:
+             PTs, void = self.healShapes(PTs, use_fix_tol, fixDegenerated = use_fix_param[0],
+                                                fixSmallEdges = use_fix_param[1],
+                                                fixSmallFaces = use_fix_param[2],
+                                                sewFaces = use_fix_param[3])
+             
+        dim = max([p[0] for p in PTs])        
         for p in PTs:
             if p[0] == dim:
                pp = dimtag2id([p])
                newkeys.append(objs.addobj(pp[0], 'impt'))
 
-        if use_fix:
-             self.factory.healShapes(dimTags = PTs,
-                                     tolerance = use_fix_tol,
-                                     fixDegenerated = use_fix_param[0],
-                                     fixSmallEdges = use_fix_param[1],
-                                     fixSmallFaces = use_fix_param[2],
-                                     sewFaces = use_fix_param[3])
         return list(objs), newkeys
     
     def CADImport_build_geom(self, objs, *args):
@@ -2258,7 +2377,21 @@ class Geometry(object):
         #cacheName = "" if isWP else gui_name
         return gui_data, objs
     
+    def find_tinyloop(self, esize, thr=1e-5):
+        # magic number to define too small
+        el_max = max(list(esize.values()))
+        edges = np.array([x for x in esize if esize[x] < el_max*thr])
 
+        dimtags = self.model.getEntities(1)
+        loops = []
+        for dim, tag in dimtags:
+             if len(self.model.getBoundary([(dim, tag)], oriented=False)) == 0:
+                  loops.append(tag)
+        edges = [e for e in edges if e in loops]
+        print("tiny loop edges ", edges)
+                  
+        return edges
+    
     def mesh_edge_algorithm1(self):
         '''
         use characteristic length
@@ -2333,8 +2466,6 @@ class Geometry(object):
         if len(esize) == 0:
             return vcl, esize, modelsize
         
-        #print(modelsize, vcl, esize)
-
         emax = max(list(esize.values()))
 
         print("Max/Min CL size", modelsize*too_large, modelsize*too_small)
@@ -2343,6 +2474,9 @@ class Geometry(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", modelsize*too_small)        
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)                
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+
+        tiny_loops = self.find_tinyloop(esize, thr=1e-5)
+        dont_do = [(1, tag) for tag in tiny_loops]
         
         ### if curse mesh large edge first ###
         do_first = []
@@ -2368,11 +2502,12 @@ class Geometry(object):
                 gmsh.model.mesh.setTransfiniteCurve(tag, self.small_edge_seg, meshType="Bump", coef=1)
                 
         self.show_only(do_first)
-        print("do_first")
+        self.hide(dont_do)        
         gmsh.model.mesh.generate(1)
 
         self.show_all()
         self.hide(do_first)
+        self.hide(dont_do)
         
         for tag in vcl:
             gmsh.model.mesh.setSize(((0, tag),), modelsize/self.geom_prev_res)
@@ -2389,6 +2524,22 @@ class Geometry(object):
         return vcl, esize, modelsize
     
     def mesh_face_algorithm1(self, esize):
+        '''
+        avoid face with strange short length loop
+        make big surface with cuvertuer
+        '''
+        edges = self.find_tinyloop(esize)
+        s = {}
+        dimtags =  self.model.getEntities(2)
+        for dim, tag in dimtags:
+             s[tag] = [y for x, y in self.model.getBoundary([(dim, tag)], oriented=False)]
+        from petram.mesh.mesh_utils import line2surf
+        l2s = line2surf(s)
+        faces = sum([l2s[edge] for edge in edges if len(l2s[edge]) == 1],[])
+        print("loop faces with tiny single edge", faces)
+
+        #dont_do = [(2, tag) for tag in faces]
+        
         do_first = []
         size_thr = 0.01
 
@@ -2401,7 +2552,8 @@ class Geometry(object):
                 do_first.append((2, tag))
 
         self.show_only(do_first)
-
+        #self.hide(dont_do)
+        
         if self.use_curvature:
             gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
         else:
@@ -2410,6 +2562,7 @@ class Geometry(object):
         gmsh.model.mesh.generate(2)
         
         self.show_all()
+        #self.hide(dont_do)
         self.hide(do_first)
         
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                            
@@ -2563,9 +2716,9 @@ class GMSHGeometryGenerator(mp.Process):
             q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
 
         else:
+            from petram.geom.read_gmsh import read_pts_groups, read_loops
+            
             vcl, esize = self.mw.generate_preview_mesh()
-
-            from petram.geom.read_gmsh import read_pts_groups, read_loops        
             ptx, cells, cell_data = read_pts_groups(gmsh)
             l, s, v = read_loops(gmsh)
 
@@ -2578,6 +2731,13 @@ class GeometrySequence(object):
         self.geom_sequence = []
         self.p = None
 
+    def clean_queue(self):
+        self.task_q.close()
+        self.q.close()
+        self.task_q.cancel_join_thread()
+        self.q.cancel_join_thread()
+        self.q  = None
+        self.task_q  = None        
         
     def add_sequence(self, gui_name, gui_param, geom_name):
         self.geom_sequence.append((gui_name, gui_param, geom_name))
@@ -2602,7 +2762,9 @@ class GeometrySequence(object):
 
         p = process_param[0]
         task_q = process_param[1]
-        q = process_param[2]            
+        q = process_param[2]
+        self.task_q = task_q
+        self.q = q
 
         args = (self.geom_sequence, no_mesh, finalize, filename, start_idx, kwargs)
         
@@ -2631,6 +2793,7 @@ class GeometrySequence(object):
                 
             except QueueEmpty:
                 if not p.is_alive():
+                    self.clean_queue()
                     if progressbar is not None:                    
                        progressbar.Destroy()
                     assert False, "Child Process Died"
@@ -2642,12 +2805,14 @@ class GeometrySequence(object):
                     if progressbar.WasCancelled():
                        if p.is_alive():
                            p.terminate()
-                           self.p = None
+                           self.clean_queue()                           
                        progressbar.Destroy()
                        assert False, "Geometry Generation Aborted"
                     
             time.sleep(0.03)
         if ret[1][0] == 'fail':
+            p.terminate()
+            self.clean_queue()                           
             return False, ret[1][0]
         else:
             return True, ret[1]

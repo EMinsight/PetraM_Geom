@@ -713,10 +713,12 @@ class GMSHMeshWrapper(object):
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]        
         self.show_only(dimtags)
+
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)        
         gmsh.model.mesh.generate(1)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                
-        done[1].extend([x for dim, x in tags])                                
+        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)
+        done[1].extend([x for dim, x in tags])
+
         return done, params
     
     @process_text_tags(dim=2)                
@@ -1943,6 +1945,8 @@ class GMSHMeshWrapper(object):
                 if not p.is_alive():
                     if progressbar is not None:                    
                        progressbar.Destroy()
+                    q.close()
+                    q.cancel_join_thread()
                     assert False, "Child Process Died"
                     break
                 time.sleep(1.)
@@ -1952,10 +1956,15 @@ class GMSHMeshWrapper(object):
                     if progressbar.WasCancelled():
                        if p.is_alive():
                            p.terminate()
+                           q.close()
+                           q.cancel_join_thread()
                        progressbar.Destroy()
                        assert False, "Mesh Generation Aborted"
                            
             time.sleep(0.01)
+        q.close()
+        q.cancel_join_thread()
+            
         return ret[1]
 
 def generator(q, filename, sequence, dim, finalize, msh_file, kwargs):
