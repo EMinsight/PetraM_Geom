@@ -889,6 +889,8 @@ class GmshGeom(GeomTopBase):
 
         return tinyfaces, edges, points
     
+BrepFile = GmshGeom
+
 def check_dim(unrolled):
     for line in unrolled:
         if line.startswith('Volume'): return 3
