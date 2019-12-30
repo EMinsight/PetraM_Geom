@@ -888,7 +888,12 @@ class GmshGeom(GeomTopBase):
         points = self.get_facevertices(tinyfaces)
 
         return tinyfaces, edges, points
-    
+
+# This is meant only to load a old project which uses BrepFile;
+# We don't use it anymore.
+# It is not quite correct in the sense BrepFile was meant to load a BrepFile.
+# This alias at least allows for loading  an old project file...
+
 BrepFile = GmshGeom
 
 def check_dim(unrolled):
