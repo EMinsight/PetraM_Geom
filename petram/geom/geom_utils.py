@@ -47,6 +47,7 @@ def map_points_in_geom_info(info1, info2, th = 1e-15):
     
     dist = np.array([np.min(np.sum((ptx1 - p)**2, 1))for p in ptx2])
     if np.any(dist > th):
+        print(dist)
         assert False, "could not able to find vertex mapping"
 
 
@@ -250,6 +251,14 @@ def find_rotation_between_surface(src, dst, geom=None,
 
     #print(p1, p2, n1, n2, axan)
     if axan is None:
+        c = np.sum(n1*n2)
+        s = np.sqrt(np.sum(np.cross(n1, n2)**2))
+        an = np.arctan2(s, c)
+
+        # we assume angle is less than 90 deg.
+        if an > np.pi/2.0: an = an - np.pi
+        if an < -np.pi/2.0: an = an - np.pi
+        
         M = np.vstack((n1, n2))
         b = np.array([np.sum(n1*p1[0]), np.sum(n2*p2[0])])
         
@@ -259,40 +268,28 @@ def find_rotation_between_surface(src, dst, geom=None,
 
         ax =null_space(M).flatten()
         px, res, rank, s = lstsq(M, b, rcond=None)
+
+        print("p2, axis angle", px, ax, an)
         
-        pp1 = px - p1[0] - np.sum((px-p1[0])*ax)*ax
-        pp2 = px - p2[0] - np.sum((px-p2[0])*ax)*ax
-
-        pp1 = pp1/np.linalg.norm(pp1)
-        pp2 = pp2/np.linalg.norm(pp2)
-
-        s = np.mean(np.cross(pp1, pp2)[ax!=0]/ax[ax!=0])
-        c = np.sum(pp1 * pp2)
-        #xx = np.sum(n2*n1)
-        #yy = np.sum(n2*n3)
-        #an = np.arcsin(np.linalg.norm(ax))
-        an = np.arctan2(s, c)
-
-        
-        #print("p2, axis angle", px, ax, an)        
     else:
         ax, an = axan
         ax = np.array(ax, dtype=float)
         ax = ax/np.linalg.norm(ax)            
         an = np.pi/180.*an
+        px = np.array([0, 0, 0])
         
 
-    def find_mapping(ax, an, p1, p2):
+    def find_mapping(px, ax, an, p1, p2):
         if an != 0.0:
             R = rotation_mat(ax, -an)
         else:
             R = np.diag([1,1,1.])
 
-    # check two possible orientation        
-        p3 = np.dot(R, p2.transpose()).transpose()
+        # check two possible orientation        
+        p3 = np.dot(R, (p2-px).transpose()).transpose() + px
         
         # try all transpose
-        #print("p1, p3 (1)", p1, p3)        
+        #print("p1, p2, p3 (1)", p1, p2, p3)        
         for i in range(len(p1)):
             d = p3[0]- p1[i]
             p3t = p3 - d
@@ -307,17 +304,31 @@ def find_rotation_between_surface(src, dst, geom=None,
         an = 0.0
     if abs(abs(an*180./np.pi)-180.) < min_angle:
         an = 0.0
-        
-    d, mapping, R = find_mapping(ax, an, p1, p2)
+    print('trying', an)        
+    d, mapping, R = find_mapping(px, ax, an, p1, p2)
 
     if d is None:
         if an > 0.:
-            an = -np.pi + an
+            an2 = -np.pi + an
         else:
-            an = np.pi + an
-        d, mapping, R = find_mapping(ax, an, p1, p2)        
-        if d is None:        
-            assert False, "auto trans failed (no mapping between vertices)"
+            an2 = np.pi + an
+        print('trying', an2)
+        d, mapping, R = find_mapping(px, ax, an2, p1, p2)
+        if d is None:
+            an2 = -an
+
+            print('trying', an2)            
+            d, mapping, R = find_mapping(px, ax, an2, p1, p2)        
+            if d is None:
+                if an > 0.:
+                    an2 = -np.pi - an
+                else:
+                    an2 = np.pi - an
+                print('trying', an2)                                
+                d, mapping, R = find_mapping(px, ax, an2, p1, p2)        
+        an = an2
+    if d is None:        
+        assert False, "auto trans failed (no mapping between vertices)"
 
     p_pairs = dict(zip(p1p, p2p[mapping]))  #point mapping
 
@@ -333,7 +344,7 @@ def find_rotation_between_surface(src, dst, geom=None,
     affine[:3,-1] = np.dot(np.linalg.inv(R), d)
     affine[-1,-1] = 1.0
     
-    if axan is None:
-        px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
-    #print("px, d", px, d)
+    #if axan is None:
+    #    px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
+    print("ax, an, px", ax, an, px)
     return ax, an, px, d, affine, p_pairs, l_pairs
