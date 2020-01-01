@@ -269,6 +269,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         v['algorithm'] = 'default'
         v['algorithm3d'] = 'default'
         v['gen_all_phys_entity'] = False
+        v['use_profiler'] = False
+        v['use_expert_mode'] = False
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v
@@ -290,19 +292,22 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                    ["3D Algorithm", c2[-1], 4, setting2],
                    [None, self.gen_all_phys_entity==1 ,  3,
                     {"text":"Write physical entities for all dimensions."}],
+                   [None, self.use_profiler,  3, {"text":"use profiler"}],
+                   [None, self.use_expert_mode,  3, {"text":"use GMSH expert mode"}],                   
                    [None, None, 341, {"label": "Use default size",
                                       "func": 'onSetDefSize',
                                       "noexpand": True}], 
                    [None, None, 341, {"label": "Finalize Mesh",
                                       "func": 'onBuildAll',
-                                      "noexpand": True}], ])
+                                      "noexpand": True}],])
+
 
         return ll
     
     def get_panel1_value(self):
         return ([self.geom_group,] + list(self.vt.get_panel_value(self)) +
                 [self.algorithm, self.algorithm3d, self.gen_all_phys_entity,
-                 self, self, ])
+                 self.use_profiler, self.use_expert_mode, self, self, ])
     
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
@@ -310,11 +315,13 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     
     def import_panel1_value(self, v):
         self.geom_group = str(v[0])
-        self.vt.import_panel_value(self, v[1:-5])
+        self.vt.import_panel_value(self, v[1:-7])
 
-        self.algorithm = str(v[-5])
-        self.algorithm3d = str(v[-4])
-        self.gen_all_phys_entity = v[-3]
+        self.algorithm = str(v[-7])
+        self.algorithm3d = str(v[-6])
+        self.gen_all_phys_entity = v[-5]
+        self.use_profiler = bool(v[-4])
+        self.use_expert_mode = bool(v[-3])        
         
     def panel1_tip(self):
         return ([None] +
@@ -322,6 +329,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 ["Alogirth for 2D mesh",
                  "Algoirthm for 3D mesh",
                  "Write lower dimensional physical entity. This may take a long time",
+                 "Use cProfiler",
+                 "Enable GMSH expert mode to suppress some warning",
                  None, None])
         
     def get_possible_child(self):
@@ -593,7 +602,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                             CharacteristicLengthMin = clmin,
                             EdgeResolution = 3,                             
                             MeshAlgorithm = self.algorithm,
-                            MeshAlgorithm3D = self.algorithm3d)
+                            MeshAlgorithm3D = self.algorithm3d,
+                            use_profiler = self.use_profiler,
+                            use_expert_mode = self.use_expert_mode)
         #mesher.load_brep(geom_root._geom_brep)
         
         children = [x for x in self.walk()]

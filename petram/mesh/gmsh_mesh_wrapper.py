@@ -21,6 +21,8 @@ import petram.geom.gmsh_config as gmsh_config
 debug  = True
 debug2 = False
 
+from petram.debug import timeit, use_profiler
+
 def dprint(*args):
     if debug:
         print(*args)
@@ -156,6 +158,8 @@ class GMSHMeshWrapper(object):
                        **kwargs):
         
         self.queue = kwargs.pop("queue", None)
+        self.use_profiler = kwargs.pop("use_profiler", True)
+        self.use_expert_mode = kwargs.pop("use_expert_mode", False)
         
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -174,8 +178,11 @@ class GMSHMeshWrapper(object):
         self.algorithm = MeshAlgorithm
         self.algorithm3d = MeshAlgorithm3D
         self.maxthreads= MaxThreads    # general, 1D, 2D, 3D: defualt = 1,1,1,1
-        self._new_brep = True        
-        
+        self._new_brep = True
+        self._name = "GMSH_Mesher"
+    def name(self):
+        return self._name
+    
     def add(self, name, *gids, **kwargs):
         '''
         add mesh command
@@ -183,7 +190,9 @@ class GMSHMeshWrapper(object):
         if name == 'extrude_face':
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         elif name == 'revolve_face':
+            
             kwargs['revolve']=True
+            kwargs['volume_hint'] = gids[0]
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         else:
             pass
@@ -197,7 +206,8 @@ class GMSHMeshWrapper(object):
         clear mesh sequence
         '''
         self.mesh_sequence = []
-        
+
+    @use_profiler
     def generate(self, dim=3, brep_input = '',
                  finalize=False, msh_file=''):
         '''
@@ -224,7 +234,7 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin",
                               self.clmin)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-
+        gmsh.option.setNumber("General.ExpertMode",   1 if  self.use_expert_mode else 0)
         gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])        
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
@@ -266,10 +276,11 @@ class GMSHMeshWrapper(object):
 
                 done, params[idx] = f(done, params[idx],
                                       *args, **kwargs)
-                gmsh.model.mesh.removeDuplicateNodes()                
+                #gmsh.model.mesh.removeDuplicateNodes()                
                 
             for i in range(mdim+1, 4): done[i] = []
             
+        gmsh.model.mesh.removeDuplicateNodes()                                    
         if finalize:
             self.add_sequential_physicals()
             if msh_file != '': gmsh.write(msh_file)
@@ -279,21 +290,23 @@ class GMSHMeshWrapper(object):
     def load_brep(self, filename):
         self.switch_model('main1')
         self.target = filename
-        
+
         gmsh.model.occ.importShapes(filename, highestDimOnly=False)
         gmsh.model.occ.synchronize()
-
+        
         self.geom_info = self.read_geom_info()
         self._new_brep = True
         return self.current
     
-    def read_geom_info(self):
+    def read_geom_info(self, dimtags=None):
         from petram.geom.read_gmsh import read_loops2
+
         self.hide_all()        
         gmsh.model.mesh.generate(1)
+        #gmsh.model.mesh.removeDuplicateNodes()                        
 
         #ptx, p, l, s, v = read_loops2(gmsh)
-        return read_loops2(gmsh)
+        return read_loops2(gmsh, dimtags)
         
     def add_model(self, name):
         gmsh.model.add(name)
@@ -311,12 +324,13 @@ class GMSHMeshWrapper(object):
         GMSHMeshWrapper.workspace_base += 1
         
         self.add_model(name)
-        gmsh.model.setCurrent(name)        
+        gmsh.model.setCurrent(name)
         gmsh.model.occ.importShapes(self.target, highestDimOnly=False)
-        self.hide_all()        
+        self.hide_all()
+
         gmsh.model.mesh.generate(1)
         gmsh.model.occ.synchronize()
-        
+
         return name
         
     def show_only(self, dimtags, recursive=False):
@@ -327,7 +341,7 @@ class GMSHMeshWrapper(object):
 
         # we hide the surfaces genrated from virtual operation always.
         if self.current == 'main1':
-           vent = [x for x in ent if not x in self.target_entities]            
+           vent = list(set(ent).difference(self.target_entities))
            #vent = [x for x in ent if not x in self.target_entities]
            #print("hiding virtual", vent)
            if len(vent) > 0:
@@ -347,16 +361,37 @@ class GMSHMeshWrapper(object):
            ent = gmsh.model.getEntities()
         gmsh.model.setVisibility(ent, True)
 
-    def delete_all_except(self, dim, tags):
-        for d in [3, 2, 1]:
-            ent = gmsh.model.getEntities(d)            
-            if dim == d:
-                ent = [(d, t) for d, t in ent if not t in tags]
-                gmsh.model.occ.remove(ent, recursive=True)
-                break
-            else:
-                gmsh.model.occ.remove(ent)
-        gmsh.model.occ.synchronize()        
+    @timeit
+    def delete_all_except_face(self, tags):
+        dimtags = [(2, x) for x in tags]
+        ret_3D = gmsh.model.getEntities(3)
+
+        del_list = []
+        rem3D_list = []
+        rem2D_list = []
+        for x in ret_3D:
+             bdrs = gmsh.model.getBoundary(x, combined=False, oriented=False)
+             print(x, bdrs)
+             print(set(bdrs).intersection(dimtags))
+             if len(set(bdrs).intersection(dimtags))==0:
+                 print('delete ', x)
+                 del_list.append(x)
+             else:
+                 rem3D_list.append(x)
+                 rem2D_list.extend(bdrs)
+        print("delete this (3D)#", len(del_list))
+        gmsh.model.occ.remove(del_list, recursive=True)
+        
+        print("delete bodies #", len(rem3D_list))                
+        gmsh.model.occ.remove(rem3D_list, recursive=False)
+
+        del_list = list(set(rem2D_list).difference(dimtags))
+        print("delete faces #", len(del_list))        
+        gmsh.model.occ.remove(del_list, recursive=True)
+        
+        print('calling this')
+        gmsh.model.occ.synchronize()
+        print('done')        
     '''
     def transfer_mesh(self, dimtags, ws1, ws2, resursive = True):
         if resursive:
@@ -1027,19 +1062,30 @@ class GMSHMeshWrapper(object):
     # copy face
     @process_text_tags_sd(dim=2)        
     def copyface_0D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        from petram.geom.geom_utils import find_translate_between_surface 
+        from petram.geom.geom_utils import find_translate_between_surface
         from petram.geom.geom_utils import find_rotation_between_surface
+        from petram.geom.geom_utils import find_rotation_between_surface2       
         
         ptx, p, l, s, v = self.geom_info
         axan = kwargs.pop('axan', None)
-        revolve = kwargs.pop('revolve', False)        
-        geom_data = (ptx, l, s, None)
+        revolve = kwargs.pop('revolve', False)
+        volume_hint = kwargs.pop('volume_hint', None)        
+        geom_data = (ptx, l, s, v)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
 
         if revolve:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
+            if volume_hint is None:
+               ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
                                                             tag1, tag2,
+                                                            geom_data=geom_data,
+                                                            axan = axan)
+            else:
+               # copy(revolve) face is perfomece in the preparation of revolve mesh
+               # in this case we use the volume being meshed as a hint
+               vtags = [int(x) for x in volume_hint.split(',')]
+               ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface2(
+                                                            tag1, tag2, vtags,
                                                             geom_data=geom_data,
                                                             axan = axan)
         else:
@@ -1054,7 +1100,9 @@ class GMSHMeshWrapper(object):
     
     @process_text_tags_sd(dim=2)
     def copyface_1D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        gmsh.model.occ.synchronize()
+
+        # don't do this otherwise previously meshed surfaces would be lost
+        ### gmsh.model.occ.synchronize()
         gmsh.model.mesh.rebuildNodeCache()
         ax, an, px, d, affine, p_pairs, l_pairs = params
         
@@ -1205,12 +1253,20 @@ class GMSHMeshWrapper(object):
     @process_text_tags_sd(dim=2)        
     def copyface_3D(self,  done, params, dimtags, dimgtag2, *args, **kwargs):
         return done, params                            
-    
+
+    def _extract_info_for_volume(self, vtags):
+         ptx, p, l, s, v = self.geom_info
+         vv = {k: v[k] for k in vtags}
+         ss = {k: s[k] for k in set(sum(vv.values(),[]))}
+         ll = {k: l[k] for k in set(sum(ss.values(),[]))}
+         pp = {k: p[k] for k in set(sum(ll.values(),[]))}         
+         return ptx, pp, ll, ss, vv
+        
     # extrudeface
     @process_text_tags_vsd(dim=3)            
     def extrude_face_0D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         from petram.geom.geom_utils import find_translate_between_surface
-        from petram.geom.geom_utils import find_rotation_between_surface        
+        from petram.geom.geom_utils import find_rotation_between_surface2        
         from petram.geom.geom_utils import map_points_in_geom_info
         from petram.geom.geom_utils import map_lines_in_geom_info
         from petram.geom.geom_utils import map_surfaces_in_geom_info
@@ -1221,13 +1277,16 @@ class GMSHMeshWrapper(object):
         axan = kwargs.pop('axan', None)
         
         ptx, p, l, s, v = self.geom_info
-        geom_data = (ptx, l, s, None)
+        geom_data = (ptx, l, s, v)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
+        vtags = [x for dim, x in vdimtags]
+
+        info1 = self._extract_info_for_volume(vtags)
 
         if revolve:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
-                                                            tag1, tag2,
+            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface2(
+                                                            tag1, tag2, vtags,
                                                             geom_data=geom_data,
                                                             axan = axan)
         else:
@@ -1237,7 +1296,12 @@ class GMSHMeshWrapper(object):
                                                             axan = axan)
         ws = self.prep_workspace()
 
-        self.delete_all_except(2, tag1)
+
+        # ??? Apparently I need to delete a destinaion volume to make space for
+        #     extrusion. Doesnt need to delete everything ???
+        #self.delete_all_except_face(tag1)
+        gmsh.model.occ.remove(vdimtags, recursive=False)
+
         if (not revolve and an == 0):
             ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
                                          numElements=[nlayers])
@@ -1248,6 +1312,8 @@ class GMSHMeshWrapper(object):
         else:
             print(revolve, an)
             assert False, "extrude/revolve mesh error. Inconsistent imput"
+            
+        gmsh.model.occ.synchronize()
 
         # split dimtags to src, dst, lateral
         idx3 = np.where(np.array([x[0] for x in ret]) == 3)[0]
@@ -1255,14 +1321,12 @@ class GMSHMeshWrapper(object):
         dst = [ret[x-1] for x in idx3]
         laterals = [x for x in ret if not x in dst and x[0] == 2] 
         ex_info = ([(2, x) for x in tag1], dst, laterals,  vol)
-        gmsh.model.occ.synchronize()
-        
+
         # for debug the intermediate geometry
         gmsh.write('tmp_'+ws +  '.brep')            
 
-        info1 = self.geom_info
-        info2 = self.read_geom_info()
-        gmsh.model.getEntities
+        #info1 = self.geom_info
+        info2 = self.read_geom_info(ret)
 
         pmap, pmap_r = map_points_in_geom_info(info1, info2)
         lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r)
@@ -1337,7 +1401,7 @@ class GMSHMeshWrapper(object):
             copied_line.append(tag)
 
         # gather data to transfer
-        ents = gmsh.model.getEntities(1)
+        ents = [(1, x) for x in list(lmap_r)]
         ents = [x for x in ents if not x[1] in copied_line]
         mdata = get_nodes_elements(ents, normalize=True)
         '''
@@ -1475,11 +1539,16 @@ class GMSHMeshWrapper(object):
             gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], ndata[2])            
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
 
-        self.show_all()
-        #gmsh.write("debug_2d.msh")        
+        #self.show_all()
+        #gmsh.write("debug_2d.msh")
+        
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)        
+        self.show_only([(3, x) for x in list(vmap_r)])
         gmsh.model.mesh.generate(3)
+        #gmsh.write("debug_3d.msh")        
 
-        tmp = gmsh.model.getEntities(3)
+        # collect 3D mesh data
+        tmp = [(3, x) for x in list(vmap_r)]                
         mdata3D = []
         for dim, tag in tmp:
             ndata = gmsh.model.mesh.getNodes(dim, tag) 
@@ -1487,7 +1556,7 @@ class GMSHMeshWrapper(object):
             mdata3D.append((dim, tag, ndata, edata))
 
         # copy back lateral mesh on surfaces
-        tmp = gmsh.model.getEntities(2)
+        tmp = [(2, x) for x in list(smap_r)]        
         tmp = [x for x in tmp if not x in src_dst]
         #print("gather info from ", tmp)
         mdata = []
@@ -1642,7 +1711,7 @@ class GMSHMeshWrapper(object):
         
         ws = self.prep_workspace()
 
-        self.delete_all_except(2, [tag1])
+        self.delete_all_except_face([tag1])
         ret = gmsh.model.occ.extrude(((2,tag1),), d[0], d[1], d[2],
                                      numElements=[nlayers])
         gmsh.model.occ.synchronize()        
@@ -1924,7 +1993,9 @@ class GMSHMeshWrapper(object):
                   'EdgeResolution' : self.res,
                   'MeshAlgorithm'  : self.algorithm,
                   'MeshAlgorithm3D': self.algorithm3d,
-                  'MaxThreads' : self.maxthreads}
+                  'MaxThreads' : self.maxthreads,
+                  'use_profiler': self.use_profiler,
+                  'use_expert_mode': self.use_expert_mode}
 
         q = mp.Queue()
         p = mp.Process(target = generator,

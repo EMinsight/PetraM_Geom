@@ -44,25 +44,28 @@ import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('ReadGMSH')
 
 #dimtags =  gmsh.model.getEntities()
-def read_loops(geom):
+def read_loops(geom, dimtags=None):
     model = geom.model
     
     model.occ.synchronize()
     v = {}
     s = {}
     l = {}
-    
-    dimtags =  model.getEntities(3)
-    for dim, tag in dimtags:
+
+    dimtag3 =  model.getEntities(3) if dimtags is None else [x for x in dimtags if x[0]==3]
+    for dim, tag in dimtag3:
         v[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
-    dimtags =  model.getEntities(2)
-    for dim, tag in dimtags:
+    dimtag2 =  model.getEntities(2) if dimtags is None else [x for x in dimtags if x[0]==2] + model.getBoundary(dimtag3, combined=False, oriented=False)
+    dimtag2 = list(set(dimtag2))
+    
+    for dim, tag in dimtag2:
         s[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
 
-    dimtags =  model.getEntities(1)
-    for dim, tag in dimtags:
+    dimtag1 =  model.getEntities(1) if dimtags is None else [x for x in dimtags if x[0]==1] + model.getBoundary(dimtag2, combined=False, oriented=False)
+    dimtag1 = list(set(dimtag1))
+    for dim, tag in dimtag1:
         l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
                                                        oriented=False)]
         if len(l[tag]) == 0:
@@ -72,20 +75,27 @@ def read_loops(geom):
         
     return l, s, v
 
-def read_loops2(geom):
+def read_loops2(geom, dimtags=None):
     '''
     read vertex coordinats and loops together. 
     before calling this, do 
         self.hide_all()        
         gmsh.model.mesh.generate(1)
     '''
-    l, s, v = read_loops(geom)
+    l, s, v = read_loops(geom, dimtags=dimtags)
     model = geom.model
-    nidx, coord, pcoord = geom.model.mesh.getNodes(dim=0)
-    tags = [tag for dim, tag in geom.model.getEntities(0)]
-    p = {t: int(nidx[k]-1)  for k, t in enumerate(tags)}
 
+    nidx, coord, pcoord = geom.model.mesh.getNodes(dim=0)
     ptx = np.array(coord).reshape(-1, 3)
+    
+    if dimtags is not None:
+        ents = model.getBoundary(dimtags, combined=False, recursive=True)
+        tags = list(set([tag for didm, tag in ents]))
+        p = {t:int(geom.model.mesh.getNodes(dim=0, tag=t)[0][0]-1) for t in tags}
+    else:
+        tags = [tag for dim, tag in geom.model.getEntities(0)]
+        p = {t: int(nidx[k]-1)  for k, t in enumerate(tags)}        
+
     return ptx, p, l, s, v
 
 def read_pts_groups(geom, finished_lines=None, 

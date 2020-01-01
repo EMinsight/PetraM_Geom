@@ -574,7 +574,7 @@ data0 =  (('target_object', VtableElement('target_object', type='string',
                                       default = True,
                                       tip = "delete recursively")), 
           ('inverse_sel', VtableElement('inverse_sel', type='bool',
-                                      guilabel = 'Select keep',
+                                      guilabel = 'Choose object being kept',
                                       default = False,
                                       tip = "selected object is kept")), )
 
