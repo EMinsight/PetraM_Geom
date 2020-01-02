@@ -488,8 +488,8 @@ class GMSHMeshWrapper(object):
             max_dim = 3
             if verbose: print("Adding " + str(len(ent)) + " Volume(s)")
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
-                continue
+            #if len(gmsh.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
+            #    continue
             value = gmsh.model.addPhysicalGroup(3, [x[1]], tag=k+1)
             gmsh.model.setPhysicalName(3, value, 'volume'+str(value))
                   
@@ -499,8 +499,8 @@ class GMSHMeshWrapper(object):
             if verbose: print("Adding " + str(len(ent)) + " Surface(s)")
             
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
-                continue
+            #if len(gmsh.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
+            #    continue
             value = gmsh.model.addPhysicalGroup(2, [x[1]], tag=k+1)
             gmsh.model.setPhysicalName(2, value, 'surface'+str(value))
 
@@ -511,8 +511,8 @@ class GMSHMeshWrapper(object):
             if verbose: print("Adding " + str(len(ent)) + " Line(s)")
             
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
-                continue                    
+            #if len(gmsh.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
+            #    continue                    
             value = gmsh.model.addPhysicalGroup(1, [x[1]], tag=k+1)                
             gmsh.model.setPhysicalName(1, value, 'line'+str(value))
             
@@ -521,8 +521,8 @@ class GMSHMeshWrapper(object):
         if len(ent) > 0:
             if verbose: print("Adding " + str(len(ent)) + " Point(s)")
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
-                continue                                        
+            #if len(gmsh.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
+            #    continue                                        
             value = gmsh.model.addPhysicalGroup(0, [x[1]], tag=k+1)                
             gmsh.model.setPhysicalName(0, value, 'point'+str(value))
             
