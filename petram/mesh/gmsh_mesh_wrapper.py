@@ -4,6 +4,7 @@ import numpy as np
 import gmsh
 import time
 import tempfile
+from scipy.spatial import cKDTree
 import multiprocessing as mp
 from six.moves.queue import Empty as QueueEmpty
 
@@ -1511,8 +1512,12 @@ class GMSHMeshWrapper(object):
         ntags_d = sum([list(x[0]) for x in tmp], [])
         pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
-        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}                
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
+        
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)
+        
         for i, nt in zip(idx, ntags_s):
             node_map1[nt] = ntags_d[i]
         noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
@@ -1586,7 +1591,11 @@ class GMSHMeshWrapper(object):
         
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)
+
         for i, nt in zip(idx, ntags_s):
             node_map3[nt] = ntags_d[i]
 
@@ -1643,10 +1652,14 @@ class GMSHMeshWrapper(object):
         
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)
+        
         for i, nt in zip(idx, ntags_s):
             node_map3[nt] = ntags_d[i]
-
+        
         for d in mdata:
             dim, tag, ndata, edata = d 
             if dim != 3: break
