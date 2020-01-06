@@ -1,7 +1,6 @@
 import numpy as np
 
 gmsh_element_type = {
-        15: 'vertex',
         1: 'line',
         2: 'triangle',
         3: 'quad',
@@ -16,9 +15,63 @@ gmsh_element_type = {
         12: 'hexahedron27',
         13: 'prism18',
         14: 'pyramid14',
-        26: 'line4',
-        36: 'quad16',
+        15: 'vertex',
+        16: 'quad8',
+        17: 'hexahedron20',
+        18: 'prism15',
+        19: 'pyramid13',
+        20: 'itriangle9',   # incomplete-triangle
+        21: 'triangle10', 
+        22: 'itriangle12',  # incomplete-triangle
+        23: 'triangle15',
+        24: 'itriangle15',  # incomplete-triangle
+        25: 'triangle21',
+        26: 'line4',    
+        27: 'line5',    
+        28: 'line6',    
+        29: 'tetra20',
+        30: 'tetra35',
+        31: 'tetra56',
+        92: 'hexahedron64',
+        93: 'hexahedron125',
         }
+
+gmsh_element_dim = {
+        1:  1,
+        2:  2,
+        3:  2,
+        4:  3,
+        5:  3,
+        6:  3,
+        7:  3,
+        8:  1,
+        9:  2,
+        10: 2,
+        11: 3,
+        12: 3,
+        13: 3,
+        14: 3,
+        15: 0,
+        16: 2,
+        17: 3,
+        18: 3,
+        19: 3,
+        20: 2,
+        21: 2,
+        22: 2,
+        23: 2,
+        24: 2,
+        25: 2,
+        26: 1,
+        27: 1,
+        28: 1,
+        29: 3,
+        30: 3,
+        31: 3,
+        92: 3,
+        93: 3,
+        }
+
 num_nodes_per_cell = {
     'vertex': 1,
     'line': 2,
@@ -101,7 +154,12 @@ def read_loops2(geom, dimtags=None):
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
 
+    # w/o using this it becomes so slow...
+    finished_lines=None
+    finished_faces=None
+
     dprint1("finished faces", finished_faces)
+    dprint1("finished lines", finished_lines)    
     #finished_faces is None: finished_faces = []     
     model = geom.model
     
@@ -120,13 +178,18 @@ def read_pts_groups(geom, finished_lines=None,
     cell_data = {}
     el2idx = {}
     for ndim in range(3):
+        dimtags =  model.getEntities(dim=ndim)
+        
         if (ndim == 1 and finished_lines is not None and len(finished_lines) != 0
             or
             ndim == 2 and finished_faces is not None and len(finished_faces) != 0):
             finished = finished_faces if ndim==2 else finished_lines
 
-            xxx = [model.mesh.getElements(ndim, l) for l in finished]
+            dimtags = [dt for dt in dimtags if dt[1] in finished]
+            
+            xxx = [model.mesh.getElements(ndim, l[1]) for l in dimtags]
 
+            if len(xxx) == 0: continue
             if isinstance(xxx[0][0], np.ndarray):
                 # newer gmsh comes here
                 elementTypes = np.hstack([x[0] for x in xxx])
@@ -166,16 +229,14 @@ def read_pts_groups(geom, finished_lines=None,
                                        np.zeros(len(elementTags[k]), dtype=int),
                                        'physical':
                                        np.zeros(len(elementTags[k]), dtype=int)}
-
-        dimtags =  model.getEntities(dim=ndim)
-
+        '''
         if (ndim == 1 and finished_lines is not None
             or
             ndim == 2 and finished_faces is not None):
             finished = finished_faces if ndim==2 else finished_lines
             #print("here we are removing unfinished lines",  dimtags, finished_lines)
             dimtags = [dt for dt in dimtags if dt[1] in finished]
-
+        '''
         for dim, tag in dimtags:
             elType2, elTag2, nodeTag2 = model.mesh.getElements(dim=dim,
                                                                tag=tag)
@@ -185,8 +246,9 @@ def read_pts_groups(geom, finished_lines=None,
                    if not el_type_name in el2idx: continue
                    idx = el2idx[el_type_name][elTag]
                    cell_data[el_type_name]['geometrical'][idx] = tag
-
-        dimtags = model.getPhysicalGroups(dim=dim)
+        '''
+        dimtags = model.getPhysicalGroups(dim=ndim)
+        print("physical", dimtags)
         for dim, ptag in dimtags:
             etags = model.getEntitiesForPhysicalGroup(dim=dim, tag=ptag)
             for etag in etags:
@@ -198,5 +260,5 @@ def read_pts_groups(geom, finished_lines=None,
                         if not el_type_name in el2idx: continue                        
                         idx = el2idx[el_type_name][elTag]
                         cell_data[el_type_name]['physical'][idx] = ptag
-
+        '''
     return points, cells, cell_data

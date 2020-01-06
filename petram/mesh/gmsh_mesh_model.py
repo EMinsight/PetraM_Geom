@@ -131,7 +131,10 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             geom_root.onBuildAll(evt)
             
         try:
+            filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'            
             kwargs['gui_parent'] = dlg
+            kwargs['filename'] = filename
+            
             count = self.parent.build_mesh(geom_root, **kwargs)
             do_clear = (count == 0)
         except:
@@ -190,13 +193,13 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             viewer.set_status_text(status_txt, timeout = 60000)
             viewer._sel_mode = 'volume'
         else:
-            figobj = viewer.highlight_element(sel)
+            figobjs = viewer.highlight_element(sel)
             viewer.set_sel_mode(mode)
             viewer.set_sel_mode() # update buttons        
-            if figobj is not None:
+            if len(figobjs) > 0:
                 import ifigure.events
-                sel = [weakref.ref(figobj._artists[0])]
-                ifigure.events.SendSelectionEvent(figobj, dlg, sel)
+                sel = [weakref.ref(x._artists[0]) for x in figobjs]
+                ifigure.events.SendSelectionEvent(figobjs[0], dlg, sel, multi_figobj=figobjs)
             
     def get_embed(self):
         return [], [], []
@@ -587,7 +590,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         
         self.vt.preprocess_params(self)
         clmax, clmin = self.vt.make_value_or_expression(self)        
-        dprint1("callcing build mesh with", clmax, clmin)
+        dprint1("calling build mesh with", clmax, clmin)
         geom_root = self.geom_root
         
         if not geom_root.is_finalized:
@@ -604,7 +607,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                             MeshAlgorithm = self.algorithm,
                             MeshAlgorithm3D = self.algorithm3d,
                             use_profiler = self.use_profiler,
-                            use_expert_mode = self.use_expert_mode)
+                            use_expert_mode = self.use_expert_mode,
+                            gen_all_phys_entity = self.gen_all_phys_entity)
+        
         #mesher.load_brep(geom_root._geom_brep)
         
         children = [x for x in self.walk()]
@@ -633,9 +638,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 pgb.Destroy()
             pgb.Bind(wx.EVT_CLOSE, close_dlg)
             
-            max_mdim, done, data = mesher.run_generater(brep_input = geom_root._geom_brep,
+            max_mdim, done, data = mesher.run_generater(geom_root._geom_brep,
+                                                        filename, 
                                                         finalize=finalize,
-                                                        msh_file=filename,
                                                         progressbar = pgb)            
             pgb.Destroy()
             
@@ -645,7 +650,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             self._max_mdim = 0
             done = [], [], [], []
             
-        mesher.switch_model()                       # choose default geometry
         self._mesh_fface = done[2] # finished surfaces
         self._mesh_fline = done[1] # finished lines
 

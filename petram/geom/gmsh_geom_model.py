@@ -223,6 +223,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         engine = viewer.engine
         engine.build_ns()
         kwargs['gui_parent'] = dlg
+        
         try:
             p  = self.parent
             if isinstance(p, GmshGeom):
@@ -244,7 +245,6 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
         rootg.onUpdateGeoView(evt)
-
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -424,6 +424,14 @@ class GmshGeom(GeomTopBase):
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
+
+    def __del__(self):
+        if (hasattr(self, "_p") and self._p[0].is_alive()):
+            self._p[1].close()
+            self._p[2].close()
+            self._p[1].cancel_join_thread()
+            self._p[2].cancel_join_thread()                
+            self._p[0].terminate()
         
     @property
     def is_finalized(self):
@@ -578,12 +586,14 @@ class GmshGeom(GeomTopBase):
         ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
         ret = ptx, cells, {}, cell_data, {}
 
+        #
         # set clmax guess from geometry size
-        #xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
-        #l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        #clmax = l/3.
-        #clmin = l/300.
-        #self._clmax_guess = (clmax, clmin)
+        #
+        # xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
+        # l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        # clmax = l/3.
+        # clmin = l/300.
+        # self._clmax_guess = (clmax, clmin)
         
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
@@ -743,7 +753,6 @@ class GmshGeom(GeomTopBase):
             q =  mp.Queue() # data from child
             p = GMSHGeometryGenerator(q, task_q)
             p.start()
-            print("process ID", p.pid)
             self._p = (p, task_q, q)
             self._prev_sequence = gs.geom_sequence
             start_idx = 0
@@ -751,12 +760,14 @@ class GmshGeom(GeomTopBase):
             ll = len(self._prev_sequence)
             self._prev_sequence = gs.geom_sequence
             start_idx = ll
+
             
+        trash = wx.GetApp().GetTopWindow().proj.get_trash()
         success, dataset  = gs.run_generator(self, no_mesh = no_mesh, finalize=finalize,
                                              filename = stopname, progressbar = pgb,
                                              create_process = new_process,
                                              process_param = self._p,
-                                             start_idx = start_idx)
+                                             start_idx = start_idx, trash=trash)
 
         pgb.Destroy()
 

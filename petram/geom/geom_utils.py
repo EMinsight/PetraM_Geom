@@ -142,22 +142,16 @@ def find_translate_between_surface(src, dst, geom=None,
                                    mind_eps = 1e-10,
                                    axan = None):
     
-    if geom is not None:
-        ptx, cells, cell_data, l, s, v, geom = geom._gmsh4_data
-    else:
-        ptx, l, s, v = geom_data
+    ptx, l, s, v = geom_data
 
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
     l2 = np.unique(np.hstack([s[k] for k in dst]).flatten())
     p1p = np.unique(np.hstack([l[k] for k in l1]).flatten())
     p2p = np.unique(np.hstack([l[k] for k in l2]).flatten())
 
-    if cell_data is None:
-        i1 = p1p-1
-        i2 = p2p-1
-    else:
-        i1 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p1p]).flatten()
-        i2 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p2p]).flatten()
+    i1 = p1p-1
+    i2 = p2p-1
+    
     p1 = ptx[i1,:]
     p2 = ptx[i2,:]
     n1 = normal2points(p1)

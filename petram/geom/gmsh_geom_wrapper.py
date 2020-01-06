@@ -2568,7 +2568,7 @@ class Geometry(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                            
         gmsh.model.mesh.generate(2)
         
-    def generate_preview_mesh(self, filename = ''):
+    def generate_preview_mesh(self, filename):
         if self.queue is not None:
             self.queue.put((False, "generating preview"))
 
@@ -2606,14 +2606,14 @@ class Geometry(object):
             
             self.mesh_face_algorithm1(esize)
         
-        if filename != '':
-            import os
-            geom_msh = os.path.join(os.getcwd(), filename+'.msh')
-            gmsh.write(geom_msh)
+        import os
+        
+        geom_msh = os.path.join(os.getcwd(), filename+'.msh')
+        gmsh.write(geom_msh)
 
-        return vcl, esize
+        return vcl, esize, geom_msh
     
-    def generate_brep(self, objs, filename = '', finalize=False):
+    def generate_brep(self, objs, filename = '', trash='', finalize=False):
         
         if finalize and not self.skip_final_frag:
             if self.logfile is not None:
@@ -2635,8 +2635,13 @@ class Geometry(object):
         filename = '_'.join(filename.split("/"))
         filename = '_'.join(filename.split(":"))
         filename = '_'.join(filename.split("\\"))        
+
         
-        geom_brep = os.path.join(os.getcwd(), filename+'.brep')
+        if trash == '': # when finalizing
+            geom_brep = os.path.join(os.getcwd(), filename+'.brep')
+        else:
+            geom_brep = os.path.join(trash, filename+'.brep')
+
         gmsh.write(geom_brep)
 
         do_map_always = False
@@ -2646,9 +2651,11 @@ class Geometry(object):
             in meshing.
             '''
             gmsh.clear()
+            
+            # We keep highestDimOnly = False, sinse low dim elemtns could be
+            # used for embeding (cl control)
             gmsh.model.occ.importShapes(geom_brep, highestDimOnly=False)
             gmsh.model.occ.synchronize()
-
             #self.applyEntityNumberingInfo(map, objs)
             
         return geom_brep
@@ -2685,7 +2692,7 @@ class GMSHGeometryGenerator(mp.Process):
                     break
         print("exiting prcesss")
         
-    def generator(self, sequence, no_mesh, finalize, filename, start_idx,  kwargs):
+    def generator(self, sequence, no_mesh, finalize, filename, start_idx, trash,  kwargs):
 
         kwargs['write_log'] = True
         kwargs['queue'] = self.q
@@ -2709,22 +2716,27 @@ class GMSHGeometryGenerator(mp.Process):
             brep_file = self.mw.generate_brep(self.objs, filename = filename, finalize = True)
         else:
             filename = sequence[-1][0]
-            brep_file = self.mw.generate_brep(self.objs, filename = filename, finalize = False)
+            brep_file = self.mw.generate_brep(self.objs, filename = filename, trash=trash, finalize = False)
             #brep_file = ''
 
         if no_mesh:
-            q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
+            q.put((True, (self.gui_data, self.objs, brep_file, None, None, None)))
 
         else:
             from petram.geom.read_gmsh import read_pts_groups, read_loops
             
-            vcl, esize = self.mw.generate_preview_mesh()
+            vcl, esize, geom_msh = self.mw.generate_preview_mesh(filename)
+            l, s, v = read_loops(gmsh)            
+            '''
+            we don't do this in child process to avoid huge data transfer overhead.
+
             ptx, cells, cell_data = read_pts_groups(gmsh)
             l, s, v = read_loops(gmsh)
-
             data = ptx, cells, cell_data, l, s, v
             q.put((True, (self.gui_data, self.objs, brep_file, data, vcl, esize)))
-
+            '''
+            data = geom_msh, l, s, v
+            q.put((True, (self.gui_data, self.objs, brep_file, data, vcl, esize)))
 
 class GeometrySequence(object):
     def __init__(self):
@@ -2746,7 +2758,7 @@ class GeometrySequence(object):
     def run_generator(self, gui,
                       no_mesh=False, finalize=False, filename = '',
                       progressbar = None, create_process = True,
-                      process_param = None, start_idx = 0):
+                      process_param = None, start_idx = 0, trash=''):
         
         kwargs = {'PreviewResolution': gui.geom_prev_res,
                   'PreviewAlgorithm': gui.geom_prev_algorithm,
@@ -2758,7 +2770,8 @@ class GeometrySequence(object):
                   'LongEdgeThr': gui.long_edge_thr,
                   'SmallEdgeThr': gui.small_edge_thr,
                   'SmallEdgeSeg': gui.small_edge_seg,
-                  'MaxSeg': gui.max_seg}                          
+                  'MaxSeg': gui.max_seg}
+
 
         p = process_param[0]
         task_q = process_param[1]
@@ -2766,7 +2779,7 @@ class GeometrySequence(object):
         self.task_q = task_q
         self.q = q
 
-        args = (self.geom_sequence, no_mesh, finalize, filename, start_idx, kwargs)
+        args = (self.geom_sequence, no_mesh, finalize, filename, start_idx, trash, kwargs)
         
         task_q.put((1, args))
         '''
@@ -2810,16 +2823,25 @@ class GeometrySequence(object):
                        assert False, "Geometry Generation Aborted"
                     
             time.sleep(0.03)
+
         if ret[1][0] == 'fail':
             p.terminate()
             self.clean_queue()                           
             return False, ret[1][0]
         else:
-            return True, ret[1]
-    
-        
-        
+            self.gui_data, self.objs, brep_file, data, vcl, esize = ret[1]
             
+            from petram.geom.read_gmsh import read_pts_groups, read_loops
+
+            geom_msh, l, s, v = data
+            
+            gmsh.open(geom_msh)
+            ptx, cells, cell_data = read_pts_groups(gmsh)
+            data = ptx, cells, cell_data, l, s, v
+
+            ret = self.gui_data, self.objs, brep_file, data, vcl, esize           
+            
+            return True, ret
     
 '''
    Not yet implemented...
