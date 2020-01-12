@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import os
 import numpy as np
 import time
 import tempfile
@@ -2295,7 +2296,7 @@ class Geometry(object):
         
     def BrepImport_build_geom(self, objs, *args):
         cad_file, use_fix , use_fix_param, use_fix_tol, highestDimOnly = args
-        
+
         PTs = self.factory.importShapes(cad_file, 
                                         highestDimOnly=highestDimOnly)
         #debug to load one element...
@@ -2607,7 +2608,8 @@ class Geometry(object):
             self.mesh_face_algorithm1(esize)
         
         import os
-        
+
+        filename = '_'.join(filename.split('/')) ### this avoids a problem when filename is  STEP/IGES (having / in it)
         geom_msh = os.path.join(os.getcwd(), filename+'.msh')
         gmsh.write(geom_msh)
 
@@ -2802,8 +2804,10 @@ class GeometrySequence(object):
                 if progressbar is not None:
                     istep += 1
                     if istep < progressbar.GetRange():
-                        progressbar.Update(istep, newmsg=ret[1])    
-                
+                        progressbar.Update(istep, newmsg=ret[1])
+                    else:
+                        print("Goemetry Generator : Step = " + str(istep) + ret[1])
+                        
             except QueueEmpty:
                 if not p.is_alive():
                     self.clean_queue()
@@ -2830,16 +2834,19 @@ class GeometrySequence(object):
             return False, ret[1][0]
         else:
             self.gui_data, self.objs, brep_file, data, vcl, esize = ret[1]
-            
-            from petram.geom.read_gmsh import read_pts_groups, read_loops
 
-            geom_msh, l, s, v = data
-            
-            gmsh.open(geom_msh)
-            ptx, cells, cell_data = read_pts_groups(gmsh)
-            data = ptx, cells, cell_data, l, s, v
+            if no_mesh:
+                ret =  self.gui_data, self.objs, brep_file, None, None, None
 
-            ret = self.gui_data, self.objs, brep_file, data, vcl, esize           
+            else:
+                from petram.geom.read_gmsh import read_pts_groups, read_loops
+
+                geom_msh, l, s, v = data
+                gmsh.open(geom_msh)
+                ptx, cells, cell_data = read_pts_groups(gmsh)
+                data = ptx, cells, cell_data, l, s, v
+
+                ret = self.gui_data, self.objs, brep_file, data, vcl, esize           
             
             return True, ret
     

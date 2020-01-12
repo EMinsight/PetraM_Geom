@@ -1855,6 +1855,8 @@ class GMSHMeshWrapper(object):
                 if progressbar is not None:
                     istep += 1
                     progressbar.Update(istep, newmsg=ret[1])                    
+                else:
+                    print("Mesh Generator : Step = " + str(istep) + " : " +ret[1])
 
             except QueueEmpty:
                 if not p.is_alive():
@@ -1884,8 +1886,11 @@ class GMSHMeshWrapper(object):
 
         from petram.geom.read_gmsh import read_pts_groups, read_loops
         
-        progressbar.Update(istep, newmsg="Reading mesh file for rendering")
-        
+        if progressbar is not None:
+            progressbar.Update(istep, newmsg="Reading mesh file for rendering")
+        else:
+            print("Reading mesh file for rendering")
+            
         gmsh.open(msh_output)
         ptx, cells, cell_data = read_pts_groups(gmsh,
                                             finished_lines = done[1],
@@ -1893,7 +1898,7 @@ class GMSHMeshWrapper(object):
                 
         data = ptx, cells, {}, cell_data, {}
         
-        return max_dim, done, data
+        return max_dim, done, data, msh_output
 
 def generator(q, brep_input, msh_file, sequence, dim, finalize, kwargs):
     

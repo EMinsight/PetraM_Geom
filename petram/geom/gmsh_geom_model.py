@@ -426,6 +426,9 @@ class GmshGeom(GeomTopBase):
         NS_mixin.__init__(self, *args, **kwargs)
 
     def __del__(self):
+        self.terminate_child()
+
+    def terminate_child(self):
         if (hasattr(self, "_p") and self._p[0].is_alive()):
             self._p[1].close()
             self._p[2].close()
@@ -724,31 +727,33 @@ class GmshGeom(GeomTopBase):
         gs = GeometrySequence()
         stopname = self.walk_over_geom_chidlren(gs, stop1=stop1, stop2=stop2)
 
-        import wx
-        if gui_parent is None:
-            gui_parent = wx.GetApp().TopWindow
 
         L = len(gs.geom_sequence) + 3
-        pgb = wx.ProgressDialog("Generating geometry...",
+        
+        if gui_parent is not None:
+            import wx            
+            gui_parent = wx.GetApp().TopWindow
+            pgb = wx.ProgressDialog("Generating geometry...",
                                 "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
-        def close_dlg(evt, dlg=pgb):
-            pgb.Destroy()
-        pgb.Bind(wx.EVT_CLOSE, close_dlg)
-
+            
+            def close_dlg(evt, dlg=pgb):
+               pgb.Destroy()
+            pgb.Bind(wx.EVT_CLOSE, close_dlg)
+            trash = wx.GetApp().GetTopWindow().proj.get_trash()            
+        else:
+            pgb = None
+            cwd = os.getcwd()
+            trash = os.path.join(cwd, '.trash')
+            if not os.path.exists(trash): os.mkdir(trash)
+            
         if (hasattr(self, "_p") and self._p[0].is_alive()):
             new_process = self.check_create_new_child(gs)
         else:
             new_process = True
 
         if new_process:
-            if (hasattr(self, "_p") and self._p[0].is_alive()):
-                self._p[1].close()
-                self._p[2].close()
-                self._p[1].cancel_join_thread()
-                self._p[2].cancel_join_thread()                
-                self._p[0].terminate()
-
+            self.terminate_child()
             task_q = mp.Queue() # data to child
             q =  mp.Queue() # data from child
             p = GMSHGeometryGenerator(q, task_q)
@@ -762,14 +767,14 @@ class GmshGeom(GeomTopBase):
             start_idx = ll
 
             
-        trash = wx.GetApp().GetTopWindow().proj.get_trash()
+
         success, dataset  = gs.run_generator(self, no_mesh = no_mesh, finalize=finalize,
                                              filename = stopname, progressbar = pgb,
                                              create_process = new_process,
                                              process_param = self._p,
                                              start_idx = start_idx, trash=trash)
 
-        pgb.Destroy()
+        if pgb is not None: pgb.Destroy()
 
         if not success:
             print(dataset) # this is an error message
@@ -784,7 +789,10 @@ class GmshGeom(GeomTopBase):
         self.update_GUI_after_geom(gui_data, objs)
 
         if data is None:  # if no_mesh = True
-            return   
+            self.terminate_child()            
+            return
+        if finalize:
+            self.terminate_child()                
         # for the readablity I expend data here, do we need geom?        
         ptx, cells, cell_data, l, s, v = data
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, gs)
@@ -798,6 +806,15 @@ class GmshGeom(GeomTopBase):
         self._vcl = vcl
         self._esize = esize
         return
+    
+    def generate_final_geometry(self):
+        cwd = os.getcwd()
+        dprint1("Generating Geometry in " + cwd)
+        self.build_geom4(finalize = True, gui_parent=None, no_mesh=True)
+        self.geom_finalized = True
+        self.geom_timestamp = time.ctime()
+        self.terminate_child()        
+        dprint1("Generating Geometry ... Done")        
 
     def build_geom(self, stop1=None, stop2=None, filename = None,
                    finalize = False, gui_parent=None):

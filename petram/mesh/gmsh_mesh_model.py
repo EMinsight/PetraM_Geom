@@ -627,25 +627,32 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if mesher.count_sequence() > 0:
             self._mesher_data = None                # set None since mesher may die...
             
-            import wx
-            if gui_parent is None:
-                gui_parent = wx.GetApp().TopWindow
             L = mesher.count_sequence()*4 + 3
-            pgb = wx.ProgressDialog("Generating mesh...",
+            
+            if gui_parent is not None:
+                import wx                
+                gui_parent = wx.GetApp().TopWindow
+                pgb = wx.ProgressDialog("Generating mesh...",
                                 "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
-            def close_dlg(evt, dlg=pgb):
-                pgb.Destroy()
-            pgb.Bind(wx.EVT_CLOSE, close_dlg)
+                def close_dlg(evt, dlg=pgb):
+                    pgb.Destroy()
+                pgb.Bind(wx.EVT_CLOSE, close_dlg)
+            else:
+                pgb = None
             
-            max_mdim, done, data = mesher.run_generater(geom_root._geom_brep,
-                                                        filename, 
-                                                        finalize=finalize,
-                                                        progressbar = pgb)            
-            pgb.Destroy()
+            max_mdim, done, data, msh_output = mesher.run_generater(geom_root._geom_brep,
+                                                                    filename, 
+                                                                    finalize=finalize,
+                                                                    progressbar = pgb)            
+            if pgb is not None: pgb.Destroy()
             
             self._mesher_data = data         
             self._max_mdim = max_mdim
+            if finalize:
+                self._msh_output = msh_output
+            else:
+                self._msh_output = ''
         else:
             self._max_mdim = 0
             done = [], [], [], []
@@ -653,7 +660,21 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self._mesh_fface = done[2] # finished surfaces
         self._mesh_fline = done[1] # finished lines
 
-        return (mesher.count_sequence() > 0)               
+        
+        return (mesher.count_sequence() > 0)
+    
+    def generate_mesh_file(self):
+        cwd = os.getcwd()
+        dprint1("Generating Mesh in " + cwd)
+        geom_root = self.geom_root
+        filename = os.path.join(cwd, self.name())+'.msh'
+        count = self.build_mesh(geom_root, finalize=True, filename=filename,
+                                gui_parent = None)
+        if count == 0:
+            assert False, "Failed to generate mesh"
+        else:
+            dprint1("Generating Mesh ... Done")        
+
               
     def load_gui_figure_data(self, viewer):
         #import meshio
@@ -684,6 +705,12 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def get_meshfile_path(self):
         '''
         '''
+        if hasattr(self, '_msh_output') and self._msh_output != '':
+            path = self._msh_output
+            if os.path.exists(path):
+                dprint1("gmsh file path", path)
+                return path
+                
         path = os.path.join(self.root().get_root_path(), self.name() + '.msh')
         if os.path.exists(path):
             dprint1("gmsh file path", path)
