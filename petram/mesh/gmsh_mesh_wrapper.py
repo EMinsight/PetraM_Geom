@@ -1482,7 +1482,7 @@ class GMSHMeshWrapper(object):
         ex_info = ([(2, x) for x in tag1], dst, laterals,  vol)
 
         # for debug the intermediate geometry
-        gmsh.write('tmp_'+ws +  '.brep')            
+        #gmsh.write('tmp_'+ws +  '.brep')            
 
         #info1 = self.geom_info
         info2 = self.read_geom_info(ret)
