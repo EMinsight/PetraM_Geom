@@ -942,13 +942,13 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
                                       guilabel = 'Target',
                                       default = "",
                                       tip = "target object")),
-          ('taxis', VtableElement_Plain('taxis', type='float',
-                                        guilabel = 'cut plain',
+          ('taxis', VtableElement_Plane('taxis', type='float',
+                                        guilabel = 'cut plane',
                                         suffix = ('a', 'b', 'c', 'd'),
                                         default = [1, 0,  0, 0],
-                                        tip = "Cutting Plain" )),)
+                                        tip = "Cutting Plane" )),)
 
-class SplitByPlain(GeomPB):    
+class SplitByPlane(GeomPB):    
     vt = Vtable(edata)
 
     

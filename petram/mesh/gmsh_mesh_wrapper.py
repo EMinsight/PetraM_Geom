@@ -113,10 +113,23 @@ def process_text_tags_vsd(dim=3):
                 
             tags2 = [int(x) for x in tags2.split(',')]
             dimtags2 = [(dim-1, x) for x in tags2]
-            
             return method(self, done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
         return method2
     return func2
+
+def set_restore_maxmin_cl(method):
+    def wrapped2(self, *args, **kwargs):
+        maxsize=kwargs.get("maxsize", 1e20)
+        minsize=kwargs.get("minsize", 0.0)
+        if maxsize != 0:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", maxsize)
+        if minsize != 0:            
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", minsize)
+        ret = method(self, *args, **kwargs)            
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
+        return ret
+    return wrapped2
 
 def check_line_orientation(ltag, vtags, pcoord):
     p1 = np.array(gmsh.model.getValue(0, vtags[0], [0]))
@@ -232,10 +245,8 @@ class GMSHMeshWrapper(object):
                               Algorithm3D[self.algorithm3d])
         gmsh.option.setNumber("Mesh.Algorithm3D",
                               Algorithm3D[self.algorithm3d])
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax",
-                              self.clmax)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin",
-                              self.clmin)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         gmsh.option.setNumber("General.ExpertMode",   1 if  self.use_expert_mode else 0)
         gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])        
@@ -264,6 +275,7 @@ class GMSHMeshWrapper(object):
 
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
+
         for mdim in range(maxdim+1):
             for idx, sq in enumerate(self.mesh_sequence):
                 proc, args, kwargs = sq
@@ -723,6 +735,7 @@ class GMSHMeshWrapper(object):
         return done, params        
 
     # freevolume
+    @set_restore_maxmin_cl
     @process_text_tags(dim=3)        
     def freevolume_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -762,6 +775,7 @@ class GMSHMeshWrapper(object):
         
         dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
+
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
         for dim, tag in dimtags:
@@ -773,7 +787,8 @@ class GMSHMeshWrapper(object):
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
-    
+
+    @set_restore_maxmin_cl    
     @process_text_tags(dim=3)    
     def freevolume_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -797,7 +812,8 @@ class GMSHMeshWrapper(object):
         gmsh.model.mesh.generate(1)
         done[1].extend([x for dim, x in tags])        
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=3)    
     def freevolume_2D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -817,7 +833,8 @@ class GMSHMeshWrapper(object):
         gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in tags])                
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=3)
     def freevolume_3D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -829,6 +846,7 @@ class GMSHMeshWrapper(object):
         return done, params
     
     # freeface
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)
     def freeface_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -867,7 +885,8 @@ class GMSHMeshWrapper(object):
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)                
     def freeface_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -890,6 +909,7 @@ class GMSHMeshWrapper(object):
 
         return done, params
     
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)                
     def freeface_2D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -899,11 +919,13 @@ class GMSHMeshWrapper(object):
         done[2].extend([x for dim, x in tags])         
         return done, params
 
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)    
     def freeface_3D(self, done, params, tags, *args, **kwargs):
         return done, params                
 
     # freeedge
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)        
     def freeedge_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -930,7 +952,8 @@ class GMSHMeshWrapper(object):
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)                
     def freeedge_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -940,10 +963,12 @@ class GMSHMeshWrapper(object):
         done[1].extend([x for dim, x in tags])                 
         return done, params
 
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)    
     def freeedge_2D(self, done, params, tags, *args, **kwargs):
         return done, params        
 
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)    
     def freeedge_3D(self,  done, params, tags, *args, **kwargs):
         return done, params                

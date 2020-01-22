@@ -475,11 +475,11 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,  Fillet, Chamfer, Array, ArrayRot
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,  Fillet, Chamfer, Array, ArrayRot
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
@@ -491,7 +491,7 @@ class GmshGeom(GeomTopBase):
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
                 ("", Array), ("!", ArrayRot),
-                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlain),
+                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
                 ("Import...", BrepImport),("", CADImport),("!", healCAD),
                 ]
