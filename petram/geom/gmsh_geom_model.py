@@ -48,12 +48,16 @@ geom_key_dict = {'SurfaceBase': 'sb',
 
 
 def get_gmsh_exe():
-    macos_gmsh_location = '/Applications/Gmsh.app/Contents/MacOS/gmsh'
-    if os.path.isfile(macos_gmsh_location):
-        gmsh_executable = macos_gmsh_location
+    from shutil import which
+
+    gmsh_executable = which('gmsh')
+    if gmsh_executable is not None:
+        return gmsh_executable
     else:
-        gmsh_executable = 'gmsh'
-    return gmsh_executable
+        macos_gmsh_location = '/Applications/Gmsh.app/Contents/MacOS/gmsh'
+        if os.path.isfile(macos_gmsh_location):
+            return macos_gmsh_location
+    return 'gmsh'
 
 
 def get_gmsh_major_version():

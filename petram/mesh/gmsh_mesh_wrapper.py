@@ -182,7 +182,8 @@ class GMSHMeshWrapper(object):
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", format)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-
+        gmsh.option.setNumber("Mesh.IgnorePeriodicity", 1)
+        
         gmsh_init = True
         self.add_model('main1')
         
@@ -204,6 +205,7 @@ class GMSHMeshWrapper(object):
         '''
         add mesh command
         '''
+
         if name == 'extrude_face':
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         elif name == 'revolve_face':
@@ -212,7 +214,7 @@ class GMSHMeshWrapper(object):
             kwargs['volume_hint'] = gids[0]
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         else:
-            pass
+            pass 
         self.mesh_sequence.append([name, gids, kwargs])
         
     def count_sequence(self):
@@ -839,8 +841,7 @@ class GMSHMeshWrapper(object):
     def freevolume_3D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[3]]
-
-        self.show_only(dimtags, recursive = False)
+        self.show_only(tags, recursive = True)
         gmsh.model.mesh.generate(3)
         done[3].extend([x for dim, x in tags])                        
         return done, params
@@ -977,7 +978,7 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=1)        
     def transfinite_edge_0D(self, done, params, dimtags, *args, **kwargs):
         #meher.add('transfinite_line', gid, nseg=nseg, progression = p,  bump = b)
-        nseg = kwargs.get('nseg', 100)-1
+        nseg = kwargs.get('nseg', 100) + 1
         
         meshType = 'Progression'
         coef = kwargs.get('progression', 1.0)
@@ -995,69 +996,6 @@ class GMSHMeshWrapper(object):
             done[1].append(tag)
         return done, params
 
-        '''
-        # A test to understand transfinite meshing...
-        if bump != 1:
-            if nseg % 2 == 1:            
-                tmp = np.logspace(0, np.log10(bump), (nseg+1)/2)
-                dd =  np.hstack([np.flip(tmp[1:], 0), tmp])
-            else:
-                tmp = np.logspace(0, np.log10(bump), nseg/2)
-                dd =  np.hstack([np.flip(tmp, 0), tmp])
-        elif progression != 1:
-             dd = abs(progression)**np.arange(nseg)
-             if progression < 0:
-                 dd = np.flip(dd, 0)
-        else:
-            dd = np.array([1.]*nseg)
-
-        dists = dd/np.sum(dd) # normalized goemetrical distance of nodes
-        cdists = np.hstack([[0], np.cumsum(dists)])
-        
-
-        params = {}
-        for dim, tag in dimtags:
-            ntags, nodes, pcoords = gmsh.model.mesh.getNodes(1, tag, includeBoundary=True)
-            p = list(np.linspace(pcoords[-2], pcoords[-1], np.max([nseg*3, 300])))            
-            ptx = np.array(gmsh.model.getValue(1, tag, p)).reshape(-1, 3)
-            dd = np.sqrt(np.sum((ptx[:-1]- ptx[1:])**2, 1))
-            ddd = np.hstack([[0], np.cumsum(dd)])
-            ddd = ddd/ddd[-1]
-
-            pcoords = np.interp(cdists, ddd, p) #parametric Coords to realized the distancs
-            nodepos = gmsh.model.getValue(1, tag, pcoords[1:-1])
-
-            size = np.array(gmsh.model.getValue(1, tag, pcoords[:2])).reshape(-1, 3)
-            size1 = np.sqrt(np.sum((size[1]- size[0])**2))
-            size = np.array(gmsh.model.getValue(1, tag, pcoords[-2:])).reshape(-1, 3)
-            size2 = np.sqrt(np.sum((size[1]- size[0])**2))
-                
-            vtags = [x for xx, x in gmsh.model.getBoundary(((dim, tag),))]
-            flag = check_line_orientation(tag, vtags, pcoords[0])            
-            if flag == 1:
-                if not vtags[0] in done[0]:                
-                    gmsh.model.mesh.setSize(((0, vtags[0]),), size1)
-                    done[0].append(vtags[0])                                
-                if not vtags[1] in done[0]:                                    
-                    gmsh.model.mesh.setSize(((0, vtags[1]),), size2)
-                    done[0].append(vtags[1])
-                    
-            elif flag == 2:
-                if not vtags[0] in done[0]:
-                    gmsh.model.mesh.setSize(((0, vtags[0]),), size2)
-                    done[0].append(vtags[0])                                                    
-                if not vtags[1] in done[0]:                    
-                    gmsh.model.mesh.setSize(((0, vtags[1]),), size1)
-                    done[0].append(vtags[1])                    
-            else:
-                print(gmsh.model.getValue(0, vtags[0], [0]), gmsh.model.getValue(0, vtags[1], [0]),
-                      gmsh.model.getValue(1, tag, pcoords[:1]), gmsh.model.getValue(1, tag, pcoords[-1:]))
-                assert False, "Something is wrong"
-            
-            params[tag] = (nodepos, pcoords)
-        gmsh.model.mesh.generate(0)
-        return done, params
-        '''
     @process_text_tags(dim=1)            
     def transfinite_edge_1D(self, done, params, dimtags, *args, **kwargs):
         self.show_only(dimtags)
@@ -1065,39 +1003,6 @@ class GMSHMeshWrapper(object):
         done[1].extend([x for dim, x in dimtags])         
         return done, params
         
-        '''
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
-        
-        for dim, tag in dimtags:
-            nodepos, pcoords = params[tag]
-            
-            ntags = range(noffset, noffset+len(pcoords)-2)
-            noffset = noffset+len(ntags)
-            
-            etags = [range(eoffset, eoffset+len(ntags)+1)]
-            eoffset = eoffset+len(etags[0])
-
-            vtags = [x for xx, x in gmsh.model.getBoundary(((dim, tag),))]
-            flag = check_line_orientation(tag, vtags, pcoords[0])
-            
-            info1 = self.geom_info
-            tmp = np.vstack([ntags, ntags]).transpose().flatten()
-            if flag == 1:
-                nodes2 = np.hstack([[info1[1][vtags[0]]+1], tmp, [info1[1][vtags[1]]+1]])
-            elif flag == 2:
-                nodes2 = np.hstack([[info1[1][vtags[1]]+1], tmp, [info1[1][vtags[0]]+1]])                
-            else:
-                assert False, "Something is wrong"
-
-            #print("setting", dim, tag, ntags, nodepos, pcoords)
-            gmsh.model.mesh.setNodes(dim, tag, ntags, nodepos, pcoords[1:-1])
-            #print("setting", dim, tag, [1], etags, [list(nodes2)])     
-            gmsh.model.mesh.setElements(dim, tag, [1], etags, [list(nodes2)])        
-            done[1].append(tag)
-            
-        return done, params                        
-        '''
     def transfinite_edge_2D(self, done, params, dimtags, *args, **kwargs):
         return done, params                
     
@@ -1235,25 +1140,39 @@ class GMSHMeshWrapper(object):
 
         if revolve:
             if volume_hint is None:
-               ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
+                ### find volume hint
+                ### if there are volumes connecting all src and dst. we use thse volumes
+                ### to constuct point mapping
+                volume_hint = []
+                for v1 in v:
+                    if (len(set(v[v1]).intersection(tag1)) != 0 and
+                        len(set(v[v1]).intersection(tag2)) != 0):
+                        volume_hint.append(str(v1))
+                if len(volume_hint) == len(tag1):
+                    volume_hint = ','.join(volume_hint)
+
+
+            if volume_hint is None:
+               ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
             else:
-               # copy(revolve) face is perfomece in the preparation of revolve mesh
+               # copy(revolve) face is perfomed in the preparation of revolve mesh
                # in this case we use the volume being meshed as a hint
+               #print("using volume hint", volume_hint)                
                vtags = [int(x) for x in volume_hint.split(',')]
-               ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface2(
+               ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
                                                             tag1, tag2, vtags,
                                                             geom_data=geom_data,
                                                             axan = axan)
         else:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+            ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)        
         
-        params = (ax, an, px, d, affine, p_pairs, l_pairs)
+        params = (ax, an, px, d, affine, p_pairs, l_pairs, s_pairs)
         #print("transformation param", params)
         return done, params
     
@@ -1263,7 +1182,7 @@ class GMSHMeshWrapper(object):
         # don't do this otherwise previously meshed surfaces would be lost
         ### gmsh.model.occ.synchronize()
         gmsh.model.mesh.rebuildNodeCache()
-        ax, an, px, d, affine, p_pairs, l_pairs = params
+        ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
         
         ents = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
         mdata = get_nodes_elements(ents, normalize=True)
@@ -1285,11 +1204,14 @@ class GMSHMeshWrapper(object):
             if dim != 1: continue
 
             tag = l_pairs[tag]
+
+
             if tag in done[1]:
-                print("Line is already meshed (CopyFace1D skip edge): "+str(tag)+ "... continuing")
+                print("Line is already meshed (CopyFace1D skip edge): "+str(tag)+ "... continuing")  
                 continue
-                
-            ntag, pos, ppos = ndata            
+
+            ntag, pos, ppos = ndata
+            #print("parametric copyied", ppos)            
             etypes, etags, nodes = edata
             ntag2 = range(noffset, noffset+len(ntag)-2)
             noffset = noffset+len(ntag)-2
@@ -1319,8 +1241,12 @@ class GMSHMeshWrapper(object):
                 d = np.array(p1) - np.array(p2)
                 return np.sum(d**2)
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
-                print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
-                ppos = np.array([abs(1-x) for x in ppos])
+                print("reversing Coords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
+                pos = np.array(pos).reshape(-1, 3)
+                pos = np.flip(pos, 0)
+                pos = pos.flatten()
+                #ppos = np.array([abs(1-x) for x in ppos])
+                #print("parametric fixed", pos, ppos)                      
                 #ntag2 = list(reversed(ntag2))
 
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
@@ -1328,8 +1254,6 @@ class GMSHMeshWrapper(object):
             for i, j in zip(ntag, ntag2): node_map2[i] = j
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
             
-            #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ppos)
-            #gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
             gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, ppos)
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)        
             
@@ -1339,8 +1263,8 @@ class GMSHMeshWrapper(object):
 
     @process_text_tags_sd(dim=2)    
     def copyface_2D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        ax, an, px, d, affine, p_pairs, l_pairs = params
-        
+        ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
+
         mdata = []
         for dim, tag in dimtags:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
@@ -1372,20 +1296,23 @@ class GMSHMeshWrapper(object):
         ntags_d = sum([list(x[0]) for x in tmp], [])
         pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
-        
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)        
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
         for i, nt in zip(idx, ntags_s):
             node_map2[nt] = ntags_d[i]
             
 
         for kk, d in enumerate(mdata):
             dim, tag, ndata, edata = d
+            
             if dim != 2: continue
-            tag = dimtags2[kk][1]
+            tag = s_pairs[tag]
+
             if tag in done[2]:
                 print("Face is already meshed (CopyFace): "+str(tag) + "... continuing")
                 continue                
-                
+
             ntag, pos, ppos = ndata
             ntag2 = range(noffset, noffset+len(ntag))
             noffset = noffset+len(ntag)
@@ -1395,17 +1322,17 @@ class GMSHMeshWrapper(object):
             pos = (np.dot(R, pos).transpose() + D).flatten()
 
             #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, [])
-            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, [])
+
             etypes, etags, nodes = edata
 
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
 
-            #gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, [])
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)        
             done[2].append(tag)
-            
+        #gmsh.model.mesh.reclassifyNodes()            
         return done, params            
         
 
@@ -1444,12 +1371,12 @@ class GMSHMeshWrapper(object):
         info1 = self._extract_info_for_volume(vtags)
 
         if revolve:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface2(
+            ax, an, px, d, affine, p_pairs, l_pairs, s_pairs= find_rotation_between_surface2(
                                                             tag1, tag2, vtags,
                                                             geom_data=geom_data,
                                                             axan = axan)
         else:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+            ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
@@ -1933,16 +1860,6 @@ def generator(q, brep_input, msh_file, sequence, dim, finalize, kwargs):
     mw.mesh_sequence = sequence
     max_dim, done, msh_output = mw.generate(brep_input, msh_file, dim=dim, finalize=finalize)
 
-    '''
-    from petram.geom.read_gmsh import read_pts_groups, read_loops
-    ptx, cells, cell_data = read_pts_groups(gmsh,
-                                            finished_lines = done[1],
-                                            finished_faces = done[2])
-                
-    data = ptx, cells, {}, cell_data, {}
-    '''
-    
-    #q.put((True, (max_dim, done, data)))
     q.put((True, (max_dim, done, msh_output)))
     
     

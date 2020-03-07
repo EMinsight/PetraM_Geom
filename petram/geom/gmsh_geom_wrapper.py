@@ -2569,7 +2569,19 @@ class Geometry(object):
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                            
         gmsh.model.mesh.generate(2)
         
-    def generate_preview_mesh(self, filename):
+    def make_safe_file(self, filename, trash, ext):
+        #map = self.getEntityNumberingInfo()
+        # make filename safe
+        filename = '_'.join(filename.split("/"))
+        filename = '_'.join(filename.split(":"))
+        filename = '_'.join(filename.split("\\"))
+        
+        if trash == '': # when finalizing
+            return os.path.join(os.getcwd(), filename+ext)
+        else:
+            return os.path.join(trash, filename+ext)
+
+    def generate_preview_mesh(self, filename, trash):
         if self.queue is not None:
             self.queue.put((False, "generating preview"))
 
@@ -2608,9 +2620,10 @@ class Geometry(object):
             self.mesh_face_algorithm1(esize)
         
         import os
-
-        filename = '_'.join(filename.split('/')) ### this avoids a problem when filename is  STEP/IGES (having / in it)
-        geom_msh = os.path.join(os.getcwd(), filename+'.msh')
+        
+        geom_msh = self.make_safe_file(filename, trash, '.msh')
+        #filename = '_'.join(filename.split('/')) ### this avoids a problem when filename is  STEP/IGES (having / in it)
+        #geom_msh = os.path.join(os.getcwd(), filename+'.msh')
         gmsh.write(geom_msh)
 
         return vcl, esize, geom_msh
@@ -2632,18 +2645,7 @@ class Geometry(object):
         '''
         import os
 
-        #map = self.getEntityNumberingInfo()
-        # make filename safe
-        filename = '_'.join(filename.split("/"))
-        filename = '_'.join(filename.split(":"))
-        filename = '_'.join(filename.split("\\"))        
-
-        
-        if trash == '': # when finalizing
-            geom_brep = os.path.join(os.getcwd(), filename+'.brep')
-        else:
-            geom_brep = os.path.join(trash, filename+'.brep')
-
+        geom_brep = self.make_safe_file(filename, trash, '.brep')
         gmsh.write(geom_brep)
 
         do_map_always = False
@@ -2727,7 +2729,7 @@ class GMSHGeometryGenerator(mp.Process):
         else:
             from petram.geom.read_gmsh import read_pts_groups, read_loops
             
-            vcl, esize, geom_msh = self.mw.generate_preview_mesh(filename)
+            vcl, esize, geom_msh = self.mw.generate_preview_mesh(filename, trash)
             l, s, v = read_loops(gmsh)            
             '''
             we don't do this in child process to avoid huge data transfer overhead.

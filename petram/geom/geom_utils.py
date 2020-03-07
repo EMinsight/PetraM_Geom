@@ -135,7 +135,18 @@ def map_volumes_in_geom_info(info1, info2, smap_r):
             assert False, "could not find volume mapping for "+str(s)
     return vmap, vmap_r
 
-                
+def find_s_pairs(src, dst, s, l_pairs):
+    s_pairs = {}
+    for s1 in src:
+        l2 = set([l_pairs[l1] for l1 in  s[s1]])
+        for s2 in dst:
+            if set(s[s2]) == l2:
+               s_pairs[s1] = s2
+               break
+
+    return s_pairs
+    
+        
 def find_translate_between_surface(src, dst, geom=None,
                                    geom_data = None,
                                    min_angle = 0.1,
@@ -143,7 +154,8 @@ def find_translate_between_surface(src, dst, geom=None,
                                    axan = None):
     
     ptx, l, s, v = geom_data
-
+    s2l = s
+    
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
     l2 = np.unique(np.hstack([s[k] for k in dst]).flatten())
     p1p = np.unique(np.hstack([l[k] for k in l1]).flatten())
@@ -228,8 +240,10 @@ def find_translate_between_surface(src, dst, geom=None,
     affine[-1,-1] = 1.0
 
     px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
+
+    s_pairs = find_s_pairs(src, dst, s2l, l_pairs)    
     #print("px, d", px, d)
-    return ax, an, px, d, affine, p_pairs, l_pairs
+    return ax, an, px, d, affine, p_pairs, l_pairs, s_pairs
 
 def find_rotation_between_surface(src, dst, geom=None,
                                    geom_data = None,
@@ -240,8 +254,10 @@ def find_rotation_between_surface(src, dst, geom=None,
     if geom is not None:
         ptx, cells, cell_data, l, s, v, geom = geom._gmsh4_data
     else:
+        cell_data = None
         ptx, l, s, v = geom_data
-
+    s2l = s
+    
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
     l2 = np.unique(np.hstack([s[k] for k in dst]).flatten())
     p1p = np.unique(np.hstack([l[k] for k in l1]).flatten())
@@ -276,7 +292,7 @@ def find_rotation_between_surface(src, dst, geom=None,
 
 
         ax =null_space(M).flatten()
-        px, res, rank, s = lstsq(M, b, rcond=None)
+        px, res, rank, ss = lstsq(M, b, rcond=None)
 
         print("p2, axis angle", px, ax, an)
         
@@ -353,10 +369,14 @@ def find_rotation_between_surface(src, dst, geom=None,
     affine[:3,-1] = np.dot(np.linalg.inv(R), d)
     affine[-1,-1] = 1.0
     
+    
     #if axan is None:
     #    px = np.dot(np.linalg.pinv(-R+np.diag((1,1,1))),-d)
     print("ax, an, px", ax, an, px)
-    return ax, an, px, d, affine, p_pairs, l_pairs
+
+    s_pairs = find_s_pairs(src, dst, s2l, l_pairs)
+    
+    return ax, an, px, d, affine, p_pairs, l_pairs, s_pairs
 
 
 def find_rotation_between_surface2(src, dst, vol,
@@ -371,6 +391,7 @@ def find_rotation_between_surface2(src, dst, vol,
     volume is a hint to specify the volumes in the chains
     '''
     ptx, l, s, v = geom_data
+    s2l = s
 
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
     l2 = np.unique(np.hstack([s[k] for k in dst]).flatten())
@@ -391,10 +412,6 @@ def find_rotation_between_surface2(src, dst, vol,
     an = np.arctan2(sin, cos)
     ax = np.cross(n1, n2)
     ax = ax/np.sqrt(np.sum(ax**2))
-
-    # we assume angle is less than 90 deg.
-    if an > np.pi/2.0: an = an - np.pi
-    if an < -np.pi/2.0: an = an - np.pi
 
     # next find volume chain
     def search_volume_chain(start_volume, start_face):
@@ -475,7 +492,18 @@ def find_rotation_between_surface2(src, dst, vol,
                 p_pairs[p1] = next
                 break
             next = p_map[next]
-              
+            
+    def check_distance(p_pairs, R, ptx):
+        ddd = []
+        for i, k in enumerate(p_pairs):
+            #print("checking points", k, p_pairs[k])
+            p1 = ptx[k-1,:]
+            p2 = ptx[p_pairs[k]-1,:]
+            ddd.append(np.sqrt(np.sum((p2 - np.dot(R, p1))**2)))
+        print("average distance (must be less than)", np.max(np.abs(ddd-np.mean(ddd))),
+              mind_eps)
+        return np.max(np.abs(ddd-np.mean(ddd))) < mind_eps
+    
     def rot_center(p1, p2, an, ax):
         mid = (p1 + p2)/2.0
 
@@ -492,9 +520,20 @@ def find_rotation_between_surface2(src, dst, vol,
         return np.abs(np.abs(np.sum(ax*n1))-1) < mind_eps
         
     #using angle and normal we can find the center...
-    good = [True, True]
+
     R = rotation_mat(ax, an)
     d = np.array([0, 0, 0])
+
+    if not check_distance(p_pairs, R, ptx):
+         # we assume angle is less than 90 deg.
+         if an > 0.0:
+             an = an - np.pi
+         else:
+             an = an + np.pi
+         R = rotation_mat(ax, an)
+         check_distance(p_pairs, R, ptx)
+         
+    good = [True, True]
 
     for i, k in enumerate(p_pairs):
         #print("checking points", k, p_pairs[k])
@@ -528,4 +567,6 @@ def find_rotation_between_surface2(src, dst, vol,
     affine[:3,-1] = d
     affine[-1,-1] = 1.0
 
-    return ax, an, px, d, affine, p_pairs, l_pairs
+    s_pairs = find_s_pairs(src, dst, s2l, l_pairs)
+
+    return ax, an, px, d, affine, p_pairs, l_pairs, s_pairs
