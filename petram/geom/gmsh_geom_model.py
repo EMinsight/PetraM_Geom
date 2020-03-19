@@ -48,12 +48,16 @@ geom_key_dict = {'SurfaceBase': 'sb',
 
 
 def get_gmsh_exe():
-    macos_gmsh_location = '/Applications/Gmsh.app/Contents/MacOS/gmsh'
-    if os.path.isfile(macos_gmsh_location):
-        gmsh_executable = macos_gmsh_location
+    from shutil import which
+
+    gmsh_executable = which('gmsh')
+    if gmsh_executable is not None:
+        return gmsh_executable
     else:
-        gmsh_executable = 'gmsh'
-    return gmsh_executable
+        macos_gmsh_location = '/Applications/Gmsh.app/Contents/MacOS/gmsh'
+        if os.path.isfile(macos_gmsh_location):
+            return macos_gmsh_location
+    return 'gmsh'
 
 
 def get_gmsh_major_version():
@@ -223,6 +227,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         engine = viewer.engine
         engine.build_ns()
         kwargs['gui_parent'] = dlg
+        
         try:
             p  = self.parent
             if isinstance(p, GmshGeom):
@@ -244,7 +249,6 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
         rootg.onUpdateGeoView(evt)
-
         
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -424,6 +428,17 @@ class GmshGeom(GeomTopBase):
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
+
+    def __del__(self):
+        self.terminate_child()
+
+    def terminate_child(self):
+        if (hasattr(self, "_p") and self._p[0].is_alive()):
+            self._p[1].close()
+            self._p[2].close()
+            self._p[1].cancel_join_thread()
+            self._p[2].cancel_join_thread()                
+            self._p[0].terminate()
         
     @property
     def is_finalized(self):
@@ -464,11 +479,11 @@ class GmshGeom(GeomTopBase):
         return v
         
     def get_possible_child(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,  Fillet, Chamfer, Array, ArrayRot
-        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot]
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,  Fillet, Chamfer, Array, ArrayRot
+        return [Point,  Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder, Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop, Extrude, Revolve, Sweep, Union, Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot]
     
     def get_possible_child_menu(self):
-        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlain, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
+        from .gmsh_primitives import Point, Line, Spline, Circle, Rect, Polygon, Box, Ball, Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep, LineLoop, CreateLine, CreateSurface, CreateVolume, SurfaceLoop, Union, Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Move, Rotate, Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet, Chamfer, Array, ArrayRot
         return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
                 ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
@@ -480,7 +495,7 @@ class GmshGeom(GeomTopBase):
                 ("", Copy), ("", Remove),
                 ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
                 ("", Array), ("!", ArrayRot),
-                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlain),
+                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
                 ("Import...", BrepImport),("", CADImport),("!", healCAD),
                 ]
@@ -578,12 +593,14 @@ class GmshGeom(GeomTopBase):
         ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
         ret = ptx, cells, {}, cell_data, {}
 
+        #
         # set clmax guess from geometry size
-        #xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
-        #l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        #clmax = l/3.
-        #clmin = l/300.
-        #self._clmax_guess = (clmax, clmin)
+        #
+        # xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
+        # l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        # clmax = l/3.
+        # clmin = l/300.
+        # self._clmax_guess = (clmax, clmin)
         
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
@@ -714,36 +731,37 @@ class GmshGeom(GeomTopBase):
         gs = GeometrySequence()
         stopname = self.walk_over_geom_chidlren(gs, stop1=stop1, stop2=stop2)
 
-        import wx
-        if gui_parent is None:
-            gui_parent = wx.GetApp().TopWindow
 
         L = len(gs.geom_sequence) + 3
-        pgb = wx.ProgressDialog("Generating geometry...",
+        
+        if gui_parent is not None:
+            import wx            
+            gui_parent = wx.GetApp().TopWindow
+            pgb = wx.ProgressDialog("Generating geometry...",
                                 "", L, parent = gui_parent,
                                 style = wx.PD_APP_MODAL|wx.PD_AUTO_HIDE|wx.PD_CAN_ABORT)
-        def close_dlg(evt, dlg=pgb):
-            pgb.Destroy()
-        pgb.Bind(wx.EVT_CLOSE, close_dlg)
-
+            
+            def close_dlg(evt, dlg=pgb):
+               pgb.Destroy()
+            pgb.Bind(wx.EVT_CLOSE, close_dlg)
+            trash = wx.GetApp().GetTopWindow().proj.get_trash()            
+        else:
+            pgb = None
+            cwd = os.getcwd()
+            trash = os.path.join(cwd, '.trash')
+            if not os.path.exists(trash): os.mkdir(trash)
+            
         if (hasattr(self, "_p") and self._p[0].is_alive()):
             new_process = self.check_create_new_child(gs)
         else:
             new_process = True
 
         if new_process:
-            if (hasattr(self, "_p") and self._p[0].is_alive()):
-                self._p[1].close()
-                self._p[2].close()
-                self._p[1].cancel_join_thread()
-                self._p[2].cancel_join_thread()                
-                self._p[0].terminate()
-
+            self.terminate_child()
             task_q = mp.Queue() # data to child
             q =  mp.Queue() # data from child
             p = GMSHGeometryGenerator(q, task_q)
             p.start()
-            print("process ID", p.pid)
             self._p = (p, task_q, q)
             self._prev_sequence = gs.geom_sequence
             start_idx = 0
@@ -751,14 +769,16 @@ class GmshGeom(GeomTopBase):
             ll = len(self._prev_sequence)
             self._prev_sequence = gs.geom_sequence
             start_idx = ll
+
             
+
         success, dataset  = gs.run_generator(self, no_mesh = no_mesh, finalize=finalize,
                                              filename = stopname, progressbar = pgb,
                                              create_process = new_process,
                                              process_param = self._p,
-                                             start_idx = start_idx)
+                                             start_idx = start_idx, trash=trash)
 
-        pgb.Destroy()
+        if pgb is not None: pgb.Destroy()
 
         if not success:
             print(dataset) # this is an error message
@@ -773,7 +793,10 @@ class GmshGeom(GeomTopBase):
         self.update_GUI_after_geom(gui_data, objs)
 
         if data is None:  # if no_mesh = True
-            return   
+            self.terminate_child()            
+            return
+        if finalize:
+            self.terminate_child()                
         # for the readablity I expend data here, do we need geom?        
         ptx, cells, cell_data, l, s, v = data
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, gs)
@@ -787,6 +810,15 @@ class GmshGeom(GeomTopBase):
         self._vcl = vcl
         self._esize = esize
         return
+    
+    def generate_final_geometry(self):
+        cwd = os.getcwd()
+        dprint1("Generating Geometry in " + cwd)
+        self.build_geom4(finalize = True, gui_parent=None, no_mesh=True)
+        self.geom_finalized = True
+        self.geom_timestamp = time.ctime()
+        self.terminate_child()        
+        dprint1("Generating Geometry ... Done")        
 
     def build_geom(self, stop1=None, stop2=None, filename = None,
                    finalize = False, gui_parent=None):

@@ -39,5 +39,13 @@ class GeomTopBase(GeomBase):
         v['geom_timestamp'] = 0
         return v
     
+    def generate_final_geometry(self):
+        '''
+        will be called from engine to generate final geometry file,
+        which is ready to be passed to mesher
+        '''
+        raise NotImplementedError(
+             "you must specify this method in subclass")
+        
 # this is needed for backward compatibility        
 from petram.mfem_model import MFEM_GeomRoot

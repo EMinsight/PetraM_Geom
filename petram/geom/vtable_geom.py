@@ -103,7 +103,7 @@ class VtableElement_Direction(VtableElement):
             pass
         return ret
     
-class VtableElement_Plain(VtableElement):
+class VtableElement_Plane(VtableElement):
     def add_attribute(self, v):
         v = VtableElement.add_attribute(self, v) 
         v['use_face_parallel'] = False

@@ -4,6 +4,9 @@ import numpy as np
 import gmsh
 import time
 import tempfile
+from collections import defaultdict
+
+from scipy.spatial import cKDTree
 import multiprocessing as mp
 from six.moves.queue import Empty as QueueEmpty
 
@@ -20,6 +23,8 @@ import petram.geom.gmsh_config as gmsh_config
 
 debug  = True
 debug2 = False
+
+from petram.debug import timeit, use_profiler
 
 def dprint(*args):
     if debug:
@@ -108,10 +113,23 @@ def process_text_tags_vsd(dim=3):
                 
             tags2 = [int(x) for x in tags2.split(',')]
             dimtags2 = [(dim-1, x) for x in tags2]
-            
             return method(self, done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
         return method2
     return func2
+
+def set_restore_maxmin_cl(method):
+    def wrapped2(self, *args, **kwargs):
+        maxsize=kwargs.get("maxsize", 1e20)
+        minsize=kwargs.get("minsize", 0.0)
+        if maxsize != 0:
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", maxsize)
+        if minsize != 0:            
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", minsize)
+        ret = method(self, *args, **kwargs)            
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
+        return ret
+    return wrapped2
 
 def check_line_orientation(ltag, vtags, pcoord):
     p1 = np.array(gmsh.model.getValue(0, vtags[0], [0]))
@@ -156,12 +174,16 @@ class GMSHMeshWrapper(object):
                        **kwargs):
         
         self.queue = kwargs.pop("queue", None)
+        self.use_profiler = kwargs.pop("use_profiler", True)
+        self.use_expert_mode = kwargs.pop("use_expert_mode", False)
+        self.gen_all_phys_entity = kwargs.pop("gen_all_phys_entity", False)
         
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", format)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-
+        gmsh.option.setNumber("Mesh.IgnorePeriodicity", 1)
+        
         gmsh_init = True
         self.add_model('main1')
         
@@ -174,19 +196,25 @@ class GMSHMeshWrapper(object):
         self.algorithm = MeshAlgorithm
         self.algorithm3d = MeshAlgorithm3D
         self.maxthreads= MaxThreads    # general, 1D, 2D, 3D: defualt = 1,1,1,1
-        self._new_brep = True        
-        
+        self._new_brep = True
+        self._name = "GMSH_Mesher"
+    def name(self):
+        return self._name
+    
     def add(self, name, *gids, **kwargs):
         '''
         add mesh command
         '''
+
         if name == 'extrude_face':
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         elif name == 'revolve_face':
+            
             kwargs['revolve']=True
+            kwargs['volume_hint'] = gids[0]
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
         else:
-            pass
+            pass 
         self.mesh_sequence.append([name, gids, kwargs])
         
     def count_sequence(self):
@@ -197,9 +225,9 @@ class GMSHMeshWrapper(object):
         clear mesh sequence
         '''
         self.mesh_sequence = []
-        
-    def generate(self, dim=3, brep_input = '',
-                 finalize=False, msh_file=''):
+
+    @use_profiler
+    def generate(self, brep_input, msh_file, dim=3, finalize=False):
         '''
         generate mesh based on  meshing job sequence.
         brep must be loaed 
@@ -219,12 +247,10 @@ class GMSHMeshWrapper(object):
                               Algorithm3D[self.algorithm3d])
         gmsh.option.setNumber("Mesh.Algorithm3D",
                               Algorithm3D[self.algorithm3d])
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax",
-                              self.clmax)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin",
-                              self.clmin)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-
+        gmsh.option.setNumber("General.ExpertMode",   1 if  self.use_expert_mode else 0)
         gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])        
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
@@ -251,6 +277,7 @@ class GMSHMeshWrapper(object):
 
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
+
         for mdim in range(maxdim+1):
             for idx, sq in enumerate(self.mesh_sequence):
                 proc, args, kwargs = sq
@@ -266,15 +293,39 @@ class GMSHMeshWrapper(object):
 
                 done, params[idx] = f(done, params[idx],
                                       *args, **kwargs)
-                gmsh.model.mesh.removeDuplicateNodes()                
+                #gmsh.model.mesh.removeDuplicateNodes()                
                 
             for i in range(mdim+1, 4): done[i] = []
             
-        if finalize:
-            self.add_sequential_physicals()
-            if msh_file != '': gmsh.write(msh_file)
+        gmsh.model.mesh.removeDuplicateNodes()
 
-        return maxdim, done
+        # somehow add_physical is very slow when there are too many physicals...
+        # we process the mesh file w/o physical
+        
+        use_add_physical =  False
+        path = os.path.dirname(msh_file)
+        
+        if finalize:
+            self.queue.put((False,
+                            "Adding Physical Entities " ))
+            
+            if use_add_physical:
+                self.add_sequential_physicals()                
+                gmsh.write(msh_file)
+            else:
+                print("creating temporary mesh file")
+                tmp0 = os.path.join(path, 'tmp0.msh')
+                gmsh.write(tmp0)
+                   
+                print("generating final mesh file")
+                self.edit_msh_to_add_sequential_physicals(tmp0, msh_file)
+        else:
+            print("creating temporary mesh file")
+            tmp0 = os.path.join(path, 'tmp0.msh')
+            gmsh.write(tmp0)
+            msh_file = tmp0
+            
+        return maxdim, done, msh_file
     
     def load_brep(self, filename):
         self.switch_model('main1')
@@ -282,18 +333,20 @@ class GMSHMeshWrapper(object):
         
         gmsh.model.occ.importShapes(filename, highestDimOnly=False)
         gmsh.model.occ.synchronize()
-
+        
         self.geom_info = self.read_geom_info()
         self._new_brep = True
         return self.current
     
-    def read_geom_info(self):
+    def read_geom_info(self, dimtags=None):
         from petram.geom.read_gmsh import read_loops2
+
         self.hide_all()        
         gmsh.model.mesh.generate(1)
+        #gmsh.model.mesh.removeDuplicateNodes()                        
 
         #ptx, p, l, s, v = read_loops2(gmsh)
-        return read_loops2(gmsh)
+        return read_loops2(gmsh, dimtags)
         
     def add_model(self, name):
         gmsh.model.add(name)
@@ -311,12 +364,13 @@ class GMSHMeshWrapper(object):
         GMSHMeshWrapper.workspace_base += 1
         
         self.add_model(name)
-        gmsh.model.setCurrent(name)        
+        gmsh.model.setCurrent(name)
         gmsh.model.occ.importShapes(self.target, highestDimOnly=False)
-        self.hide_all()        
+        self.hide_all()
+
         gmsh.model.mesh.generate(1)
         gmsh.model.occ.synchronize()
-        
+
         return name
         
     def show_only(self, dimtags, recursive=False):
@@ -327,7 +381,7 @@ class GMSHMeshWrapper(object):
 
         # we hide the surfaces genrated from virtual operation always.
         if self.current == 'main1':
-           vent = [x for x in ent if not x in self.target_entities]            
+           vent = list(set(ent).difference(self.target_entities))
            #vent = [x for x in ent if not x in self.target_entities]
            #print("hiding virtual", vent)
            if len(vent) > 0:
@@ -347,16 +401,37 @@ class GMSHMeshWrapper(object):
            ent = gmsh.model.getEntities()
         gmsh.model.setVisibility(ent, True)
 
-    def delete_all_except(self, dim, tags):
-        for d in [3, 2, 1]:
-            ent = gmsh.model.getEntities(d)            
-            if dim == d:
-                ent = [(d, t) for d, t in ent if not t in tags]
-                gmsh.model.occ.remove(ent, recursive=True)
-                break
-            else:
-                gmsh.model.occ.remove(ent)
-        gmsh.model.occ.synchronize()        
+    @timeit
+    def delete_all_except_face(self, tags):
+        dimtags = [(2, x) for x in tags]
+        ret_3D = gmsh.model.getEntities(3)
+
+        del_list = []
+        rem3D_list = []
+        rem2D_list = []
+        for x in ret_3D:
+             bdrs = gmsh.model.getBoundary(x, combined=False, oriented=False)
+             print(x, bdrs)
+             print(set(bdrs).intersection(dimtags))
+             if len(set(bdrs).intersection(dimtags))==0:
+                 print('delete ', x)
+                 del_list.append(x)
+             else:
+                 rem3D_list.append(x)
+                 rem2D_list.extend(bdrs)
+        print("delete this (3D)#", len(del_list))
+        gmsh.model.occ.remove(del_list, recursive=True)
+        
+        print("delete bodies #", len(rem3D_list))                
+        gmsh.model.occ.remove(rem3D_list, recursive=False)
+
+        del_list = list(set(rem2D_list).difference(dimtags))
+        print("delete faces #", len(del_list))        
+        gmsh.model.occ.remove(del_list, recursive=True)
+        
+        print('calling this')
+        gmsh.model.occ.synchronize()
+        print('done')        
     '''
     def transfer_mesh(self, dimtags, ws1, ws2, resursive = True):
         if resursive:
@@ -439,7 +514,115 @@ class GMSHMeshWrapper(object):
             #print(x, gmsh.model.getEntities())
         gmsh.model.setCurrent(self.current)
 
-    def add_sequential_physicals(self, verbose = True, include_lower_dims=False):
+    def edit_msh_to_add_sequential_physicals(self, tmp_file, filename, verbose=True):
+        
+        from petram.geom.read_gmsh import gmsh_element_type, gmsh_element_dim
+
+        lines = OrderedDict()
+        
+        fid = open(tmp_file, 'r')
+        
+        def readline1():
+            ret = fid.readline()
+            new_lines1.append(ret)
+
+        l = fid.readline()
+        while l:
+            line = l.strip()
+            if len(line) == 0:
+               l = fid.readline()
+               continue
+
+            if line[:4]  == '$End':
+                pass
+            elif line[0]  == '$':
+                section = line[1:]            
+                lines[section] = []
+            else:
+                lines[section].append(line)
+            l = fid.readline()
+
+        
+        # process element
+        ndims = [defaultdict(int),
+                 defaultdict(int),
+                 defaultdict(int),
+                 defaultdict(int)]
+        
+        elines = [[], [], [], []]
+        
+        for k, l in enumerate(lines["Elements"][1:]):
+            xx = l.split(' ')
+            el_type = int(xx[1])
+            el_num =  int(xx[4])
+            xx[3] = str(el_num)
+            dd = gmsh_element_dim[el_type]
+            ndims[dd][el_num] = ndims[dd][el_num] + 1
+
+            elines[dd].append(' '.join(xx))
+            
+        if not self.gen_all_phys_entity and len(ndims[3]) !=0:
+            elines2 = elines[2] + elines[3] 
+            nphys = len(ndims[2]) + len(ndims[3])
+            ndims[0] = {}
+            if verbose:
+                print("Adding " + str(len(ndims[2])) + " Surface(s)")
+                print("Adding " + str(len(ndims[3])) + " Volume(s)")                        
+            
+        elif not self.gen_all_phys_entity and len(ndims[2]) !=0:
+            elines2 = elines[1] + elines[2]
+            nphys = len(ndims[1]) + len(ndims[2])
+            ndims[0] = {}
+            if verbose:
+                print("Adding " + str(len(ndims[1])) + " Line(s)")
+                print("Adding " + str(len(ndims[2])) + " Surface(s)")                        
+            
+        else:
+            elines2 = elines[0] + elines[1] + elines[2] + elines[3]
+            nphys = len(ndims[0]) + len(ndims[1]) + len(ndims[2]) + len(ndims[3])
+            if verbose:
+                print("Adding " + str(len(ndims[0])) + " Point(s)")                
+                print("Adding " + str(len(ndims[1])) + " Line(s)")
+                print("Adding " + str(len(ndims[2])) + " Surfac(s)")
+                print("Adding " + str(len(ndims[3])) + " Volume(s)")
+
+        # renumber elements
+        elines3 = []
+        for k, l in enumerate(elines2):
+            xx = l.split(' ')
+            elines3.append(' '.join([str(k+1)] + xx[1:]))
+        elines3 = [str(len(elines3))]+elines3
+        lines["Elements"] = elines3
+        
+        phys_names = [str(nphys)]
+        for l in list(ndims[0]):
+            phys_names.append(" ".join(["0", str(l), '"point'+str(l)+'"']))
+        for l in list(ndims[1]):
+            phys_names.append(" ".join(["1", str(l), '"line'+str(l)+'"']))
+        for l in list(ndims[2]):
+            phys_names.append(" ".join(["2", str(l), '"surface'+str(l)+'"']))
+        for l in list(ndims[3]):
+            phys_names.append(" ".join(["3", str(l), '"volume'+str(l)+'"']))
+
+        lines["PhysicalNames"] = phys_names
+
+        def write_section(fid, lines, sec):
+            fid.write("$"+sec+"\n")
+            fid.write("\n".join(lines[sec])+"\n")
+            fid.write("$End"+sec+"\n")                              
+
+        rest_sec = [x for x in list(lines) if x != "MeshFormat" and x != "PhysicalNames"]
+                              
+        fid = open(filename, "w")
+                              
+        write_section(fid, lines, "MeshFormat")
+        write_section(fid, lines, "PhysicalNames")
+        for sec in rest_sec:
+            write_section(fid, lines, sec)
+
+        fid.close()                      
+                           
+    def add_sequential_physicals(self, verbose = True):
         '''
         add sequencial physical entity numbers
         '''
@@ -453,8 +636,8 @@ class GMSHMeshWrapper(object):
             max_dim = 3
             if verbose: print("Adding " + str(len(ent)) + " Volume(s)")
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
-                continue
+            #if len(gmsh.model.getPhysicalGroupsForEntity(3, x[1])) > 0:
+            #    continue
             value = gmsh.model.addPhysicalGroup(3, [x[1]], tag=k+1)
             gmsh.model.setPhysicalName(3, value, 'volume'+str(value))
                   
@@ -464,30 +647,30 @@ class GMSHMeshWrapper(object):
             if verbose: print("Adding " + str(len(ent)) + " Surface(s)")
             
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
-                continue
+            #if len(gmsh.model.getPhysicalGroupsForEntity(2, x[1])) > 0:
+            #    continue
             value = gmsh.model.addPhysicalGroup(2, [x[1]], tag=k+1)
             gmsh.model.setPhysicalName(2, value, 'surface'+str(value))
 
-        if not include_lower_dims and max_dim == 3: return
+        if not self.gen_all_phys_entity and max_dim == 3: return
         ent = gmsh.model.getEntities(dim=1)
         if len(ent) > 0:
             if max_dim == 0: max_dim = 1
             if verbose: print("Adding " + str(len(ent)) + " Line(s)")
             
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
-                continue                    
+            #if len(gmsh.model.getPhysicalGroupsForEntity(1, x[1])) > 0:
+            #    continue                    
             value = gmsh.model.addPhysicalGroup(1, [x[1]], tag=k+1)                
             gmsh.model.setPhysicalName(1, value, 'line'+str(value))
-            
-        if not include_lower_dims and max_dim == 2: return                      
+
+        if not self.gen_all_phys_entity and max_dim == 2: return
         ent = gmsh.model.getEntities(dim=0)
         if len(ent) > 0:
             if verbose: print("Adding " + str(len(ent)) + " Point(s)")
         for k, x in enumerate(ent):
-            if len(gmsh.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
-                continue                                        
+            #if len(gmsh.model.getPhysicalGroupsForEntity(0, x[1])) > 0:
+            #    continue                                        
             value = gmsh.model.addPhysicalGroup(0, [x[1]], tag=k+1)                
             gmsh.model.setPhysicalName(0, value, 'point'+str(value))
             
@@ -554,6 +737,7 @@ class GMSHMeshWrapper(object):
         return done, params        
 
     # freevolume
+    @set_restore_maxmin_cl
     @process_text_tags(dim=3)        
     def freevolume_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -593,6 +777,7 @@ class GMSHMeshWrapper(object):
         
         dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim = 0)
+
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
         for dim, tag in dimtags:
@@ -604,7 +789,8 @@ class GMSHMeshWrapper(object):
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
-    
+
+    @set_restore_maxmin_cl    
     @process_text_tags(dim=3)    
     def freevolume_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -628,7 +814,8 @@ class GMSHMeshWrapper(object):
         gmsh.model.mesh.generate(1)
         done[1].extend([x for dim, x in tags])        
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=3)    
     def freevolume_2D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -648,18 +835,19 @@ class GMSHMeshWrapper(object):
         gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in tags])                
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=3)
     def freevolume_3D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[3]]
-
-        self.show_only(dimtags, recursive = False)
+        self.show_only(tags, recursive = True)
         gmsh.model.mesh.generate(3)
         done[3].extend([x for dim, x in tags])                        
         return done, params
     
     # freeface
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)
     def freeface_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -698,7 +886,8 @@ class GMSHMeshWrapper(object):
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)                
     def freeface_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -721,6 +910,7 @@ class GMSHMeshWrapper(object):
 
         return done, params
     
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)                
     def freeface_2D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -730,11 +920,13 @@ class GMSHMeshWrapper(object):
         done[2].extend([x for dim, x in tags])         
         return done, params
 
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=2)    
     def freeface_3D(self, done, params, tags, *args, **kwargs):
         return done, params                
 
     # freeedge
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)        
     def freeedge_0D(self, done, params, dimtags, *args, **kwargs):
         maxsize=kwargs.pop("maxsize", 1e20)
@@ -761,7 +953,8 @@ class GMSHMeshWrapper(object):
             done[0].append(tag)            
         gmsh.model.mesh.generate(0)
         return done, params
-    
+
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)                
     def freeedge_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
@@ -771,10 +964,12 @@ class GMSHMeshWrapper(object):
         done[1].extend([x for dim, x in tags])                 
         return done, params
 
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)    
     def freeedge_2D(self, done, params, tags, *args, **kwargs):
         return done, params        
 
+    @set_restore_maxmin_cl        
     @process_text_tags(dim=1)    
     def freeedge_3D(self,  done, params, tags, *args, **kwargs):
         return done, params                
@@ -783,7 +978,7 @@ class GMSHMeshWrapper(object):
     @process_text_tags(dim=1)        
     def transfinite_edge_0D(self, done, params, dimtags, *args, **kwargs):
         #meher.add('transfinite_line', gid, nseg=nseg, progression = p,  bump = b)
-        nseg = kwargs.get('nseg', 100)-1
+        nseg = kwargs.get('nseg', 100) + 1
         
         meshType = 'Progression'
         coef = kwargs.get('progression', 1.0)
@@ -801,69 +996,6 @@ class GMSHMeshWrapper(object):
             done[1].append(tag)
         return done, params
 
-        '''
-        # A test to understand transfinite meshing...
-        if bump != 1:
-            if nseg % 2 == 1:            
-                tmp = np.logspace(0, np.log10(bump), (nseg+1)/2)
-                dd =  np.hstack([np.flip(tmp[1:], 0), tmp])
-            else:
-                tmp = np.logspace(0, np.log10(bump), nseg/2)
-                dd =  np.hstack([np.flip(tmp, 0), tmp])
-        elif progression != 1:
-             dd = abs(progression)**np.arange(nseg)
-             if progression < 0:
-                 dd = np.flip(dd, 0)
-        else:
-            dd = np.array([1.]*nseg)
-
-        dists = dd/np.sum(dd) # normalized goemetrical distance of nodes
-        cdists = np.hstack([[0], np.cumsum(dists)])
-        
-
-        params = {}
-        for dim, tag in dimtags:
-            ntags, nodes, pcoords = gmsh.model.mesh.getNodes(1, tag, includeBoundary=True)
-            p = list(np.linspace(pcoords[-2], pcoords[-1], np.max([nseg*3, 300])))            
-            ptx = np.array(gmsh.model.getValue(1, tag, p)).reshape(-1, 3)
-            dd = np.sqrt(np.sum((ptx[:-1]- ptx[1:])**2, 1))
-            ddd = np.hstack([[0], np.cumsum(dd)])
-            ddd = ddd/ddd[-1]
-
-            pcoords = np.interp(cdists, ddd, p) #parametric Coords to realized the distancs
-            nodepos = gmsh.model.getValue(1, tag, pcoords[1:-1])
-
-            size = np.array(gmsh.model.getValue(1, tag, pcoords[:2])).reshape(-1, 3)
-            size1 = np.sqrt(np.sum((size[1]- size[0])**2))
-            size = np.array(gmsh.model.getValue(1, tag, pcoords[-2:])).reshape(-1, 3)
-            size2 = np.sqrt(np.sum((size[1]- size[0])**2))
-                
-            vtags = [x for xx, x in gmsh.model.getBoundary(((dim, tag),))]
-            flag = check_line_orientation(tag, vtags, pcoords[0])            
-            if flag == 1:
-                if not vtags[0] in done[0]:                
-                    gmsh.model.mesh.setSize(((0, vtags[0]),), size1)
-                    done[0].append(vtags[0])                                
-                if not vtags[1] in done[0]:                                    
-                    gmsh.model.mesh.setSize(((0, vtags[1]),), size2)
-                    done[0].append(vtags[1])
-                    
-            elif flag == 2:
-                if not vtags[0] in done[0]:
-                    gmsh.model.mesh.setSize(((0, vtags[0]),), size2)
-                    done[0].append(vtags[0])                                                    
-                if not vtags[1] in done[0]:                    
-                    gmsh.model.mesh.setSize(((0, vtags[1]),), size1)
-                    done[0].append(vtags[1])                    
-            else:
-                print(gmsh.model.getValue(0, vtags[0], [0]), gmsh.model.getValue(0, vtags[1], [0]),
-                      gmsh.model.getValue(1, tag, pcoords[:1]), gmsh.model.getValue(1, tag, pcoords[-1:]))
-                assert False, "Something is wrong"
-            
-            params[tag] = (nodepos, pcoords)
-        gmsh.model.mesh.generate(0)
-        return done, params
-        '''
     @process_text_tags(dim=1)            
     def transfinite_edge_1D(self, done, params, dimtags, *args, **kwargs):
         self.show_only(dimtags)
@@ -871,39 +1003,6 @@ class GMSHMeshWrapper(object):
         done[1].extend([x for dim, x in dimtags])         
         return done, params
         
-        '''
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
-        
-        for dim, tag in dimtags:
-            nodepos, pcoords = params[tag]
-            
-            ntags = range(noffset, noffset+len(pcoords)-2)
-            noffset = noffset+len(ntags)
-            
-            etags = [range(eoffset, eoffset+len(ntags)+1)]
-            eoffset = eoffset+len(etags[0])
-
-            vtags = [x for xx, x in gmsh.model.getBoundary(((dim, tag),))]
-            flag = check_line_orientation(tag, vtags, pcoords[0])
-            
-            info1 = self.geom_info
-            tmp = np.vstack([ntags, ntags]).transpose().flatten()
-            if flag == 1:
-                nodes2 = np.hstack([[info1[1][vtags[0]]+1], tmp, [info1[1][vtags[1]]+1]])
-            elif flag == 2:
-                nodes2 = np.hstack([[info1[1][vtags[1]]+1], tmp, [info1[1][vtags[0]]+1]])                
-            else:
-                assert False, "Something is wrong"
-
-            #print("setting", dim, tag, ntags, nodepos, pcoords)
-            gmsh.model.mesh.setNodes(dim, tag, ntags, nodepos, pcoords[1:-1])
-            #print("setting", dim, tag, [1], etags, [list(nodes2)])     
-            gmsh.model.mesh.setElements(dim, tag, [1], etags, [list(nodes2)])        
-            done[1].append(tag)
-            
-        return done, params                        
-        '''
     def transfinite_edge_2D(self, done, params, dimtags, *args, **kwargs):
         return done, params                
     
@@ -1027,36 +1126,63 @@ class GMSHMeshWrapper(object):
     # copy face
     @process_text_tags_sd(dim=2)        
     def copyface_0D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        from petram.geom.geom_utils import find_translate_between_surface 
+        from petram.geom.geom_utils import find_translate_between_surface
         from petram.geom.geom_utils import find_rotation_between_surface
+        from petram.geom.geom_utils import find_rotation_between_surface2       
         
         ptx, p, l, s, v = self.geom_info
         axan = kwargs.pop('axan', None)
-        revolve = kwargs.pop('revolve', False)        
-        geom_data = (ptx, l, s, None)
+        revolve = kwargs.pop('revolve', False)
+        volume_hint = kwargs.pop('volume_hint', None)        
+        geom_data = (ptx, l, s, v)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
 
         if revolve:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
+            if volume_hint is None:
+                ### find volume hint
+                ### if there are volumes connecting all src and dst. we use thse volumes
+                ### to constuct point mapping
+                volume_hint = []
+                for v1 in v:
+                    if (len(set(v[v1]).intersection(tag1)) != 0 and
+                        len(set(v[v1]).intersection(tag2)) != 0):
+                        volume_hint.append(str(v1))
+                if len(volume_hint) == len(tag1):
+                    volume_hint = ','.join(volume_hint)
+
+
+            if volume_hint is None:
+               ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
+            else:
+               # copy(revolve) face is perfomed in the preparation of revolve mesh
+               # in this case we use the volume being meshed as a hint
+               #print("using volume hint", volume_hint)                
+               vtags = [int(x) for x in volume_hint.split(',')]
+               ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
+                                                            tag1, tag2, vtags,
+                                                            geom_data=geom_data,
+                                                            axan = axan)
         else:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+            ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)        
         
-        params = (ax, an, px, d, affine, p_pairs, l_pairs)
+        params = (ax, an, px, d, affine, p_pairs, l_pairs, s_pairs)
         #print("transformation param", params)
         return done, params
     
     @process_text_tags_sd(dim=2)
     def copyface_1D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        gmsh.model.occ.synchronize()
+
+        # don't do this otherwise previously meshed surfaces would be lost
+        ### gmsh.model.occ.synchronize()
         gmsh.model.mesh.rebuildNodeCache()
-        ax, an, px, d, affine, p_pairs, l_pairs = params
+        ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
         
         ents = list(set(gmsh.model.getBoundary(dimtags, combined=False, oriented=False)))
         mdata = get_nodes_elements(ents, normalize=True)
@@ -1078,11 +1204,14 @@ class GMSHMeshWrapper(object):
             if dim != 1: continue
 
             tag = l_pairs[tag]
+
+
             if tag in done[1]:
-                print("Line is already meshed (CopyFace1D skip edge): "+str(tag)+ "... continuing")
+                print("Line is already meshed (CopyFace1D skip edge): "+str(tag)+ "... continuing")  
                 continue
-                
-            ntag, pos, ppos = ndata            
+
+            ntag, pos, ppos = ndata
+            #print("parametric copyied", ppos)            
             etypes, etags, nodes = edata
             ntag2 = range(noffset, noffset+len(ntag)-2)
             noffset = noffset+len(ntag)-2
@@ -1112,8 +1241,12 @@ class GMSHMeshWrapper(object):
                 d = np.array(p1) - np.array(p2)
                 return np.sum(d**2)
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
-                print("fixing parametricCoords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
-                ppos = np.array([abs(1-x) for x in ppos])
+                print("reversing Coords for tag :", tag, p1_0, p1_1, p2_0, p2_1)
+                pos = np.array(pos).reshape(-1, 3)
+                pos = np.flip(pos, 0)
+                pos = pos.flatten()
+                #ppos = np.array([abs(1-x) for x in ppos])
+                #print("parametric fixed", pos, ppos)                      
                 #ntag2 = list(reversed(ntag2))
 
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
@@ -1121,8 +1254,6 @@ class GMSHMeshWrapper(object):
             for i, j in zip(ntag, ntag2): node_map2[i] = j
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
             
-            #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ppos)
-            #gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
             gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, ppos)
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)        
             
@@ -1132,8 +1263,8 @@ class GMSHMeshWrapper(object):
 
     @process_text_tags_sd(dim=2)    
     def copyface_2D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
-        ax, an, px, d, affine, p_pairs, l_pairs = params
-        
+        ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
+
         mdata = []
         for dim, tag in dimtags:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
@@ -1165,20 +1296,23 @@ class GMSHMeshWrapper(object):
         ntags_d = sum([list(x[0]) for x in tmp], [])
         pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
-        
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)        
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
         for i, nt in zip(idx, ntags_s):
             node_map2[nt] = ntags_d[i]
             
 
         for kk, d in enumerate(mdata):
             dim, tag, ndata, edata = d
+            
             if dim != 2: continue
-            tag = dimtags2[kk][1]
+            tag = s_pairs[tag]
+
             if tag in done[2]:
                 print("Face is already meshed (CopyFace): "+str(tag) + "... continuing")
                 continue                
-                
+
             ntag, pos, ppos = ndata
             ntag2 = range(noffset, noffset+len(ntag))
             noffset = noffset+len(ntag)
@@ -1188,29 +1322,37 @@ class GMSHMeshWrapper(object):
             pos = (np.dot(R, pos).transpose() + D).flatten()
 
             #gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, [])
-            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, [])
+
             etypes, etags, nodes = edata
 
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
 
-            #gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
+            gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, [])
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)        
             done[2].append(tag)
-            
+        #gmsh.model.mesh.reclassifyNodes()            
         return done, params            
         
 
     @process_text_tags_sd(dim=2)        
     def copyface_3D(self,  done, params, dimtags, dimgtag2, *args, **kwargs):
         return done, params                            
-    
+
+    def _extract_info_for_volume(self, vtags):
+         ptx, p, l, s, v = self.geom_info
+         vv = {k: v[k] for k in vtags}
+         ss = {k: s[k] for k in set(sum(vv.values(),[]))}
+         ll = {k: l[k] for k in set(sum(ss.values(),[]))}
+         pp = {k: p[k] for k in set(sum(ll.values(),[]))}         
+         return ptx, pp, ll, ss, vv
+        
     # extrudeface
     @process_text_tags_vsd(dim=3)            
     def extrude_face_0D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         from petram.geom.geom_utils import find_translate_between_surface
-        from petram.geom.geom_utils import find_rotation_between_surface        
+        from petram.geom.geom_utils import find_rotation_between_surface2        
         from petram.geom.geom_utils import map_points_in_geom_info
         from petram.geom.geom_utils import map_lines_in_geom_info
         from petram.geom.geom_utils import map_surfaces_in_geom_info
@@ -1221,23 +1363,31 @@ class GMSHMeshWrapper(object):
         axan = kwargs.pop('axan', None)
         
         ptx, p, l, s, v = self.geom_info
-        geom_data = (ptx, l, s, None)
+        geom_data = (ptx, l, s, v)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
+        vtags = [x for dim, x in vdimtags]
+
+        info1 = self._extract_info_for_volume(vtags)
 
         if revolve:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_rotation_between_surface(
-                                                            tag1, tag2,
+            ax, an, px, d, affine, p_pairs, l_pairs, s_pairs= find_rotation_between_surface2(
+                                                            tag1, tag2, vtags,
                                                             geom_data=geom_data,
                                                             axan = axan)
         else:
-            ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
+            ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                                                             tag1, tag2,
                                                             geom_data=geom_data,
                                                             axan = axan)
         ws = self.prep_workspace()
 
-        self.delete_all_except(2, tag1)
+
+        # ??? Apparently I need to delete a destinaion volume to make space for
+        #     extrusion. Doesnt need to delete everything ???
+        #self.delete_all_except_face(tag1)
+        gmsh.model.occ.remove(vdimtags, recursive=False)
+
         if (not revolve and an == 0):
             ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
                                          numElements=[nlayers])
@@ -1248,6 +1398,8 @@ class GMSHMeshWrapper(object):
         else:
             print(revolve, an)
             assert False, "extrude/revolve mesh error. Inconsistent imput"
+            
+        gmsh.model.occ.synchronize()
 
         # split dimtags to src, dst, lateral
         idx3 = np.where(np.array([x[0] for x in ret]) == 3)[0]
@@ -1255,14 +1407,12 @@ class GMSHMeshWrapper(object):
         dst = [ret[x-1] for x in idx3]
         laterals = [x for x in ret if not x in dst and x[0] == 2] 
         ex_info = ([(2, x) for x in tag1], dst, laterals,  vol)
-        gmsh.model.occ.synchronize()
-        
+
         # for debug the intermediate geometry
         #gmsh.write('tmp_'+ws +  '.brep')            
 
-        info1 = self.geom_info
-        info2 = self.read_geom_info()
-        gmsh.model.getEntities
+        #info1 = self.geom_info
+        info2 = self.read_geom_info(ret)
 
         pmap, pmap_r = map_points_in_geom_info(info1, info2)
         lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r)
@@ -1337,7 +1487,7 @@ class GMSHMeshWrapper(object):
             copied_line.append(tag)
 
         # gather data to transfer
-        ents = gmsh.model.getEntities(1)
+        ents = [(1, x) for x in list(lmap_r)]
         ents = [x for x in ents if not x[1] in copied_line]
         mdata = get_nodes_elements(ents, normalize=True)
         '''
@@ -1447,8 +1597,12 @@ class GMSHMeshWrapper(object):
         ntags_d = sum([list(x[0]) for x in tmp], [])
         pos_d = np.array(sum([list(x[1]) for x in tmp], [])).reshape(-1,3)
 
-        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}                
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
+        
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)
+        
         for i, nt in zip(idx, ntags_s):
             node_map1[nt] = ntags_d[i]
         noffset = int(max(gmsh.model.mesh.getNodes()[0])+1)
@@ -1475,11 +1629,16 @@ class GMSHMeshWrapper(object):
             gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], ndata[2])            
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
 
-        self.show_all()
-        #gmsh.write("debug_2d.msh")        
+        #self.show_all()
+        #gmsh.write("debug_2d.msh")
+        
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)        
+        self.show_only([(3, x) for x in list(vmap_r)])
         gmsh.model.mesh.generate(3)
+        #gmsh.write("debug_3d.msh")        
 
-        tmp = gmsh.model.getEntities(3)
+        # collect 3D mesh data
+        tmp = [(3, x) for x in list(vmap_r)]                
         mdata3D = []
         for dim, tag in tmp:
             ndata = gmsh.model.mesh.getNodes(dim, tag) 
@@ -1487,7 +1646,7 @@ class GMSHMeshWrapper(object):
             mdata3D.append((dim, tag, ndata, edata))
 
         # copy back lateral mesh on surfaces
-        tmp = gmsh.model.getEntities(2)
+        tmp = [(2, x) for x in list(smap_r)]        
         tmp = [x for x in tmp if not x in src_dst]
         #print("gather info from ", tmp)
         mdata = []
@@ -1517,7 +1676,11 @@ class GMSHMeshWrapper(object):
         
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)
+
         for i, nt in zip(idx, ntags_s):
             node_map3[nt] = ntags_d[i]
 
@@ -1574,10 +1737,14 @@ class GMSHMeshWrapper(object):
         
         node_map3 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
         node_map3 = {node_map3[x]:x for x in node_map3}
-        idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+
+        #idx = [np.argmin(np.sum((pos_d-p)**2, 1)) for p in pos_s]
+        tree = cKDTree(pos_d)
+        void, idx = tree.query(pos_s)
+        
         for i, nt in zip(idx, ntags_s):
             node_map3[nt] = ntags_d[i]
-
+        
         for d in mdata:
             dim, tag, ndata, edata = d 
             if dim != 3: break
@@ -1613,323 +1780,23 @@ class GMSHMeshWrapper(object):
         kwargs['revolve']=True
         return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)        
         
-    '''
-    High-level interface test codes
-    '''
-    def extrude_surface_test(self, vtag, tag1, tag2, nlayers):
-        
-        from petram.geom.geom_utils import find_translate_between_surface
-        from petram.geom.geom_utils import map_points_in_geom_info
-        from petram.geom.geom_utils import map_lines_in_geom_info
-        from petram.geom.geom_utils import map_surfaces_in_geom_info
-        from petram.geom.geom_utils import map_volumes_in_geom_info        
-        
-        ptx, p, l, s, v = self.geom_info
-        geom_data = (ptx, l, s, None)
-        ax, an, px, d, affine, p_pairs, l_pairs = find_translate_between_surface(
-                                                            [tag1], [tag2],
-                                                            geom_data=geom_data)
-        
-        ents = gmsh.model.getBoundary(((2,tag1),), oriented=False)
-        ents = list(ents)+[(2,tag1),]
-        mdata = []
-        for dim, tag in ents:
-            ndata = gmsh.model.mesh.getNodes(dim, tag)
-            edata = gmsh.model.mesh.getElements(dim, tag)
-            mdata.append((dim, tag, ndata, edata))
-        
-        ents = gmsh.model.getBoundary(((2,tag2),), oriented=False)        
-        
-        ws = self.prep_workspace()
-
-        self.delete_all_except(2, [tag1])
-        ret = gmsh.model.occ.extrude(((2,tag1),), d[0], d[1], d[2],
-                                     numElements=[nlayers])
-        gmsh.model.occ.synchronize()        
-
-        info1 = self.geom_info
-        info2 = self.read_geom_info()
-
-        pmap, pmap_r = map_points_in_geom_info(info1, info2)
-        lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r)
-        smap, smap_r = map_surfaces_in_geom_info(info1, info2, lmap_r)
-        vmap, vmap_r = map_volumes_in_geom_info(info1, info2, smap_r)
-        
-        self.show_all()
-        gmsh.model.mesh.generate(1)
-        ents = gmsh.model.getBoundary(((2,tag1),ret[0]), oriented=False)
-        for dim, tag in ents:
-            gmsh.model.mesh.setNodes(dim, tag, [], [], [])
-            gmsh.model.mesh.setElements(dim, tag, [], [], [])
-
-        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
-        #print(node_map)
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
-
-        # copy 1D elements on the source surface
-        for d in mdata:
-            dim, tag, ndata, edata = d 
-            if dim == 2: break
-            tag = lmap[tag]
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map1[i] = j
-
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])
-
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map1[x] for x in item] for item in nodes]
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-        #print("node map here", node_map1)
-        # copy 1D elements on the destination surface
-        l_pairs2 = {x:lmap[l_pairs[x]] for x in l_pairs}
-        R = affine[:3,:3]
-        D = affine[:3,-1]
-        node_map2 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
-        for p in p_pairs:
-            node_map2[info1[1][p]+1] = info2[1][pmap[p_pairs[p]]]+1
-        
-        for d in mdata:
-            dim, tag, ndata, edata = d
-            if dim == 2: break
-            tag = l_pairs2[tag]
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map2[i] = j
-
-            pos = np.array(pos).reshape(-1,3).transpose()
-            pos = (np.dot(R, pos).transpose() + D).flatten()
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ndata[2])
-
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map2[x] for x in item] for item in nodes]
-            #print("setting", dim, tag, etypes, etags2, nodes2)
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-
-        # copy source mesh
-        for d in mdata:
-            dim, tag, ndata, edata = d            
-            if dim == 1: continue
-            
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map1[i] = j
-
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])
-            
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map1[x] for x in item] for item in nodes]
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-            
-        # copy dest mesh
-        for d in mdata:
-            dim, tag, ndata, edata = d            
-            if dim == 1: continue
-            tag = ret[0][1]
-            
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map2[i] = j
-
-            pos = np.array(pos).reshape(-1,3).transpose()
-            pos = (np.dot(R, pos).transpose() + D).flatten()
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, pos, ndata[2])
-
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map2[x] for x in item] for item in nodes]
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-
-        self.hide(((2,tag1),ret[0]),)
-        gmsh.model.mesh.generate(2)
-        gmsh.model.mesh.generate(3)                    
-
-
-        #
-        #  copy back mash info
-        #
-        # first gather info
-        ents = gmsh.model.getEntities()
-        ents2 = gmsh.model.getBoundary(((2,tag1),), oriented=False)
-        ents = [x for x in ents if not x in ents2 and x[0] != 0]
-        ents = [x for x in ents if x[0] != 2 or x[1] != tag1]
-        mdata = []
-        for dim, tag in ents:
-            ndata = gmsh.model.mesh.getNodes(dim, tag)
-            edata = gmsh.model.mesh.getElements(dim, tag)
-            mdata.append((dim, tag, ndata, edata))
-
-        
-        # collect data for node mapping
-        ents2_1D =  gmsh.model.getEntities(1)
-        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents2_1D]
-        ntags_ws_1D = sum([x[0] for x in tmp], [])
-        pos_ws_1D = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
-        ents2_2D = gmsh.model.getEntities(2)
-        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents2_2D]
-        ntags_ws_2D = sum([x[0] for x in tmp], [])
-        pos_ws_2D = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
-
-        #node_map1 = {info2[1][k]+1:info1[1][pmap_r[k]]+1 for k in pmap_r}
-        
-        self.switch_model('main1')
-
-        
-        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
-        node_map1 = {node_map1[x]:x for x in node_map1}
-
-        '''
-        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_m = sum([x[0] for x in tmp], [])
-        pos_m = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
-        idx = [np.argmin(np.sum((pos_m-p)**2, 1)) for p in pos_ws_1D]
-        for i, nt in zip(idx, ntags_ws_1D):
-            node_map1[nt] = ntags_m[i]
-        print("nodemap1", node_map1)
-        '''        
-        #gmsh.model.occ.synchronize()
-        #self.list_entities()                
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
-
-        # send back 1D data
-        for d in mdata:
-            dim, tag, ndata, edata = d
-            if dim != 1: continue
-            print("copy from ", dim, tag)                        
-            tag = lmap_r[tag]
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map1[i] = j
-            #print("setting nodes", dim, tag, ntag2, ndata[1], ndata[2])
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map1[x] for x in item] for item in nodes]
-            #print("setting elements", dim, tag, etypes, etags2, nodes2)
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-
-        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
-        node_map1 = {node_map1[x]:x for x in node_map1}
-        
-        ents_1D = self.expand_dimtags(((3, vtag),), return_dim = 1)
-        print("ents_1D", ents_1D)
-        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_m = sum([x[0] for x in tmp], [])
-        pos_m = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
-        idx = [np.argmin(np.sum((pos_m-p)**2, 1)) for p in pos_ws_1D]
-        for i, nt in zip(idx, ntags_ws_1D):
-            node_map1[nt] = ntags_m[i]
-
-        # send back 2D data
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
-        
-        for d in mdata:
-            dim, tag, ndata, edata = d
-            if dim != 2: continue
-            print("copy from ", dim, tag)            
-            tag = smap_r[tag]
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map1[i] = j
-            #print("setting nodes", dim, tag, ntag2, ndata[1], ndata[2])
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map1[x] for x in item] for item in nodes]
-            print("setting elements", dim, tag, etypes, etags2, nodes2)
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-
-        self.show_all()            
-        self.hide(((3, 2),), recursive=True)
-        gmsh.model.mesh.generate(2)
-
-        node_map1 = {info1[1][k]+1:info2[1][pmap[k]]+1 for k in pmap}
-        node_map1 = {node_map1[x]:x for x in node_map1}
-
-        ents_1D = self.expand_dimtags(((3, vtag),), return_dim = 1)                
-        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
-        ntags_m = sum([x[0] for x in tmp], [])
-        pos_m = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
-        idx = [np.argmin(np.sum((pos_m-p)**2, 1)) for p in pos_ws_1D]
-        for i, nt in zip(idx, ntags_ws_1D):
-            node_map1[nt] = ntags_m[i]
-
-        ents_2D = self.expand_dimtags(((3, vtag),), return_dim = 2)
-        tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_2D]
-        ntags_m = sum([x[0] for x in tmp], [])
-        pos_m = np.array(sum([x[1] for x in tmp], [])).reshape(-1,3)
-        idx = [np.argmin(np.sum((pos_m-p)**2, 1)) for p in pos_ws_2D]
-        for i, nt in zip(idx, ntags_ws_2D):
-            node_map1[nt] = ntags_m[i]
-        noffset = max(gmsh.model.mesh.getNodes()[0])+1
-        eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
-        
-        for d in mdata:
-            dim, tag, ndata, edata = d
-            if dim != 3: continue
-            print("copy from ", dim, tag)            
-            tag = vmap_r[tag]
-            ntag, pos, ppos = ndata
-            ntag2 = range(noffset, noffset+len(ntag))
-            noffset = noffset+len(ntag)
-            for i, j in zip(ntag, ntag2): node_map1[i] = j
-            #print("setting nodes", dim, tag, ntag2, ndata[1], ndata[2])
-            gmsh.model.mesh.setNodes(dim, tag, ntag2, ndata[1], ndata[2])
-            etypes, etags, nodes = edata
-
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
-            eoffset = eoffset+len(etags[0])
-            nodes2 = [[node_map1[x] for x in item] for item in nodes]
-            #print("setting elements", dim, tag, etypes, etags2, nodes2)
-            gmsh.model.mesh.setElements(dim, tag, etypes, etags2, nodes2)
-
-        self.show_all()            
-        self.hide(((3, 2),), recursive=True)
-        gmsh.model.mesh.generate(3)
-            
-    def run_generater(self, brep_input='', finalize=False, dim=3, msh_file='',
+    def run_generater(self, brep_input, msh_file, finalize=False, dim=3, 
                       progressbar = None):
         
-        if brep_input != '':
-            filename = brep_input
-        else:
-            filename = self.target
-
         kwargs = {'CharacteristicLengthMax':self.clmax,
                   'CharacteristicLengthMin':self.clmin,
                   'EdgeResolution' : self.res,
                   'MeshAlgorithm'  : self.algorithm,
                   'MeshAlgorithm3D': self.algorithm3d,
-                  'MaxThreads' : self.maxthreads}
+                  'MaxThreads' : self.maxthreads,
+                  'use_profiler': self.use_profiler,
+                  'use_expert_mode': self.use_expert_mode,
+                  'gen_all_phys_entity': self.gen_all_phys_entity}
 
         q = mp.Queue()
         p = mp.Process(target = generator,
-                       args = (q, filename, self.mesh_sequence,
-                               dim, finalize, msh_file, kwargs))
+                       args = (q, brep_input, msh_file,  self.mesh_sequence,
+                               dim, finalize, kwargs))
         p.start()
         istep = 0
         
@@ -1940,6 +1807,8 @@ class GMSHMeshWrapper(object):
                 if progressbar is not None:
                     istep += 1
                     progressbar.Update(istep, newmsg=ret[1])                    
+                else:
+                    print("Mesh Generator : Step = " + str(istep) + " : " +ret[1])
 
             except QueueEmpty:
                 if not p.is_alive():
@@ -1964,27 +1833,34 @@ class GMSHMeshWrapper(object):
             time.sleep(0.01)
         q.close()
         q.cancel_join_thread()
-            
-        return ret[1]
 
-def generator(q, filename, sequence, dim, finalize, msh_file, kwargs):
+        max_dim, done, msh_output = ret[1]
+
+        from petram.geom.read_gmsh import read_pts_groups, read_loops
+        
+        if progressbar is not None:
+            progressbar.Update(istep, newmsg="Reading mesh file for rendering")
+        else:
+            print("Reading mesh file for rendering")
+            
+        gmsh.open(msh_output)
+        ptx, cells, cell_data = read_pts_groups(gmsh,
+                                            finished_lines = done[1],
+                                            finished_faces = done[2])
+                
+        data = ptx, cells, {}, cell_data, {}
+        
+        return max_dim, done, data, msh_output
+
+def generator(q, brep_input, msh_file, sequence, dim, finalize, kwargs):
     
     kwargs['queue'] = q
     mw = GMSHMeshWrapper(**kwargs)
     
     mw.mesh_sequence = sequence
-    max_dim, done = mw.generate(dim=dim, brep_input = filename,
-                                finalize=finalize, msh_file=msh_file)
+    max_dim, done, msh_output = mw.generate(brep_input, msh_file, dim=dim, finalize=finalize)
 
-    from petram.geom.read_gmsh import read_pts_groups, read_loops
-        
-    ptx, cells, cell_data = read_pts_groups(gmsh,
-                                             finished_lines = done[1],
-                                             finished_faces = done[2])
-                
-    data = ptx, cells, {}, cell_data, {}
-
-    q.put((True, (max_dim, done, data)))
+    q.put((True, (max_dim, done, msh_output)))
     
     
 

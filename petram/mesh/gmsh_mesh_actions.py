@@ -312,7 +312,7 @@ class CopyFace(GmshMeshActionBase):
        
         kwargs = process_hint_ex(hint)
         kwargs['copy_cl'] = cp_cl
-
+        print('adding here', src_id, gid,)
         mesher.add('copyface', src_id, gid,
                    **kwargs)
         
