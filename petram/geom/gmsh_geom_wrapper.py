@@ -68,6 +68,13 @@ class SurfaceLoopID(GeomIDBase):
    def __neg__(self):
        return SurfaceLoopID(-int(self))
 
+class UniqueCounter(list):
+    def add_shape(self, x):
+        if x in self:
+            return False, self.index(x)+1
+        self.append(x)
+        return True, len(self)
+   
 def id2dimtag(en):
     if isinstance(en, VertexID):
         return (0, int(en))
@@ -189,6 +196,7 @@ class Geometry(object):
         self.maxthreads = kwargs.pop('Maxthreads', 1)
         self.skip_final_frag = kwargs.pop('SkipFrag', False)
         self.use_1d_preview = kwargs.pop('Use1DPreview', False)
+        self.use_occ_preview = kwargs.pop('UseOCCPreview', False)        
         self.use_curvature = kwargs.pop('UseCurvature', False)        
         self.long_edge_thr = kwargs.pop('LongEdgeThr', 0.1)
         self.small_edge_thr = kwargs.pop('SmallEdgeThr', 0.001)
@@ -964,7 +972,6 @@ class Geometry(object):
             
         newobj1 = objs.addobj(pts[0], 'pt')
         newobj2 = objs.addobj(pts[-1], 'pt')
-        #print("entities(0)", geom.model.getEntities())                     
         
         _newobjs.append(newobj1)
         _newobjs.append(newobj2)
@@ -1182,10 +1189,21 @@ class Geometry(object):
     def Ball_build_geom(self, objs, *args):
         self.factory.synchronize()
 
-        x0,  l1,  l2,  l3 =  args
+        x0,  l1,  l2,  l3, a1, a2, a3 =  args
         lcar = 0.0
         radii = [l1, l2, l3]
         rr = min(radii)
+
+
+        volumes = []
+        
+        v1 = self.factory.addSphere(x0[0], x0[1], x0[2], rr,
+                                      angle1=a1/180*np.pi, angle2=a2/180*np.pi, angle3=a3/180*np.pi)
+        if (l1/rr != 1.0 or l2/rr != 1.0 or l3/rr != 1.0):
+            self.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
+        v1 = VolumeID(v1)        
+        newkey = objs.addobj(v1, 'bl')
+        return  list(objs), [newkey]
         
         '''
         v1 = self.factory.addSphere(x0[0], x0[1], x0[2], rr, angle1=-np.pi, angle2 = 0)
@@ -1200,6 +1218,7 @@ class Geometry(object):
         newkey = objs.addobj(v1, 'bl')
         return  objs.keys(), [newkey]                
         '''
+        '''
         pc = self.add_point(x0, lcar)
         p1 = self.add_point([x0[0]+rr, x0[1], x0[2]], lcar=lcar)
         p2 = self.add_point([x0[0], x0[1]+rr, x0[2]], lcar=lcar)
@@ -1211,7 +1230,7 @@ class Geometry(object):
         ps1 = self.add_plane_surface(ll1)
         dst = [id2dimtag(ps1), ]
 
-        volumes = []
+
         for i in range(4):
            ret = self.factory.revolve(dst,
                                    x0[0], x0[1], x0[2],
@@ -1221,20 +1240,19 @@ class Geometry(object):
 
         ret = self.factory.fuse(volumes[:1], volumes[1:])
         v1 = VolumeID(ret[0][0][1])
-        
+
         if (l1/rr != 1.0 or l2/rr != 1.0 or l3/rr != 1.0):
             self.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
-        
-        newkey = objs.addobj(v1, 'bl')
-        return  list(objs), [newkey]
+        '''
 
     def Cone_build_geom(self, objs, *args):
         x0,  d0,  r1, r2, angle = args
         
-        an = angle if angle < 180 else angle/2
-            
+        #an = angle if angle < 180 else angle/2
+
         v1 = self.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
-                           r1, r2,  an/180*np.pi)
+                           r1, r2,  angle/180*np.pi)
+        '''
         if angle >=180:
            v2 = self.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
                               r1, r2,  an/180*np.pi)
@@ -1244,7 +1262,8 @@ class Geometry(object):
            v1 = [id2dimtag(v1), ]                      
            ret = self.factory.fuse(v1, v2)
            v1 = VolumeID(ret[0][0][1])
-
+        '''
+        v1 = VolumeID(v1)
         newkey = objs.addobj(v1, 'cn')
         return  list(objs), [newkey]
 
@@ -2581,10 +2600,10 @@ class Geometry(object):
         else:
             return os.path.join(trash, filename+ext)
 
-    def generate_preview_mesh(self, filename, trash):
+    def generate_preview_mesh_gmsh(self, filename, trash):
         if self.queue is not None:
             self.queue.put((False, "generating preview"))
-
+        
         ss = self.getObjSizes()
         
         dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
@@ -2627,7 +2646,88 @@ class Geometry(object):
         gmsh.write(geom_msh)
 
         return vcl, esize, geom_msh
+
+    def generate_preview_mesh_occ(self, filename, trash):
+        if self.queue is not None:
+            self.queue.put((False, "generating preview"))
+        
+        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        
+        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()                   
+        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
+        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/30)        
+
+        too_large = self.long_edge_thr
+        too_small = self.small_edge_thr
+        vcl, esize = self.getVertexCL(modelsize*too_small)
+        return vcl, esize, ''
+
+    def generate_preview_mesh(self, filename, trash):
+        from petram.geom.read_gmsh import read_pts_groups, read_loops, read_loops_do_meshloop
+        
+        if self.use_occ_preview:
+            vcl, esize, geom_msh = self.generate_preview_mesh_occ(filename, trash)
+            l, s, v = read_loops_do_meshloop(gmsh)            
+        else:    
+            vcl, esize, geom_msh = self.generate_preview_mesh_gmsh(filename, trash)
+            l, s, v = read_loops(gmsh)
+        return geom_msh, l, s, v, vcl, esize
     
+    def create_entity_mapping(self):
+        '''
+        create a mapping between entitiy number and the numbering read from
+        brep
+        '''
+        uvols = UniqueCounter()
+        ufaces = UniqueCounter()
+        uedges = UniqueCounter()
+        uverts = UniqueCounter()        
+
+        vmap = {}
+        fmap = {}
+        emap = {}
+        pmap = {}
+        
+        for dim1, tag1 in gmsh.model.getEntities(3):
+            flag, ivol = uvols.add_shape(tag1)
+            vmap[ivol] = tag1
+            for dim2, tag2 in self.model.getBoundary(((dim1, tag1,),), oriented=False):
+                flag, iface = ufaces.add_shape(tag2)
+                fmap[iface] = tag2
+                for dim3, tag3 in self.model.getBoundary(((dim2, tag2,),), oriented=False):                
+                    flag, iedge = uedges.add_shape(tag3)
+                    emap[iedge] = tag3
+                    for dim4, tag4 in self.model.getBoundary(((dim3, tag3,),), oriented=False):               
+                        flag, ivert = uverts.add_shape(tag4)
+                        pmap[ivert] = tag4
+
+        for dim2, tag2 in gmsh.model.getEntities(2):
+            flag, iface = ufaces.add_shape(tag2)
+            if not flag: continue
+            fmap[iface] = tag2
+            for dim3, tag3 in self.model.getBoundary(((dim2, tag2,),), oriented=False):               
+                flag, iedge = uedges.add_shape(tag3)
+                emap[iedge] = tag3
+                for dim4, tag4 in self.model.getBoundary(((dim3, tag3,),), oriented=False):                
+                    flag, ivert = uverts.add_shape(tag4)
+                    pmap[ivert] = tag4
+
+        for dim3, tag3 in gmsh.model.getEntities(1):
+            flag, iedge = uedges.add_shape(tag3)
+            if not flag: continue           
+            emap[iedge] = tag3
+            for dim4, tag4 in self.model.getBoundary(((dim3, tag3,),), oriented=False):                
+                flag, ivert = uverts.add_shape(tag4)
+                pmap[ivert] = tag4
+
+        for dim4, tag4 in gmsh.model.getEntities(1):
+            flag, ivert = uverts.add_shape(tag4)
+            pmap[ivert] = tag4
+
+        return vmap, fmap, emap, pmap
+
     def generate_brep(self, objs, filename = '', trash='', finalize=False):
         
         if finalize and not self.skip_final_frag:
@@ -2662,7 +2762,9 @@ class Geometry(object):
             gmsh.model.occ.synchronize()
             #self.applyEntityNumberingInfo(map, objs)
             
-        return geom_brep
+        mappings = self.create_entity_mapping()
+        
+        return geom_brep, mappings
         
 class GMSHGeometryGenerator(mp.Process):
     def __init__(self, q, task_q):
@@ -2717,30 +2819,20 @@ class GMSHGeometryGenerator(mp.Process):
 
         if finalize:
             filename = filename
-            brep_file = self.mw.generate_brep(self.objs, filename = filename, finalize = True)
+            brep_file, mappings = self.mw.generate_brep(self.objs, filename = filename, finalize = True)
         else:
             filename = sequence[-1][0]
-            brep_file = self.mw.generate_brep(self.objs, filename = filename, trash=trash, finalize = False)
+            brep_file, mappings = self.mw.generate_brep(self.objs, filename = filename, trash=trash, finalize = False)
             #brep_file = ''
 
         if no_mesh:
-            q.put((True, (self.gui_data, self.objs, brep_file, None, None, None)))
+            q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
 
         else:
-            from petram.geom.read_gmsh import read_pts_groups, read_loops
-            
-            vcl, esize, geom_msh = self.mw.generate_preview_mesh(filename, trash)
-            l, s, v = read_loops(gmsh)            
-            '''
-            we don't do this in child process to avoid huge data transfer overhead.
+            data = self.mw.generate_preview_mesh(filename, trash)
+            # data =  geom_msh, l, s, v,  vcl, esize 
 
-            ptx, cells, cell_data = read_pts_groups(gmsh)
-            l, s, v = read_loops(gmsh)
-            data = ptx, cells, cell_data, l, s, v
-            q.put((True, (self.gui_data, self.objs, brep_file, data, vcl, esize)))
-            '''
-            data = geom_msh, l, s, v
-            q.put((True, (self.gui_data, self.objs, brep_file, data, vcl, esize)))
+            q.put((True, (self.gui_data, self.objs, brep_file, data,  mappings)))
 
 class GeometrySequence(object):
     def __init__(self):
@@ -2770,6 +2862,7 @@ class GeometrySequence(object):
                   'Maxthreads': gui.maxthreads,
                   'SkipFrag': gui.skip_final_frag,
                   'Use1DPreview': gui.use_1d_preview,
+                  'UseOCCPreview': gui.use_occ_preview,                  
                   'UseCurvature': gui.use_curvature,
                   'LongEdgeThr': gui.long_edge_thr,
                   'SmallEdgeThr': gui.small_edge_thr,
@@ -2833,22 +2926,30 @@ class GeometrySequence(object):
         if ret[1][0] == 'fail':
             p.terminate()
             self.clean_queue()                           
-            return False, ret[1][0]
+            return False, ret[1][1]
         else:
-            self.gui_data, self.objs, brep_file, data, vcl, esize = ret[1]
+            self.gui_data, self.objs, brep_file, data, mappings = ret[1]
 
             if no_mesh:
                 ret =  self.gui_data, self.objs, brep_file, None, None, None
 
             else:
-                from petram.geom.read_gmsh import read_pts_groups, read_loops
+                geom_msh, l, s, v, vcl, esize = data
+                
+                from petram.geom.read_brep_occ import read_file, format_brepdata
 
-                geom_msh, l, s, v = data
-                gmsh.open(geom_msh)
-                ptx, cells, cell_data = read_pts_groups(gmsh)
+                if geom_msh != '':
+                    from petram.geom.read_gmsh import read_pts_groups
+                    gmsh.open(geom_msh)
+                    ptx, cells, cell_data = read_pts_groups(gmsh)
+                else:
+                    occ_data = read_file(brep_file)
+                    ptx, cells, cell_data = format_brepdata(occ_data, mappings)
+                    
+                    pass
                 data = ptx, cells, cell_data, l, s, v
 
-                ret = self.gui_data, self.objs, brep_file, data, vcl, esize           
+                ret = self.gui_data, self.objs, brep_file, data, vcl, esize
             
             return True, ret
     

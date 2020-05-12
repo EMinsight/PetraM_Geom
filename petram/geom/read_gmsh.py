@@ -120,13 +120,52 @@ def read_loops(geom, dimtags=None):
     dimtag1 = list(set(dimtag1))
     for dim, tag in dimtag1:
         l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
-                                                       oriented=False)]
+                                                       oriented=False, recursive=True)]
         if len(l[tag]) == 0:
              print('line :' + str(tag) + ' has no boundary (loop)')
              node, coord, pc  = model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)
              l[tag].append(node[0])
         
     return l, s, v
+
+def read_loops_do_meshloop(geom, dimtags=None):
+    model = geom.model
+    model.occ.synchronize()
+    ent = model.getEntities()    
+    model.setVisibility(ent, False)
+    
+    v = {}
+    s = {}
+    l = {}
+
+    dimtag3 =  model.getEntities(3) if dimtags is None else [x for x in dimtags if x[0]==3]
+    for dim, tag in dimtag3:
+        v[tag] = [y for x, y in model.getBoundary([(dim, tag)],
+                                                       oriented=False)]
+    dimtag2 =  model.getEntities(2) if dimtags is None else [x for x in dimtags if x[0]==2] + model.getBoundary(dimtag3, combined=False, oriented=False)
+    dimtag2 = list(set(dimtag2))
+    
+    for dim, tag in dimtag2:
+        s[tag] = [y for x, y in model.getBoundary([(dim, tag)],
+                                                       oriented=False)]
+
+    dimtag1 =  model.getEntities(1) if dimtags is None else [x for x in dimtags if x[0]==1] + model.getBoundary(dimtag2, combined=False, oriented=False)
+    dimtag1 = list(set(dimtag1))
+    for dim, tag in dimtag1:
+        l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
+                                                       oriented=False, recursive=True)]
+
+        if len(l[tag]) == 0:
+             print('line :' + str(tag) + ' has no boundary (loop)')
+             model.setVisibility(((dim,tag),), True, recursive = True)
+             model.mesh.generate(1)
+        
+             node, coord, pc  = model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)
+             l[tag].append(node[0])
+        
+    return l, s, v
+
+
 
 def read_loops2(geom, dimtags=None):
     '''

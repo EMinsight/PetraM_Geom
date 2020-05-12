@@ -126,7 +126,19 @@ vtdata =  (('center', VtableElement('center', type='float',
           ('z_rarius', VtableElement('z_radius', type='float',
                                      guilabel = 'radius (Z)',
                                      default = 1.0,                                
-                                     tip = "radius in Z direction" )),)
+                                     tip = "radius in Z direction" )),
+          ('angle1', VtableElement('angle1', type='float',
+                                     guilabel = 'polar opening(1)',
+                                     default = -90,                                
+                                     tip = "poloar opening angle (start)" )),
+          ('angle2', VtableElement('angle2', type='float',
+                                     guilabel = 'polar opening(2)',
+                                     default = 90.,                                
+                                     tip = "polar opening angle (stop)" )),
+          ('angle3', VtableElement('angle3', type='float',
+                                     guilabel = 'azimuthal opening',
+                                     default = 360.,                                
+                                     tip = "azimuthal opening" )),)
                  
 class Ball(GeomPB):
     vt = Vtable(vtdata)

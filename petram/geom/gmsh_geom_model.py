@@ -471,6 +471,7 @@ class GmshGeom(GeomTopBase):
         v['maxthreads'] = 1
         v['skip_final_frag'] = False
         v['use_1d_preview'] = False
+        v['use_occ_preview'] = False        
         v['use_curvature'] = False
         v['long_edge_thr'] = 0.3        
         v['small_edge_thr'] = 0.001
@@ -523,6 +524,7 @@ class GmshGeom(GeomTopBase):
                 [None, self.occ_parallel, 3, {"text":"OCC parallel boolean"}],
                 [None, self.skip_final_frag, 3, {"text":"Skip fragmentationn"}],
                 [None, self.use_1d_preview, 3, {"text":"Use line preview"}],
+                [None, self.use_occ_preview, 3, {"text":"OCC preview (in dev.)"}],                
                 [None, self.use_curvature, 3, {"text":"Consider curvature in preview generation"}],                                                
                 [None, None, 341, {"label": "Finalize Geom",
                                    "func": 'onBuildAll',
@@ -534,7 +536,7 @@ class GmshGeom(GeomTopBase):
         return [None, txt, self.geom_prev_res, self.long_edge_thr,
                 self.small_edge_thr, self.small_edge_seg, self.max_seg,
                 self.maxthreads, self.occ_parallel,
-                self.skip_final_frag, self.use_1d_preview, self.use_curvature, self]
+                self.skip_final_frag, self.use_1d_preview, self.use_occ_preview, self.use_curvature, self]
        
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
@@ -551,7 +553,8 @@ class GmshGeom(GeomTopBase):
         self.occ_parallel  = v[8]
         self.skip_final_frag = v[9]
         self.use_1d_preview = v[10]
-        self.use_curvature = v[11]
+        self.use_occ_preview = v[11]        
+        self.use_curvature = v[12]
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -590,25 +593,22 @@ class GmshGeom(GeomTopBase):
         
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
+        self.update_figure_data(viewer)
+
+    def update_figure_data(self, viewer):
+        if not hasattr(self, "_gmsh4_data"): return
+        if self._gmsh4_data is None: return
+        
         ptx, cells, cell_data, l, s, v, geom = self._gmsh4_data
         ret = ptx, cells, {}, cell_data, {}
 
-        #
-        # set clmax guess from geometry size
-        #
-        # xmin, ymin, zmin, xmax, ymax, zmax = geom.getBoundingBox()
-        # l = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        # clmax = l/3.
-        # clmin = l/300.
-        # self._clmax_guess = (clmax, clmin)
-        
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
         viewer.update_figure('geom', self.name())
         
         viewer._s_v_loop['geom'] = s, v
         viewer._s_v_loop['mesh'] = s, v
-        
+
     def onUpdateGeoView(self, evt, filename = None):       
         if globals()['gmsh_Major']==4 and use_gmsh_api:
             return self.onUpdateGeoView4(evt, filename = filename)
@@ -723,7 +723,8 @@ class GmshGeom(GeomTopBase):
                         OCCParallel = int(self.occ_parallel),
                         Maxthreads = self.maxthreads,
                         SkipFrag = self.skip_final_frag,
-                        Use1DPreview = self.use_1d_preview)
+                        Use1DPreview = self.use_1d_preview,
+                        UseOCCPreview = self.use_occ_preview)
 
         geom.set_factory('OpenCASCADE')
         '''
