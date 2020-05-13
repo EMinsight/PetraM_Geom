@@ -53,13 +53,13 @@ class TopoShapeSet(list):
         if self.mapping is not None:
             i = self.mapping.FindIndex(x)-1
             if self.check[i] != -1:
-                return False
+                return self.check[i]+1
             else:
-                return True
+                return -1
         else:
             for kk, i in enumerate(self):
-                if i.IsSame(x): return False
-            return True
+                if i.IsSame(x): return kk+1
+            return -1
         
 class Counter(object):
     def __init__(self):
@@ -183,16 +183,20 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
         return
     
     def work_on_edge_on_face(edge):
+        face = topods_Face(edge2face.FindFromKey(edge).First())
+        iface = ufaces.check_shape(face)
+        if iface == -1: return  # face is not yet processed
+        
         flag, iedge = uedges.add_shape(edge)
         if not flag: return
         
-        face = topods_Face(edge2face.FindFromKey(edge).First())
-        _flag, iface = ufaces.add_shape(face)
         coffset = face_vert_offset[iface]
         
         location = TopLoc_Location()
         facing = (bt.Triangulation(face, location))
-        if facing is None: return
+        if facing is None:
+            print('returning due to this')
+            return
         
         poly = (bt.PolygonOnTriangulation(edge, facing, location))
         
@@ -275,7 +279,7 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
     while ex2.More():
         shell = topods_Shell(ex2.Current())
         flag = ushells.check_shape(shell)        
-        if flag:
+        if flag == -1:
             work_on_shell(shell)            
             ex3 = TopExp_Explorer(shell, TopAbs_FACE)
             while ex3.More():    
@@ -304,7 +308,7 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
     while ex3.More():
         face = topods_Face(ex3.Current())
         flag = ufaces.check_shape(face)                
-        if flag:
+        if flag == -1:
             work_on_face(face)
             ex4 = TopExp_Explorer(face, TopAbs_WIRE)
             while ex4.More():
@@ -327,7 +331,7 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
     while ex4.More():
         wire = topods_Wire(ex4.Current())
         flag = uwires.check_shape(wire)                        
-        if flag:
+        if flag == -1:
             work_on_wire(wire)
             ex5 = TopExp_Explorer(wire, TopAbs_EDGE)
             while ex5.More():
@@ -346,7 +350,7 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
     while ex5.More():
         edge = topods_Edge(ex5.Current())
         flag = uedges.check_shape(edge)
-        if flag:
+        if flag == -1:
             work_on_edge(edge)
             ex6 = TopExp_Explorer(edge, TopAbs_VERTEX)
             while ex6.More():
@@ -359,7 +363,7 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
     while ex6.More():
         vertex = topods_Vertex(ex6.Current())
         flag  = uvertices.check_shape(vertex)
-        if flag:
+        if flag == -1:
              work_on_vertex(vertex)
         ex6.Next()
 
@@ -428,9 +432,11 @@ if __name__ == '__main__':
     #filename = '/Users/shiraiwa/Desktop/line.brep'
     #filename = '/Users/shiraiwa/Desktop/extrude.brep'
     #filename = '/Users/shiraiwa/Desktop/box.brep'
-    filename = '/Users/shiraiwa/Desktop/NSTX_1s_cmplx_shield.brep'
+    filename = '/Users/shiraiwa/Desktop/NSTX_1s_cmplx_shield2.brep'
     
     ptx, face_idx, edge_idx, vert_idx, num_failedface, num_failededge  = read_file(filename, verbose=True)
+    print("number of faces", len(face_idx))
+    print("number of edges", len(edge_idx))    
     print("number of triangulation fails", num_failedface(), num_failededge())
     pr.dump_stats("test4.prof")
 

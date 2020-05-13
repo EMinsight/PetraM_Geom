@@ -2019,7 +2019,7 @@ class Geometry(object):
                 
         return list(objs), newkeys
     
-    def SplitByPlain_build_geom(self, objs, *args):
+    def SplitByPlane_build_geom(self, objs, *args):
         print(args)
         def project_ptx_2_plain(normal, cptx, p):
             dp = p - cptx
