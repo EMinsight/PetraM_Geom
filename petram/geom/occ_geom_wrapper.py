@@ -4,18 +4,52 @@ import os
 import numpy as np
 import time
 import tempfile
+from collections import defaultdict
 import multiprocessing as mp
 from six.moves.queue import Empty as QueueEmpty
 
 import petram.debug as debug
-dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomWrapper')
+dprint1, dprint2, dprint3 = debug.init_dprints('OCCGeomWrapper')
 
-import petram.geom.gmsh_config as gmsh_config
 import gmsh
 
 from petram.phys.vtable import VtableElement, Vtable
-from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.geom.gmsh_geom_model import get_geom_key
+
+from OCC.Core.gp import gp_Ax2, gp_Pnt, gp_Dir, gp_Pnt2d
+from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_Sewing,
+                                     BRepBuilderAPI_MakeSolid,
+                                     BRepBuilderAPI_MakeShell,
+                                     BRepBuilderAPI_MakeFace,
+                                     BRepBuilderAPI_MakeWire,
+                                     BRepBuilderAPI_MakeEdge,
+                                     BRepBuilderAPI_MakeVertex)
+from OCC.Core.TopAbs import (TopAbs_SOLID,
+                             TopAbs_SHELL,
+                             TopAbs_FACE, 
+                             TopAbs_WIRE,
+                             TopAbs_EDGE,
+                             TopAbs_VERTEX)
+from OCC.Core.TopoDS import (TopoDS_Compound,
+                             TopoDS_Shape,
+                             topods_Solid,
+                             topods_Shell,                             
+                             topods_Face,
+                             topods_Wire,                             
+                             topods_Edge,
+                             topods_Vertex)
+from OCC.Core.ShapeFix import (ShapeFix_Solid,
+                               ShapeFix_Shell,
+                               ShapeFix_Face)
+from OCC.Core.TopTools import (TopTools_IndexedMapOfShape,
+                               TopTools_IndexedDataMapOfShapeListOfShape,
+                               TopTools_ListIteratorOfListOfShape)
+from OCC.Core.BRepTools import breptools_Write
+from OCC.Core.BRep import BRep_Builder, BRep_Tool
+from OCC.Core.TopExp import (TopExp_Explorer,
+                             topexp_MapShapes,
+                             topexp_MapShapesAndAncestors)
+from OCC.Core.TopLoc import TopLoc_Location
 
 from petram.geom.geom_id import (GeomIDBase, VertexID, LineID, SurfaceID, VolumeID,
                                  LineLoopID, SurfaceLoopID)
@@ -27,12 +61,15 @@ class Polygon(object):
         self.lcar = lcar
 
 
-class UniqueCounter(list):
-    def add_shape(self, x):
-        if x in self:
-            return False, self.index(x)+1
-        self.append(x)
-        return True, len(self)
+class Counter(object):
+    def __init__(self):
+        self.value = 0
+        
+    def increment(self,x):
+        self.value = self.value + x
+
+    def __call__(self):
+        return self.value
    
 def id2dimtag(en):
     if isinstance(en, VertexID):
@@ -113,6 +150,45 @@ def find_combined_bbox(model, dimtags):
                                                            xmax, ymax, zmax)
     return xmin, ymin, zmin, xmax, ymax, zmax
 
+class topo_seen(list):
+    def __init__(self, mapping):
+        self.mapping = mapping
+        self.check = np.array([0]*mapping.Size())
+            
+    def check_shape(self, x):
+        i = self.mapping.FindIndex(x)-1
+        ret = self.check[i]
+        self.check[i] += 1
+        return ret
+        
+class topo2id(object):
+    def __init__(self, dd, mapper):
+        self.mapper = mapper
+        self.mapperout2k = {mapper.FindIndex(dd[k]):k for k in dd}
+        #self._d = [(dd[k], k) for k in dd]
+        
+    def __getitem__(self, val):
+        out = self.mapper.FindIndex(val)
+        return self.mapperout2k[out]
+        #assert False, "ID is not found in ap from Topo to ID"
+        
+class topo_list(object):
+    def __init__(self):
+        self.d = {}
+
+    def add(self, shape):
+        self.d[len(self.d)+1] = shape
+        return len(self.d)
+    
+    def __iter__(self):
+        return self.d.__iter__()
+
+    def __len__(self):
+        return len(self.d)
+    
+    def __getitem__(self, val):
+        return self.d[val]
+        
 class Geometry(object):
     def __init__(self, *args, **kwargs):
         self._point_loc = {}
@@ -120,21 +196,13 @@ class Geometry(object):
         gmsh.option.setNumber("General.Terminal", 1)
         self.process_kwargs(kwargs)
 
-        modelname = kwargs.pop("modelname", "model1")
-        gmsh.clear()
-        gmsh.model.add(modelname)
+        self.builder = BRep_Builder()        
+        
 
         self.model = gmsh.model
         self.factory = gmsh.model.occ
 
-        #self.p = VertexID(0) 
-        #self.l = LineID(0)   
-        #self.ll = LineLoopID(0)  
-        #self.s = SurfaceID(0)   
-        #self.sl = SurfaceLoopID(0)
-        #self.v = VolumeID(0)      
         self.geom_sequence = []
-        
         self._point = {}
         self._point_mask = []
         gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
@@ -148,6 +216,15 @@ class Geometry(object):
         self.queue = kwargs.pop("queue", None)
         self.p = None
 
+        
+    def prep_topo_list(self):
+        self.vertices = topo_list()
+        self.edges = topo_list()
+        self.wires = topo_list()
+        self.faces = topo_list()
+        self.shells = topo_list()
+        self.solids = topo_list()
+        
     def process_kwargs(self, kwargs):
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2) 
@@ -156,7 +233,6 @@ class Geometry(object):
         self.skip_final_frag = kwargs.pop('SkipFrag', False)
         self.use_1d_preview = kwargs.pop('Use1DPreview', False)
         self.use_occ_preview = kwargs.pop('UseOCCPreview', False)        
-        self.use_curvature = kwargs.pop('UseCurvature', False)        
         self.long_edge_thr = kwargs.pop('LongEdgeThr', 0.1)
         self.small_edge_thr = kwargs.pop('SmallEdgeThr', 0.001)
         self.small_edge_seg = kwargs.pop('SmallEdgeSeg', 3)
@@ -169,97 +245,36 @@ class Geometry(object):
 
     def clear(self):
         gmsh.clear()
+
+    def bounding_box(self, shape=None, tolerance=1e-5):
+        from OCC.Core.Bnd import Bnd_Box        
+        from OCC.Core.BRepBndLib import brepbndlib_Add
         
-    def getBoundingBox(self):
-        xmax = -np.inf
-        xmin =  np.inf
-        ymax = -np.inf
-        ymin =  np.inf
-        zmax = -np.inf
-        zmin =  np.inf
+        shape = self.shape if shape is None else shape
         
-        def update_maxmin(dim, tag, xmin, ymin, zmin, xmax, ymax, zmax):
-            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)
-            xmax = np.max([xmax, x2])
-            ymax = np.max([ymax, y2])
-            zmax = np.max([zmax, z2])
-            xmin = np.min([xmin, x1])
-            ymin = np.min([ymin, y1])
-            zmin = np.min([zmin, z1])
-            return xmin, ymin, zmin, xmax, ymax, zmax
-         
-        #if (self.model.getEntities(3)) != 0:
-        for dim, tag in self.model.getEntities():
-            xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
-                                                               xmin, ymin, zmin,
-                                                               xmax, ymax, zmax)
-        '''      
-        elif len(self.model.getEntities(2)) != 0:
-           for dim, tag in self.model.getEntities(2):
-              xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
-                                                                 xmin, ymin, zmin,
-                                                                 xmax, ymax, zmax)
-        elif len(self.model.getEntities(1)) != 0:
-           for dim, tag in self.model.getEntities(1):
-              xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
-                                                                 xmin, ymin, zmin,
-                                                                 xmax, ymax, zmax)
-        else:
-           for dim, tag in self.model.getEntities(0):
-              xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
-                                                                 xmin, ymin, zmin,
-                                                                 xmax, ymax, zmax)
-        '''
-        return xmin, ymin, zmin, xmax, ymax, zmax
+        bbox = Bnd_Box()
+        bbox.SetGap(tolerance)
+        brepbndlib_Add(shape, bbox)
+        values = bbox.Get()
+        return [values[i] for i in range(6)]
      
-    def getObjSizes(self):
-        size = []
-        for dim, tag in self.model.getEntities():
-            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)
-            s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
-            size.append((dim, tag, s))
-        return size
-     
-    def getVertexCL(self, mincl=0):
-        from collections import defaultdict
-        
-        lcar = defaultdict(lambda: np.inf)
+    def get_esize(self):
         esize={}
-        
-        for dim, tag in self.model.getEntities(1):
-            x1, y1, z1, x2, y2, z2 = self.model.getBoundingBox(dim, tag)
+        for iedge in self.edges:
+            x1, y1, z1, x2, y2, z2 = self.bounding_box(self.edges[iedge])
             s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
 
-            esize[tag] = s
-            bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
-            for bdim, btag in bdimtags:
-                mm = min((lcar[btag], s))
-                if mm > mincl:
-                    lcar[btag] = min((lcar[btag], s))
+            esize[iedge] = s
+        return esize
 
-        lcar = dict(lcar)
-        for tag in list(lcar):
-            if lcar[tag] == np.inf: del lcar[tag]
-        #for dim, tag in self.model.getEntities(0):
-        #    if not tag in lcar:
-        #        lcar[tag] = mincl
-
-        return dict(lcar), esize
-
-    def show_only(self, dimtags, recursive=False):
-        self.hide_all()
-        gmsh.model.setVisibility(dimtags, True, recursive = recursive)
+    def get_vcl(self, l, esize):
+        lcar = defaultdict(lambda: np.inf)
+        for iedge in esize:
+            iverts = l[iedge]
+            for ivert in iverts:
+                lcar[ivert] = min(lcar[ivert], esize[iedge])
         
-    def hide(self, dimtags, recursive=False):
-        gmsh.model.setVisibility(dimtags, False, recursive = recursive)
-        
-    def hide_all(self):
-        ent = gmsh.model.getEntities()
-        gmsh.model.setVisibility(ent, False)
-        
-    def show_all(self):
-        ent = gmsh.model.getEntities()
-        gmsh.model.setVisibility(ent, True)
+        return dict(lcar)
     
     def getEntityNumberingInfo(self):
         '''
@@ -312,26 +327,36 @@ class Geometry(object):
         return map
         
 
-    def applyEntityNumberingInfo(self, map, objs):
-        map1  = self.getEntityNumberingInfo()
-        point_map = dict(zip(map[0], map1[0]))
-        edge_map = dict(zip(map[1], map1[1]))
-        face_map = dict(zip(map[2], map1[2]))
-        volume_map = dict(zip(map[3], map1[3]))
-        #print("objs", objs)
-        for key in objs:
-            if isinstance(objs[key], VertexID):
-                objs[key] = VertexID(point_map[objs[key]])
-            if isinstance(objs[key], LineID):
-                objs[key] = LineID(edge_map[objs[key]])
-            if isinstance(objs[key], SurfaceID):
-                objs[key] = SurfaceID(face_map[objs[key]])
-            if isinstance(objs[key], VolumeID):
-                objs[key] = VolumeID(volume_map[objs[key]])
        
     @staticmethod
     def write(filename):
         gmsh.write(filename)
+
+    def write_brep(self, filename):
+        import os
+        comp = TopoDS_Compound()
+        b = self.builder
+        b.MakeCompound(comp)
+        ex1 = TopExp_Explorer(self.shape, TopAbs_SOLID)
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        ex1 = TopExp_Explorer(self.shape, TopAbs_FACE, TopAbs_SHELL)
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        ex1 = TopExp_Explorer(self.shape, TopAbs_EDGE, TopAbs_WIRE)
+        while ex1.More():
+            b.Add(comp, ex1.Current())            
+            ex1.Next()        
+        ex1 = TopExp_Explorer(self.shape, TopAbs_VERTEX, TopAbs_EDGE)
+        while ex1.More():        
+            b.Add(comp, ex1.Current())                    
+            ex1.Next()
+
+        dprint1("exproted brep file:", filename)
+        breptools_Write(comp, filename)
+        
         
     @staticmethod        
     def finalize():
@@ -345,34 +370,18 @@ class Geometry(object):
         return 0
      
     def add_point(self, p, lcar=0.0, mask=True):
-        p = tuple(p)
-        '''
-        self.factory.synchronize()
-        ptx_tags = gmsh.model.getEntities(0)
-        create_new = True
-        if len(ptx_tags) > 0:
-            points = np.vstack([gmsh.model.getValue(0, x[1], []) for x in ptx_tags])
-            dd = np.sum((points-np.array(p))**2, 1)
-            dd = np.sqrt(np.sum((points-np.array(p))**2, 1))
-            if np.min(dd) == 0:
-                idx = np.argmin(dd)
-                pp = ptx_tags[idx][1]
-                #create_new = False
-        #if not p in self._point_loc:
-        if create_new:
-        '''
-        pp = self.factory.addPoint(p[0], p[1], p[2], lcar)
-        self._point_loc[p] = VertexID(pp)
-        #print("made point ", pp, p)
-            
-        p_id = self._point_loc[p]
-        self._point[p_id]=np.array(p)
-        if mask : self._point_mask.append(p_id)
+        p = BRepBuilderAPI_MakeVertex(gp_Pnt(p[0], p[1], p[2])).Shape()
+        p_id = self.vertices.add(p)
         return p_id
         
     def add_line(self, p1, p2):
-        l = self.factory.addLine(p1, p2)
-        return LineID(l)
+        edgeMaker=BRepBuilderAPI_MakeEdge(self.vertices[p1], self.vertices[p2])
+        edgeMaker.Build()
+        if not edgeMaker.IsDone():
+            assert False, "Failed to make edge"
+        edge = edgeMaker.Edge()        
+        l_id = self.edges.add(edge)        
+        return l_id
       
     def add_circle_arc(self, p2, pc, p3):
         l = self.factory.addCircleArc(p2, pc, p3)
@@ -385,11 +394,23 @@ class Geometry(object):
            self.factory.remove(dimtags)
         return LineID(l)
 
-    def add_plane_surface(self, tags):
-        # tags : 1st element exterier, others makes hole
-        tags = list(np.atleast_1d(tags))
-        s = self.factory.addPlaneSurface(tags)
-        return SurfaceID(s)
+    def add_plane_surface(self, tag):
+
+        wire = self.wires[tag]
+        faceMaker = BRepBuilderAPI_MakeFace(wire)        
+        faceMaker.Build()
+
+        if not faceMaker.IsDone():
+            assert False, "can not create face"
+
+        face = faceMaker.Face()
+
+        fixer = ShapeFix_Face(face)
+        fixer.Perform()
+        face = fixer.Face()
+        f_id = self.faces.add(face)
+        
+        return f_id
 
     def add_surface_filling(self, tags):
         tags = list(np.atleast_1d(tags))
@@ -441,49 +462,51 @@ class Geometry(object):
         #print(gmsh.model.getEntities(1))
         return SurfaceID(s)
     
-    def add_line_loop(self, pts, sign=None):
+    def add_line_loop(self, pts, sign=None):        
         tags = list(np.atleast_1d(pts))
-        if sign is not None:
-           for k, v in enumerate(sign):
-               if not v: tags[k] = -tags[k]
-              
-        #self.factory.synchronize()                                
-        #en1 = self.model.getEntities(1)
+
+        wireMaker = BRepBuilderAPI_MakeWire()
+        for t in tags:
+            edge = self.edges[t]
+            wireMaker.Add(edge)
+        wireMaker.Build()
         
-        ll = self.factory.addWire(tags, checkClosed=True)
-
-        #self.factory.synchronize()                                
-        #en2 = self.model.getEntities(1)
-        #if len(en1) != len(en2):
-        #  print("removing", tags[-1])
-        #  self.factory.remove(((1, abs(tags[-1])),))
-
-        # (note)
-        #   somehow, addWire create a duplicated line sometimes
-        #   here I delete input lines to enforce re-numbering.
-        #
-        dimtags = [(1, x) for x in tags]
-        self.factory.remove(dimtags)
-           
-        #self.factory.synchronize()
-        #en3 = self.model.getEntities(1)
-        #print(en1, en2, en3)
-        return LineLoopID(ll)
+        if not wireMaker.IsDone():
+            assert False, "Failed to make wire"
+        wire = wireMaker.Wire()
+        
+        w_id = self.wires.add(wire)
+        return w_id
     
-    def add_curve_loop(self, pts, sign=None):
-        tags = list(np.atleast_1d(pts))
-        if sign is not None:
-           for k, v in enumerate(sign):
-               if not v: tags[k] = -tags[k]
-               
-        ll = self.factory.addCurveLoop(tags)
-        return LineLoopID(ll)
+    def add_curve_loop(self, pts):
+        return self.add_line_loop(pts)
         
     def add_surface_loop(self, sl):
         tags = list(np.atleast_1d(sl))
 
-        sl = self.factory.addSurfaceLoop(tags)
-        return SurfaceLoopID(sl)
+        try:
+            sewingMaker = BRepBuilderAPI_Sewing()
+            for t in tags:
+                face = self.faces[t]
+                sewingMaker.Add(face)
+            sewingMaker.Perform()
+            result = sewingMaker.SewedShape()
+        except:
+            assert False, "Failed to sew faces"
+            
+
+        ex1 = TopExp_Explorer(result, TopAbs_SHELL)
+        while ex1.More():
+            shell = topods_Shell(ex1.Current())
+            fixer = ShapeFix_Shell(shell)
+            fixer.Perform()
+            shell = fixer.Shell()
+            break
+            ex.Next()
+            
+        shell_id = self.shells.add(shell)
+        
+        return shell_id
 
     def add_sphere(self, x, y, z, radius):
         v = self.factory.addSphere(x, y, z, radius)
@@ -506,10 +529,25 @@ class Geometry(object):
         return VolumeID(v)
         
     def add_volume(self, shells):
-        tags = list(np.atleast_1d(shells))              
-        v = self.factory.addVolume(tags)
-        return VolumeID(v)
-     
+        tags = list(np.atleast_1d(shells))
+        
+        solidMaker = BRepBuilderAPI_MakeSolid()
+        for t in tags:
+            shell = self.shells[t]
+            solidMaker.Add(shell)
+        result = solidMaker.Solid()
+
+        if not solidMaker.IsDone():
+            assert False, "Failed to make solid"
+
+        fixer = ShapeFix_Solid(result)
+        fixer.Perform()
+        result = topods_Solid(fixer.Solid())
+            
+        solid_id = self.solids.add(result)
+
+        return solid_id
+        
     def add_ellipse_arc(self, startTag, centerTag, endTag):
         a =  self._point[startTag] - self._point[centerTag]
         b =  self._point[endTag] - self._point[centerTag]
@@ -852,7 +890,7 @@ class Geometry(object):
         ll4 = self.add_curve_loop([l7, l11, l8, l3])        
         ll5 = self.add_curve_loop([l8, l12, l5, l4])
         ll6 = self.add_curve_loop([l9, l10, l11, l12])
-        
+
         rec1 = self.add_plane_surface(ll1)
         rec2 = self.add_plane_surface(ll2)
         rec3 = self.add_plane_surface(ll3)
@@ -861,7 +899,9 @@ class Geometry(object):
         rec6 = self.add_plane_surface(ll6)
 
         sl = self.add_surface_loop([rec1, rec2, rec3, rec4, rec5, rec6])
+
         v1 = self.add_volume(sl)
+
         return v1
         
     '''
@@ -1140,9 +1180,11 @@ class Geometry(object):
         p8 = self.add_point(c1+e3+e2+e1, lcar)
         '''
         v1 = self.add_box((p1, p2, p3, p4, p5, p6, p7, p8,))
-        
+        shape = self.solids[v1]
+        self.builder.Add(self.shape, shape)
+
+        v1 = dimtag2id([(3, v1)])
         newkey = objs.addobj(v1, 'bx')
-        
         return  list(objs), [newkey]
     
     def Ball_build_geom(self, objs, *args):
@@ -2271,35 +2313,148 @@ class Geometry(object):
             newkeys.append(objs.addobj(rr, 'hld'))
 
         return list(objs), newkeys
+
+    def select_highest_dim(self, shape):
+        comp = TopoDS_Compound()
+        b = self.builder        
+        b.MakeCompound(comp)
         
+        mmm = TopTools_IndexedMapOfShape()                    
+        topexp_MapShapes(shape,TopAbs_SOLID, mmm)
+        if mmm.Size() == 0:
+            topexp_MapShapes(shape,TopAbs_FACE, mmm)
+            if mmm.Size() == 0:            
+                topexp_MapShapes(shape,TopAbs_EDGE, mmm)
+                if mmm.Size() == 0:
+                    topexp_MapShapes(shape,TopAbs_VERTEX,mmm)
+                    ex1 = TopExp_Explorer(shape, TopAbs_VERTEX)
+                else:
+                    ex1 = TopExp_Explorer(shape, TopAbs_EDGE)                                    
+            else:
+                ex1 = TopExp_Explorer(shape, TopAbs_FACE)
+        else:
+            ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
+            
+
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        return comp
+            
+    def register_shaps_balk(self, shape):
+        solidMap = TopTools_IndexedMapOfShape()            
+        shellMap = TopTools_IndexedMapOfShape()        
+        faceMap = TopTools_IndexedMapOfShape()
+        wireMap = TopTools_IndexedMapOfShape()            
+        edgeMap = TopTools_IndexedMapOfShape()
+        vertMap = TopTools_IndexedMapOfShape()
+        
+        topexp_MapShapes(shape,TopAbs_SOLID, solidMap)
+        topexp_MapShapes(shape,TopAbs_SHELL, shellMap)        
+        topexp_MapShapes(shape,TopAbs_FACE, faceMap)
+        topexp_MapShapes(shape,TopAbs_WIRE, wireMap)            
+        topexp_MapShapes(shape,TopAbs_EDGE, edgeMap)
+        topexp_MapShapes(shape,TopAbs_VERTEX,vertMap)
+
+        usolids = topo_seen(mapping=solidMap)                  
+        ushells = topo_seen(mapping=shellMap)          
+        ufaces = topo_seen(mapping=faceMap)          
+        uwires = topo_seen(mapping=wireMap)          
+        uedges = topo_seen(mapping=edgeMap)          
+        uvertices = topo_seen(mapping=vertMap)
+
+        new_objs = []
+        # registor solid
+        ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
+        while ex1.More():
+            solid = topods_Solid(ex1.Current())
+            if usolids.check_shape(solid) == 0:
+                 solid_id = self.solids.add(solid)
+                 new_objs.append((3, solid_id))
+            ex1.Next()
+
+        def register_topo(shape, ucounter, topabs, topabs_p, topods, topods_p,
+                          topo_list, dim = -1):
+            ex1 = TopExp_Explorer(shape, topabs_p)
+            while ex1.More():
+                topo_p = topods_p(ex1.Current())
+                ex2 = TopExp_Explorer(topo_p, topabs)
+                while ex2.More():
+                    topo = topods(ex2.Current())
+                    if ucounter.check_shape(topo) == 0:
+                        topo_id = topo_list.add(topo)
+                    ex2.Next()
+                ex1.Next()
+            ex1.Init(shape, topabs, topabs_p)
+            while ex1.More():
+                topo = topods(ex1.Current())
+                if ucounter.check_shape(topo) == 0:
+                    topo_id = topo_list.add(topo)
+                    if dim != -1: new_objs.append((dim, topo_id))
+                ex1.Next()
+                  
+        register_topo(shape, ushells, TopAbs_SHELL, TopAbs_SOLID, topods_Shell, topods_Solid, self.shells)
+        register_topo(shape, ufaces,  TopAbs_FACE, TopAbs_SHELL, topods_Face, topods_Shell, self.faces, dim=2)
+        register_topo(shape, uwires,  TopAbs_WIRE, TopAbs_FACE, topods_Wire, topods_Face, self.wires)
+        register_topo(shape, uedges,  TopAbs_EDGE, TopAbs_WIRE, topods_Edge, topods_Wire, self.edges, dim=1)
+        register_topo(shape, uvertices, TopAbs_VERTEX, TopAbs_EDGE, topods_Vertex, topods_Edge,
+                      self.vertices, dim=0)                
+
+        b = self.builder        
+        comp = self.shape
+        ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        ex1 = TopExp_Explorer(shape, TopAbs_SHELL, TopAbs_SOLID)
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        ex1 = TopExp_Explorer(shape, TopAbs_FACE, TopAbs_SHELL)
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        ex1 = TopExp_Explorer(shape, TopAbs_WIRE, TopAbs_FACE)
+        while ex1.More():
+            b.Add(comp, ex1.Current())
+            ex1.Next()
+        ex1 = TopExp_Explorer(shape, TopAbs_EDGE, TopAbs_WIRE)
+        while ex1.More():
+            b.Add(comp, ex1.Current())            
+            ex1.Next()        
+        ex1 = TopExp_Explorer(shape, TopAbs_VERTEX, TopAbs_EDGE)
+        while ex1.More():        
+            b.Add(comp, ex1.Current())                    
+            ex1.Next()
+
+        return new_objs
+    
     def BrepImport_build_geom(self, objs, *args):
         cad_file, use_fix , use_fix_param, use_fix_tol, highestDimOnly = args
 
-        PTs = self.factory.importShapes(cad_file, 
-                                        highestDimOnly=highestDimOnly)
-        #debug to load one element...
+        from OCC.Core.BRepTools import breptools_Read        
+
+        shape = TopoDS_Shape()
+        success = breptools_Read(shape, cad_file, self.builder)
+
+        if not success:
+            assert False, "Failed to read brep"
+
         '''
-        for dim, tag in PTs:
-            if dim == 3:
-               self.factory.remove(((dim, tag),), recursive=False)
-            if dim == 2:
-                if tag != 165:
-                   self.factory.remove(((dim, tag),), recursive=True)
-        PTs = ((2, 165),)
-        '''
-        # apparently I should use this object (poly.surface)...?
-
-        newkeys = []
-
-
+        (I need to address healing)
         if use_fix:
              PTs, void = self.healShapes(PTs, use_fix_tol, fixDegenerated = use_fix_param[0],
                                                 fixSmallEdges = use_fix_param[1],
                                                 fixSmallFaces = use_fix_param[2],
                                                 sewFaces = use_fix_param[3])
-             
-        dim = max([p[0] for p in PTs])        
-        for p in PTs:
+        '''
+        if highestDimOnly:
+            shape = self.select_highest_dim(shape)
+        new_objs = self.register_shaps_balk(shape)
+
+        newkeys = []             
+        dim = max([p[0] for p in new_objs])        
+        for p in new_objs:
             if p[0] == dim:
                pp = dimtag2id([p])
                newkeys.append(objs.addobj(pp[0], 'impt'))
@@ -2314,12 +2469,281 @@ class Geometry(object):
         gmsh.option.setString("Geometry.OCCTargetUnit", "")
         return ret
         
+    def find_tinyloop(self, esize, thr=1e-5):
+        # magic number to define too small
+        el_max = max(list(esize.values()))
+        edges = np.array([x for x in esize if esize[x] < el_max*thr])
+
+        dimtags = self.model.getEntities(1)
+        loops = []
+        for dim, tag in dimtags:
+             if len(self.model.getBoundary([(dim, tag)], oriented=False)) == 0:
+                  loops.append(tag)
+        edges = [e for e in edges if e in loops]
+        print("tiny loop edges ", edges)
+                  
+        return edges
+    
+    def make_safe_file(self, filename, trash, ext):
+        #map = self.getEntityNumberingInfo()
+        # make filename safe
+        filename = '_'.join(filename.split("/"))
+        filename = '_'.join(filename.split(":"))
+        filename = '_'.join(filename.split("\\"))
+        
+        if trash == '': # when finalizing
+            return os.path.join(os.getcwd(), filename+ext)
+        else:
+            return os.path.join(trash, filename+ext)
+
+    def generate_preview_mesh(self, filename, trash, mesh_quality=1):
+        if self.queue is not None:
+            self.queue.put((False, "Generating preview"))
+
+        values = self.bounding_box()
+        adeviation = max((values[3]-values[0],
+                          values[4]-values[1],
+                          values[5]-values[2]))
+        
+        from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh        
+        BRepMesh_IncrementalMesh(self.shape, 0.05*adeviation*mesh_quality,
+                                 False, 0.5, self.occ_parallel)
+
+        bt = BRep_Tool()
+        
+        face_vert_offset = [0]*(len(self.faces)+1)
+        all_ptx = []        
+        face_idx = {}
+        edge_idx = {}
+        vert_idx = {}
+
+        ## in order to update value from inner functions. this needs to be object        
+        offset = Counter() 
+        num_failedface=Counter()
+        num_failededge=Counter()
+
+        solidMap = TopTools_IndexedMapOfShape()            
+        faceMap = TopTools_IndexedMapOfShape()
+        edgeMap = TopTools_IndexedMapOfShape()
+        vertMap = TopTools_IndexedMapOfShape()
+    
+        topexp_MapShapes(self.shape,TopAbs_SOLID, solidMap)
+        topexp_MapShapes(self.shape,TopAbs_FACE, faceMap)
+        topexp_MapShapes(self.shape,TopAbs_EDGE, edgeMap)
+        topexp_MapShapes(self.shape,TopAbs_VERTEX,vertMap)
+
+        #print([solidMap.FindIndex(v)-1  for v in self.solids.d.values()])
+        #print([faceMap.FindIndex(v)-1  for v in self.faces.d.values()])
+        #print([edgeMap.FindIndex(v)-1  for v in self.edges.d.values()])
+        #print([vertMap.FindIndex(v)-1  for v in self.vertices.d.values()])
+        
+        solid2isolid = topo2id(self.solids, solidMap)
+        face2iface = topo2id(self.faces, faceMap)
+        edge2iedge = topo2id(self.edges, edgeMap)
+        vert2iverte = topo2id(self.vertices, vertMap)
+
+        face2solid = TopTools_IndexedDataMapOfShapeListOfShape()
+        topexp_MapShapesAndAncestors(self.shape, TopAbs_FACE, TopAbs_SOLID, face2solid)
+        edge2face = TopTools_IndexedDataMapOfShapeListOfShape()
+        topexp_MapShapesAndAncestors(self.shape, TopAbs_EDGE, TopAbs_FACE, edge2face)
+        vertex2edge = TopTools_IndexedDataMapOfShapeListOfShape()
+        topexp_MapShapesAndAncestors(self.shape, TopAbs_VERTEX, TopAbs_EDGE, vertex2edge)
+
+        def value2coord(value, location):
+            if not location.IsIdentity():
+                trans = location.Transformation()
+                xyz = [v.XYZ() for v in value]
+                void =[trans.Transforms(x) for x in xyz]
+                ptx = [x.Coord() for x in xyz]
+            else:
+                ptx = [x.Coord() for x in value]
+            return np.vstack(ptx)
+            
+        def work_on_face(iface, face):
+            face_vert_offset[iface] = offset()
+
+            location = TopLoc_Location()
+            facing = (bt.Triangulation(face, location))
+
+            if facing is None:
+                num_failedface.increment(1)
+                return
+            else:
+                tab = facing.Nodes()
+                tri = facing.Triangles()
+                idx = [tri.Value(i).Get() for i in range(1, facing.NbTriangles()+1)]
+                values = [tab.Value(i) for i in range(1, tab.Length()+1)]
+                ptx = value2coord(values, location)
+
+                all_ptx.append(np.vstack(ptx))
+
+                face_idx[iface] = np.vstack(idx)-1 + offset()
+                offset.increment(tab.Length())
+                return
+
+        def work_on_edge_on_face(iedge, edge):
+            faces = edge2face.FindFromKey(edge)
+            topology_iterator = TopTools_ListIteratorOfListOfShape(faces)
+            while topology_iterator.More():
+                face = topology_iterator.Value()
+                topology_iterator.Next()
+                location = TopLoc_Location()
+                facing = (bt.Triangulation(face, location))
+                if facing is not None:
+                    break
+            else:
+                num_failededge.increment(1)                
+                print('tesselation of edge is missing, iedge=', iedge)
+                return
+            
+            iface = face2iface[face]
+            coffset = face_vert_offset[iface]
+            poly = (bt.PolygonOnTriangulation(edge, facing, location))
+
+            if poly is None:
+                num_failededge.increment(1)                
+            else:
+                node = poly.Nodes()
+                idx = [node.Value(i)+coffset-1  for i in range(1, poly.NbNodes()+1)]
+                edge_idx[iedge] = idx
+
+
+        def work_on_edge(iedge, edge):
+            location = TopLoc_Location()
+            poly=bt.Polygon3D(edge, location)
+
+            if poly is None:
+                work_on_edge_on_face(iedge, edge)
+            else:
+                nnodes = poly.NbNodes()
+                nodes = poly.Nodes()
+                values = [nodes.Value(i) for i in range(1, poly.NbNodes()+1)]
+                ptx = value2coord(values, location)
+
+                idx = np.arange(poly.NbNodes())
+
+                all_ptx.append(np.vstack(ptx))
+                edge_idx[iedge] = np.vstack(idx) + offset()
+                offset.increment(poly.NbNodes())
+
+        def work_on_vertex(ivert, vertex):
+            pnt =bt.Pnt(vertex)
+            ptx = [pnt.Coord()]
+            idx = [offset()]
+            all_ptx.append(ptx)
+            vert_idx[ivert] = idx
+            offset.increment(1)
+
+        for iface in self.faces:
+            work_on_face(iface, self.faces[iface])
+        for iedge in self.edges:            
+            work_on_edge(iedge, self.edges[iedge])
+        for ivert in self.vertices:            
+            work_on_vertex(ivert, self.vertices[ivert])
+
+        def generate_idxmap_from_map(idxmap, parent_imap, child2parents, objs):
+            for iobj in objs:
+                parents = child2parents.FindFromKey(objs[iobj])
+                topology_iterator = TopTools_ListIteratorOfListOfShape(parents)
+                while topology_iterator.More():
+                    p = topology_iterator.Value()
+                    topology_iterator.Next()
+
+                    try:
+                        iparent = parent_imap[p]
+                    except:
+                        assert False, "Not found"
+
+                    idxmap[iparent].append(iobj)
+                    
+                    
+        # make v, s, l            
+        v = defaultdict(list)
+        s = defaultdict(list)
+        l = defaultdict(list)
+
+        generate_idxmap_from_map(v, solid2isolid, face2solid, self.faces)
+        generate_idxmap_from_map(s, face2iface, edge2face, self.edges)
+        generate_idxmap_from_map(l, edge2iedge, vertex2edge, self.vertices)
+
+        v = dict(v);s = dict(s);l = dict(l)
+
+        shape = {}
+        idx = {}
+
+        # vertex
+        keys = list(vert_idx)
+        if len(keys) > 0:
+            shape['vertex'] = np.vstack([vert_idx[k] for k in keys])
+            idx['vertex']    = {'geometrical': np.hstack([k for k in keys]),
+                                'physical': np.hstack([0 for k in keys])}
+        # edge
+        keys = list(edge_idx)
+        if len(keys) > 0:    
+            shape['line'] = np.vstack([np.vstack([edge_idx[k][:-1], edge_idx[k][1:]]).transpose()
+                                    for k in keys])
+            eidx = np.hstack([[k]*(len(edge_idx[k])-1) for k in keys])
+            idx['line']    = {'geometrical': eidx,
+                            'physical': eidx*0}
+            
+        # face
+        keys = list(face_idx)
+        if len(keys) > 0:
+            shape['triangle'] = np.vstack([face_idx[k] for k in keys])
+            eidx = np.hstack([[k]*len(face_idx[k]) for k in keys])
+            idx['triangle']    = {'geometrical': eidx,
+                                  'physical': eidx*0}
+
+        ptx = np.vstack(all_ptx)            
+        esize = self.get_esize()
+
+        vcl = self.get_vcl(l, esize)
+        geom_msh = ''
+        
+        dprint1("number of triangulation fails", num_failedface(), num_failededge())        
+        return geom_msh, l, s, v, vcl, esize, ptx, shape, idx
+    
+    def generate_brep(self, objs, filename = '', trash='', finalize=False):
+        
+        if finalize and not self.skip_final_frag:
+            if self.logfile is not None:
+                self.logfile.write("finalize is on \n")
+            if self.queue is not None:
+                self.queue.put((False, "finalize is on"))
+                
+            self.apply_fragments()
+
+        geom_brep = self.make_safe_file(filename, trash, '.brep')            
+        self.write_brep(geom_brep)
+                        
+        do_map_always = False
+        if finalize or do_map_always:
+            '''
+            We need to reload it here so that indexing is consistent
+            in meshing.
+            '''
+            gmsh.clear()
+            
+            # We keep highestDimOnly = False, sinse low dim elemtns could be
+            # used for embeding (cl control)
+            gmsh.model.occ.importShapes(geom_brep, highestDimOnly=False)
+            gmsh.model.occ.synchronize()
+            #self.applyEntityNumberingInfo(map, objs)
+            
+        return geom_brep
+
     '''
     sequence/preview/brep generator
     '''
     def run_sequence(self, objs, gui_data, start_idx):
         isWP = False
-        
+
+        print("start idx", start_idx)
+        if start_idx < 1:
+            self.shape = TopoDS_Compound()
+            self.builder.MakeCompound(self.shape)
+            self.prep_topo_list()
+
         for gui_name, gui_param, geom_name in self.geom_sequence[start_idx:]:
             if self.logfile is not None:
                 self.logfile.write("processing " + gui_name + "\n")
@@ -2356,380 +2780,8 @@ class Geometry(object):
         #capcheName = "" if isWP else gui_name
         return gui_data, objs
     
-    def find_tinyloop(self, esize, thr=1e-5):
-        # magic number to define too small
-        el_max = max(list(esize.values()))
-        edges = np.array([x for x in esize if esize[x] < el_max*thr])
-
-        dimtags = self.model.getEntities(1)
-        loops = []
-        for dim, tag in dimtags:
-             if len(self.model.getBoundary([(dim, tag)], oriented=False)) == 0:
-                  loops.append(tag)
-        edges = [e for e in edges if e in loops]
-        print("tiny loop edges ", edges)
-                  
-        return edges
     
-    def mesh_edge_algorithm1(self):
-        '''
-        use characteristic length
-        '''
-        vcl, esize = self.getVertexCL()
-        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        
-        for tag in vcl:
-           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)                
-        gmsh.model.mesh.generate(1)
-        
-        return vcl, esize, modelsize
-    
-    def mesh_edge_algorithm2(self):
-        vcl, esize = self.getVertexCL()
-        for tag in vcl:
-           gmsh.model.mesh.setSize(((0, tag),), vcl[tag]/2.5)
-
-        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()           
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-
-        emax = max(list(esize.values()))
-        if len(esize) == 0:
-            return vcl, esize, modelsize
-        
-        too_small = []
-
-        if self.logfile is not None:
-            self.logfile.write("Running Edge Mesh Alg.2 \n")                     
-        for l in esize:
-            if esize[l] > emax/10.:
-               seg = 5
-            elif esize[l] > emax/100.:
-               seg = 5           
-            elif esize[l] > emax/1000.:
-               seg = 5                       
-            elif esize[l] > emax/10000.:
-               seg = 4                                 
-            elif esize[l] > emax/100000.:
-               seg = 3
-            else:
-               too_small.append(l)
-               seg = 3
-
-               if self.logfile is not None:
-                    self.logfile.write("Edge too small"+ str(l) + "/" + str(esize[l]/emax) + "\n")
-
-            gmsh.model.mesh.setTransfiniteCurve(l, seg, meshType="Bump", coef=1.3)
-            
-        for tag in vcl:
-           gmsh.model.mesh.setSize(((0, tag),), emax/1000)
-           
-        gmsh.model.mesh.generate(1)            
-        return vcl, esize, modelsize
-    
-    def mesh_edge_algorithm3(self):
-        '''
-        use characteristic length
-        '''
-
-        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()                   
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-
-        too_large = self.long_edge_thr
-        too_small = self.small_edge_thr
-        vcl, esize = self.getVertexCL(modelsize*too_small)
-
-        if len(esize) == 0:
-            return vcl, esize, modelsize
-        
-        emax = max(list(esize.values()))
-
-        print("Max/Min CL size", modelsize*too_large, modelsize*too_small)
-        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize*too_large)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", modelsize*too_small)        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)                
-        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-
-        tiny_loops = self.find_tinyloop(esize, thr=1e-5)
-        dont_do = [(1, tag) for tag in tiny_loops]
-        
-        ### if curse mesh large edge first ###
-        do_first = []
-        too_small2=5e-2
-
-        for tag in list(vcl):
-            s = np.max([vcl[tag]/self.geom_prev_res, modelsize*too_small])
-            if s > modelsize*too_large:
-                s = modelsize*too_large
-            vcl[tag] = s
-        #print(vcl)        
-        
-        for dim, tag in self.model.getEntities(1):      
-            bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
-            ll = [vcl[vtag] for dim,vtag in bdimtags if vtag in vcl]
-            if len(ll) == 0: continue
-            if esize[tag] > np.max(ll)*self.max_seg:
-                do_first.append((1, tag))
-                for dim,vtag in bdimtags:
-                    gmsh.model.mesh.setSize(((0, tag),), esize[tag]/self.max_seg)
-            if esize[tag] < modelsize*too_small:
-                do_first.append((1, tag))
-                gmsh.model.mesh.setTransfiniteCurve(tag, self.small_edge_seg, meshType="Bump", coef=1)
-                
-        self.show_only(do_first)
-        self.hide(dont_do)        
-        gmsh.model.mesh.generate(1)
-
-        self.show_all()
-        self.hide(do_first)
-        self.hide(dont_do)
-        
-        for tag in vcl:
-            gmsh.model.mesh.setSize(((0, tag),), modelsize/self.geom_prev_res)
-            if np.isfinite(vcl[tag]):
-                gmsh.model.mesh.setSize(((0, tag),), vcl[tag])
-                
-        print(self.use_curvature)
-        if self.use_curvature:
-            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
-        else:
-            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)            
-        gmsh.model.mesh.generate(1)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)        
-        return vcl, esize, modelsize
-    
-    def mesh_face_algorithm1(self, esize):
-        '''
-        avoid face with strange short length loop
-        make big surface with cuvertuer
-        '''
-        edges = self.find_tinyloop(esize)
-        s = {}
-        dimtags =  self.model.getEntities(2)
-        for dim, tag in dimtags:
-             s[tag] = [y for x, y in self.model.getBoundary([(dim, tag)], oriented=False)]
-        from petram.mesh.mesh_utils import line2surf
-        l2s = line2surf(s)
-        faces = sum([l2s[edge] for edge in edges if len(l2s[edge]) == 1],[])
-        print("loop faces with tiny single edge", faces)
-
-        #dont_do = [(2, tag) for tag in faces]
-        
-        do_first = []
-        size_thr = 0.01
-
-        max_edge = np.max(list(esize.values()))
-        for dim, tag in self.model.getEntities(2):      
-            bdimtags = self.model.getBoundary(((dim, tag,),), oriented=False)
-            ll = [esize[etag] for dim,etag in bdimtags]
-            if len(ll) == 0: continue
-            if np.max(ll) > max_edge * size_thr:
-                do_first.append((2, tag))
-
-        self.show_only(do_first)
-        #self.hide(dont_do)
-        
-        if self.use_curvature:
-            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
-        else:
-            gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)            
-            
-        gmsh.model.mesh.generate(2)
-        
-        self.show_all()
-        #self.hide(dont_do)
-        self.hide(do_first)
-        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)                            
-        gmsh.model.mesh.generate(2)
-        
-    def make_safe_file(self, filename, trash, ext):
-        #map = self.getEntityNumberingInfo()
-        # make filename safe
-        filename = '_'.join(filename.split("/"))
-        filename = '_'.join(filename.split(":"))
-        filename = '_'.join(filename.split("\\"))
-        
-        if trash == '': # when finalizing
-            return os.path.join(os.getcwd(), filename+ext)
-        else:
-            return os.path.join(trash, filename+ext)
-
-    def generate_preview_mesh_gmsh(self, filename, trash):
-        if self.queue is not None:
-            self.queue.put((False, "generating preview"))
-        
-        ss = self.getObjSizes()
-        
-        dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
-        dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
-
-        
-        gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads)
-        gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads)
-
-        #ent = gmsh.model.getEntities()
-        #gmsh.model.setVisibility(ent, False, recursive=True)
-        #gmsh.model.setVisibility(((2, 165),), True, recursive=True)   
-
-        # make 1D mesh
-        vcl, esize, modelsize = self.mesh_edge_algorithm3()
-
-        
-        if not self.use_1d_preview and len(esize) > 0:
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-            #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/10)        
-            gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", max(list(esize.values()))/100.)
-            gmsh.option.setNumber("Mesh.Optimize", 0)
-            gmsh.option.setNumber("Mesh.IgnorePeriodicity", 1)
-            gmsh.option.setNumber("Mesh.RefineSteps", 1)
-            gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
-
-            if self.use_curvature:
-                gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
-            else:
-                gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)            
-            
-            self.mesh_face_algorithm1(esize)
-        
-        import os
-        
-        geom_msh = self.make_safe_file(filename, trash, '.msh')
-        #filename = '_'.join(filename.split('/')) ### this avoids a problem when filename is  STEP/IGES (having / in it)
-        #geom_msh = os.path.join(os.getcwd(), filename+'.msh')
-        gmsh.write(geom_msh)
-
-        return vcl, esize, geom_msh
-
-    def generate_preview_mesh_occ(self, filename, trash):
-        if self.queue is not None:
-            self.queue.put((False, "generating preview"))
-        
-        gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
-        
-        xmin, ymin, zmin, xmax, ymax, zmax = self.getBoundingBox()                   
-        modelsize = ((xmax-xmin)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)**0.5
-        
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", modelsize/30)        
-
-        too_large = self.long_edge_thr
-        too_small = self.small_edge_thr
-        vcl, esize = self.getVertexCL(modelsize*too_small)
-        return vcl, esize, ''
-
-    def generate_preview_mesh(self, filename, trash):
-        from petram.geom.read_gmsh import read_pts_groups, read_loops, read_loops_do_meshloop
-        
-        if self.use_occ_preview:
-            vcl, esize, geom_msh = self.generate_preview_mesh_occ(filename, trash)
-            l, s, v = read_loops_do_meshloop(gmsh)            
-        else:    
-            vcl, esize, geom_msh = self.generate_preview_mesh_gmsh(filename, trash)
-            l, s, v = read_loops(gmsh)
-        return geom_msh, l, s, v, vcl, esize
-    
-    def create_entity_mapping(self):
-        '''
-        create a mapping between entitiy number and the numbering read from
-        brep
-        '''
-        self.factory.synchronize()
-            
-        uvols = UniqueCounter()
-        ufaces = UniqueCounter()
-        uedges = UniqueCounter()
-        uverts = UniqueCounter()        
-
-        vmap = {}
-        fmap = {}
-        emap = {}
-        pmap = {}
-        
-        for dim1, tag1 in gmsh.model.getEntities(3):
-            flag, ivol = uvols.add_shape(tag1)
-            vmap[ivol] = tag1
-            print(self.model.getBoundary(((dim1, tag1,),), oriented=False))
-            for dim2, tag2 in self.model.getBoundary(((dim1, tag1,),), oriented=False):
-                flag, iface = ufaces.add_shape(tag2)
-                fmap[iface] = tag2
-                for dim3, tag3 in self.model.getBoundary(((dim2, tag2,),), oriented=False):                
-                    flag, iedge = uedges.add_shape(tag3)
-                    emap[iedge] = tag3
-                    for dim4, tag4 in self.model.getBoundary(((dim3, tag3,),), oriented=False):               
-                        flag, ivert = uverts.add_shape(tag4)
-                        pmap[ivert] = tag4
-
-        for dim2, tag2 in gmsh.model.getEntities(2):
-            flag, iface = ufaces.add_shape(tag2)
-            if not flag: continue
-            fmap[iface] = tag2
-            for dim3, tag3 in self.model.getBoundary(((dim2, tag2,),), oriented=False):               
-                flag, iedge = uedges.add_shape(tag3)
-                emap[iedge] = tag3
-                for dim4, tag4 in self.model.getBoundary(((dim3, tag3,),), oriented=False):                
-                    flag, ivert = uverts.add_shape(tag4)
-                    pmap[ivert] = tag4
-
-        for dim3, tag3 in gmsh.model.getEntities(1):
-            flag, iedge = uedges.add_shape(tag3)
-            if not flag: continue           
-            emap[iedge] = tag3
-            for dim4, tag4 in self.model.getBoundary(((dim3, tag3,),), oriented=False):                
-                flag, ivert = uverts.add_shape(tag4)
-                pmap[ivert] = tag4
-
-        for dim4, tag4 in gmsh.model.getEntities(1):
-            flag, ivert = uverts.add_shape(tag4)
-            pmap[ivert] = tag4
-
-        print("mapping", vmap, fmap, emap, pmap)
-        return vmap, fmap, emap, pmap
-
-    def generate_brep(self, objs, filename = '', trash='', finalize=False):
-        
-        if finalize and not self.skip_final_frag:
-            if self.logfile is not None:
-                self.logfile.write("finalize is on \n")
-            if self.queue is not None:
-                self.queue.put((False, "finalize is on"))
-                
-            self.apply_fragments()
-            
-        self.factory.synchronize()
-
-        '''
-        Save BREP for meshing.
-        '''
-        import os
-
-        geom_brep = self.make_safe_file(filename, trash, '.brep')
-        gmsh.write(geom_brep)
-
-        do_map_always = False
-        if finalize or do_map_always:
-            '''
-            We need to reload it here so that indexing is consistent
-            in meshing.
-            '''
-            gmsh.clear()
-            
-            # We keep highestDimOnly = False, sinse low dim elemtns could be
-            # used for embeding (cl control)
-            gmsh.model.occ.importShapes(geom_brep, highestDimOnly=False)
-            gmsh.model.occ.synchronize()
-            #self.applyEntityNumberingInfo(map, objs)
-            
-        mappings = self.create_entity_mapping()
-        
-        return geom_brep, mappings
-        
-class GMSHGeometryGenerator(mp.Process):
+class OCCGeometryGenerator(mp.Process):
     def __init__(self, q, task_q):
         self.q = q
         self.task_q = task_q
@@ -2782,11 +2834,12 @@ class GMSHGeometryGenerator(mp.Process):
 
         if finalize:
             filename = filename
-            brep_file, mappings = self.mw.generate_brep(self.objs, filename = filename, finalize = True)
+            brep_file = self.mw.generate_brep(self.objs, filename = filename,
+                                              finalize = True)
         else:
             filename = sequence[-1][0]
-            brep_file, mappings = self.mw.generate_brep(self.objs, filename = filename, trash=trash, finalize = False)
-            #brep_file = ''
+            brep_file = self.mw.generate_brep(self.objs, filename = filename,
+                                              trash=trash, finalize = False)
 
         if no_mesh:
             q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
@@ -2795,6 +2848,5 @@ class GMSHGeometryGenerator(mp.Process):
             data = self.mw.generate_preview_mesh(filename, trash)
             # data =  geom_msh, l, s, v,  vcl, esize 
 
-            q.put((True, (self.gui_data, self.objs, brep_file, data,  mappings)))
+            q.put((True, (self.gui_data, self.objs, brep_file, data, None)))
 
-    

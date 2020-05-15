@@ -1,8 +1,3 @@
-'''
-
-    Model Tree to stroe MFEM model parameters
-
-'''
 from __future__ import print_function
 
 import tempfile
@@ -694,7 +689,15 @@ class GmshGeom(GeomTopBase):
             import cPickle as pickle
         else:
             import pickle
-        
+
+    
+        if self.use_occ_preview:
+            if self._p.__class__.__name__ == 'GMSHGeometryGenerator':
+                return True
+        else:
+            if self._p.__class__.__name__ != 'GMSHGeometryGenerator':
+                return True
+            
         for k, s in enumerate(self._prev_sequence):
             s_txt1 = pickle.dumps(s)
             s_txt2 = pickle.dumps(gs.geom_sequence[k])
@@ -716,7 +719,9 @@ class GmshGeom(GeomTopBase):
         #if self._gmsh4_data is not  None:
         #    self._gmsh4_data[-1].finalize()
 
-        from petram.geom.gmsh_geom_wrapper import GeometrySequence,GMSHGeometryGenerator
+        from petram.geom.geom_sequence import GeomSequenceOperator
+        from petram.geom.gmsh_geom_wrapper import GMSHGeometryGenerator
+        from petram.geom.occ_geom_wrapper import OCCGeometryGenerator        
         '''
         geom = Geometry(PreviewResolution = self.geom_prev_res,
                         PreviewAlgorithm = self.geom_prev_algorithm,
@@ -729,7 +734,7 @@ class GmshGeom(GeomTopBase):
         geom.set_factory('OpenCASCADE')
         '''
 
-        gs = GeometrySequence()
+        gs = GeomSequenceOperator()
         stopname = self.walk_over_geom_chidlren(gs, stop1=stop1, stop2=stop2)
 
 
@@ -761,7 +766,10 @@ class GmshGeom(GeomTopBase):
             self.terminate_child()
             task_q = mp.Queue() # data to child
             q =  mp.Queue() # data from child
-            p = GMSHGeometryGenerator(q, task_q)
+            if self.use_occ_preview:
+                p = OCCGeometryGenerator(q, task_q)
+            else:
+                p = GMSHGeometryGenerator(q, task_q)
             p.start()
             self._p = (p, task_q, q)
             self._prev_sequence = gs.geom_sequence

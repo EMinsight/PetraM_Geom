@@ -16,14 +16,15 @@ from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
 from OCC.Core.TopExp import TopExp_Explorer, topexp_MapShapes, topexp_MapShapesAndAncestors
 from OCC.Core.TopoDS import TopoDS_Compound, topods_Face, TopoDS_Shape, topods_Edge, topods_Vertex, topods_Solid, topods_Wire, topods_Shell
 from OCC.Core.TopAbs import TopAbs_SOLID, TopAbs_WIRE, TopAbs_FACE, TopAbs_EDGE, TopAbs_VERTEX, TopAbs_SHELL
-from OCC.Core.TopTools import TopTools_IndexedMapOfShape, TopTools_IndexedDataMapOfShapeListOfShape
+from OCC.Core.TopTools import (TopTools_IndexedMapOfShape,
+                               TopTools_IndexedDataMapOfShapeListOfShape,
+                               TopTools_ListIteratorOfListOfShape)
+
 from OCC.Core.TopLoc import TopLoc_Location
 from OCC.Core.IMeshTools import IMeshTools_Parameters
 from OCC.Core.BRepTools import breptools_Clean
 from OCC.Core.gp import gp_Pnt
 from OCC.Core.BRepTools import breptools_Read
-
-
 
 import numpy as np
 import os
@@ -141,7 +142,8 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
     uvertices = TopoShapeSet(mapping=vertMap)
 
     face_vert_offset = [0]*(faceMap.Size()+1)
-
+    edge_on_face_list = []
+    
     def value2coord(value, location):
         if not location.IsIdentity():
             trans = location.Transformation()
@@ -157,7 +159,6 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
         if not flag: return
         
     def work_on_face(face):
-        
         flag, iface = ufaces.add_shape(face)
         if not flag: return None
         
@@ -183,12 +184,19 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
         return
     
     def work_on_edge_on_face(edge):
+        flag, iedge = uedges.add_shape(edge)
+        if not flag: return
+        edge_on_face_list.append(edge)
+
+    def do_work_on_edge_on_face(edge):
+        flag, iedge = uedges.add_shape(edge)
+        if flag:
+            assert False, "This should not happen"
+            return
+
         face = topods_Face(edge2face.FindFromKey(edge).First())
         iface = ufaces.check_shape(face)
         if iface == -1: return  # face is not yet processed
-        
-        flag, iedge = uedges.add_shape(edge)
-        if not flag: return
         
         coffset = face_vert_offset[iface]
         
@@ -327,6 +335,9 @@ def read_file(filename, mesh_quality=1, verbose = False, parallel=True ):
                 ex4.Next()
         ex3.Next()
 
+    for edge in edge_on_face_list:
+        do_work_on_edge_on_face(edge)
+        
     ex4 = TopExp_Explorer(shape, TopAbs_WIRE, TopAbs_FACE)
     while ex4.More():
         wire = topods_Wire(ex4.Current())
