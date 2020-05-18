@@ -46,7 +46,8 @@ from OCC.Core.BRepPrimAPI import (BRepPrimAPI_MakePrism,
                                   BRepPrimAPI_MakeCylinder,)
 from OCC.Core.BRepFilletAPI import (BRepFilletAPI_MakeFillet,
                                     BRepFilletAPI_MakeChamfer)
-from OCC.Core.BRepOffsetAPI import BRepOffsetAPI_MakePipe
+from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
+                                    BRepOffsetAPI_MakeFilling)
 from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_Sewing,
                                      BRepBuilderAPI_Copy,
                                      BRepBuilderAPI_Transform,
@@ -472,7 +473,8 @@ class Geometry():
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2)
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
-        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanParallel', 1e-8)
+        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-8)
+        self.occ_geom_tolerance = kwargs.pop('OCCGeomTol', 1e-6)        
         self.maxthreads = kwargs.pop('Maxthreads', 1)
         self.skip_final_frag = kwargs.pop('SkipFrag', False)
         self.use_1d_preview = kwargs.pop('Use1DPreview', False)
@@ -609,7 +611,7 @@ class Geometry():
             assert False, "can not find point: "+str(int(gid))
         shape = self.vertices[gid]
         pnt = self.bt.Pnt(shape)
-        return np.array(pnt.X(), pnt.Y(), pnt.Z(),)
+        return np.array((pnt.X(), pnt.Y(), pnt.Z(),))
 
     def get_planesurface_normal(self, gid):
         '''
@@ -805,56 +807,130 @@ class Geometry():
 
         return f_id
 
-    def add_surface_filling(self, tags):
-        tags = list(np.atleast_1d(tags))
-        #print("calling wire", tags)
-        self.factory.synchronize()
-        # print(gmsh.model.getEntities(1))
-        dimtags = [(1, x) for x in tags]
+    def add_plate_surface(self, gids_edge, gids_vertex):
+        from OCC.Core.GeomPlate import (GeomPlate_BuildPlateSurface,
+                                        GeomPlate_PointConstraint,
+   	                                GeomPlate_MakeApprox)
+        from OCC.Core.BRepTools import BRepTools_WireExplorer        
+        from OCC.Core.BRepAdaptor import BRepAdaptor_HCurve
+        from OCC.Core.BRepFill import BRepFill_CurveConstraint
+        from OCC.Core.ShapeFix import ShapeFix_Face
 
-        # reorder tags to make a closed loop
-        '''
-        this has to be done by coordinates instead of tags !
-        corners = [ [yy[1] for yy in self.model.getBoundary((x,), combined=False, oriented=False,)]
-                    for x in dimtags]
-        order = [0,]
-        done_c=[corners[0][0], corners[0][1]]
-        while len(order) < len(dimtags):
-            #print("order", order)
-            for k, c in enumerate(corners):
-                if k in order: continue
-                if c[0] == done_c[-1] and not c[1] in done_c:
-                    done_c.append(c[1])
-                    order.append(k)
-                    break
-                if c[1] == done_c[-1] and not c[0] in done_c:
-                    done_c.append(c[0])
-                    order.append(k)
-                    break
-                if ((c[1] == done_c[-1] and c[0] == done_c[0]) or
-                    (c[0] == done_c[-1] and c[1] == done_c[0])):
-                    done_c.append(c[0])
-                    order.append(k)
-                    break
 
-            else: # no break here
-                assert False, "loop is not closed"
-        tags = [tags[x] for x in order]
-        '''
-        wire = self.factory.addWire(tags)
-        self.factory.remove(dimtags, recursive=True)
-        self.factory.synchronize()
-        # print(wire)
-        ent1d = [x[1] for x in gmsh.model.getEntities(1)]
-        # print(gmsh.model.getEntities(1))
-        s = self.factory.addSurfaceFilling(wire)
-        if wire in ent1d:
-            self.factory.remove([(1, wire), ], recursive=True)
-        self.factory.synchronize()
-        #print("boundary", self.model.getBoundary([(2, s)]))
-        # print(gmsh.model.getEntities(1))
-        return SurfaceID(s)
+        bt = BRep_Tool()
+        BPSurf = GeomPlate_BuildPlateSurface(2, 150, 10)
 
+        # make wire first
+        wireMaker = BRepBuilderAPI_MakeWire()
+        for gid in gids_edge:
+            edge = self.edges[gid]
+            wireMaker.Add(edge)
+        wireMaker.Build()
+
+        if not wireMaker.IsDone():
+            assert False, "Failed to make wire"
+        wire = wireMaker.Wire()
+
+
+        # make wire constraints
+        ex1 = BRepTools_WireExplorer(wire)
+        while ex1.More():
+            edge = topods_Edge(ex1.Current())
+            C = BRepAdaptor_HCurve()
+            C.ChangeCurve().Initialize(edge)
+            Cont = BRepFill_CurveConstraint(C, 0)
+            BPSurf.Add(Cont)
+            ex1.Next()
+
+        # make point constraints
+        for gid in gids_vertex:
+            vertex = self.vertices[gid]
+            Pcont = GeomPlate_PointConstraint(bt.Pnt(vertex), 0)
+            BPSurf.Add(Pcont)
+
+        BPSurf.Perform()
+
+        MaxSeg = 9
+        MaxDegree = 8
+        CritOrder = 0
+
+        PSurf = BPSurf.Surface()
+
+        dmax = max(0.0001, 10 * BPSurf.G0Error())
+        Tol = 0.0001
+
+        Mapp = GeomPlate_MakeApprox(PSurf, Tol, MaxSeg, MaxDegree,
+                                    dmax, CritOrder)
+        Surf = Mapp.Surface()
+        uMin, uMax, vMin, vMax = Surf.Bounds()
+
+        faceMaker = BRepBuilderAPI_MakeFace(Surf, uMin, uMax, vMin, vMax, 1e-6)
+        result = faceMaker.Face()
+        
+        fix = ShapeFix_Face(result)
+        fix.SetPrecision(self.occ_geom_tolerance)
+        fix.Perform()
+        fix.FixOrientation()
+        result = fix.Face()
+
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+
+        return new_objs
+
+    def add_surface_filling(self, gids_edge, gids_vertex):
+        from OCC.Core.GeomAbs import GeomAbs_C0
+        from OCC.Core.BRepTools import BRepTools_WireExplorer
+
+        bt = BRep_Tool()
+        f = BRepOffsetAPI_MakeFilling()
+
+        # make wire first
+        wireMaker = BRepBuilderAPI_MakeWire()
+        for gid in gids_edge:
+            edge = self.edges[gid]
+            wireMaker.Add(edge)
+        wireMaker.Build()
+
+        if not wireMaker.IsDone():
+            assert False, "Failed to make wire"
+        wire = wireMaker.Wire()
+ 
+        #make wire constraints
+        ex1 = BRepTools_WireExplorer(wire)
+        while ex1.More():
+            edge = topods_Edge(ex1.Current())
+            f.Add(edge, GeomAbs_C0)
+            ex1.Next()
+
+        for gid in gids_vertex:
+            vertex = self.vertices[gid]
+            pnt = bt.Pnt(vertex)
+            f.Add(pnt)
+
+        f.Build()
+
+        if not f.IsDone():
+            assert False, "Cannot make filling"
+
+        face = f.Shape()
+        s = bt.Surface(face)
+
+        faceMaker = BRepBuilderAPI_MakeFace(s, wire)
+        self.wires.add(wire)
+
+        result = faceMaker.Face()
+        
+        fix = ShapeFix_Face(result)
+        fix.SetPrecision(self.occ_geom_tolerance)
+        fix.Perform()
+        fix.FixOrientation()
+        result = fix.Face()
+
+        face_id = self.faces.add(result)
+
+        return face_id
+    
     def add_line_loop(self, pts, sign=None):
         tags = list(np.atleast_1d(pts))
 
@@ -899,6 +975,25 @@ class Geometry():
         shell_id = self.shells.add(shell)
 
         return shell_id
+
+    def add_volume(self, shells):
+        tags = list(np.atleast_1d(shells))
+
+        solidMaker = BRepBuilderAPI_MakeSolid()
+        for t in tags:
+            shell = self.shells[t]
+            solidMaker.Add(shell)
+        result = solidMaker.Solid()
+
+        if not solidMaker.IsDone():
+            assert False, "Failed to make solid"
+
+        fixer = ShapeFix_Solid(result)
+        fixer.Perform()
+        result = topods_Solid(fixer.Solid())
+
+        solid_id = self.solids.add(result)
+        return solid_id
 
     def add_sphere(self, xyzc, radius, angle1, angle2, angle3):
         if radius <= 0:
@@ -966,8 +1061,10 @@ class Geometry():
         H = np.sqrt(dx * dx + dy * dy + dz * dz)
         if H == 0:
             assert False, "Cylinder height must be > 0"
+        if r <= 0:
+            assert False, "Cylinder radius must be > 0"
         if (angle <= 0 or angle > 2 * np.pi):
-            assert False, "Cannot build cylinder with angle <= 0 or angle > 2*pi"
+            assert False, "Cannot build a cylinder with angle <= 0 or angle > 2*pi"
 
         pnt = gp_Pnt(x, y, z)
         vec = gp_Dir(dx/H, dy/H, dz/H)
@@ -990,6 +1087,13 @@ class Geometry():
         vec = gp_Dir(0, 0, 1)
         axis = gp_Ax2(pnt, vec)
 
+        if r1 <= 0:
+            assert False, "Torus major radius must be > 0"
+        if r2 <= 0:
+            assert False, "Torus minor radius must be > 0"
+        if (angle <= 0 or angle > 2 * np.pi):
+            assert False, "Torus angle must be between 0, and 2*pi"
+
         t = BRepPrimAPI_MakeTorus(axis, r1, r2, angle)
         t.Build()
         if not t.IsDone():
@@ -998,27 +1102,8 @@ class Geometry():
         result = topods_Solid(t.Shape())
         result = self.select_highest_dim(result)
         new_objs = self.register_shaps_balk(result)
-        
+
         return new_objs
-
-    def add_volume(self, shells):
-        tags = list(np.atleast_1d(shells))
-
-        solidMaker = BRepBuilderAPI_MakeSolid()
-        for t in tags:
-            shell = self.shells[t]
-            solidMaker.Add(shell)
-        result = solidMaker.Solid()
-
-        if not solidMaker.IsDone():
-            assert False, "Failed to make solid"
-
-        fixer = ShapeFix_Solid(result)
-        fixer.Perform()
-        result = topods_Solid(fixer.Solid())
-
-        solid_id = self.solids.add(result)
-        return solid_id
 
     def fillet(self, gid_vols, gid_curves, radii):
 
@@ -1045,11 +1130,11 @@ class Geometry():
             elif len(gid_curves)+1 == len(radii):
                 f.Add(radii[kk], radii[kk+1], shape)
             else:
-                assert False, "wrong radius setting"
+                assert False, "Wrong radius setting"
 
         f.Build()
         if not f.IsDone():
-            assert False, "can not make fillet"
+            assert False, "Can not make fillet"
 
         result = f.Shape()
 
@@ -1089,7 +1174,7 @@ class Geometry():
 
         f.Build()
         if not f.IsDone():
-            assert False, "can not make chamfer"
+            assert False, "Can not make chamfer"
 
         result = f.Shape()
 
@@ -1164,9 +1249,20 @@ class Geometry():
                 iterator2.Next()
                 print("shape new", shape_new)
 
-    def do_boolean(self, operator, gid_objs, gid_tools,
-                   remove_tool=True, remove_obj=True, 
+    def do_boolean(self, operation, gid_objs, gid_tools,
+                   remove_tool=True, remove_obj=True,
                    keep_highest=False):
+
+        if operation == 'fuse':
+            operator = BRepAlgoAPI_Fuse()
+        elif operation == 'cut':
+            operator = BRepAlgoAPI_Cut()
+        elif operation == 'common':
+            operator = BRepAlgoAPI_Common()
+        elif operation == 'fragments':
+            operator = BRepAlgoAPI_BuilderAlgo()
+        else:
+            assert False, "Unknown boolean operation"
 
         objs = TopTools_ListOfShape()
         tools = TopTools_ListOfShape()
@@ -1180,22 +1276,22 @@ class Geometry():
             topolist = self.get_topo_list_for_gid(gid)
             shape = topolist[gid]
             objs.Append(shape)
-        
+
 
         operator.SetRunParallel(self.occ_parallel)
         operator.SetArguments(objs)
-        
-        if isinstance(operator, BRepAlgoAPI_BuilderAlgo):
+
+        if operation == 'fragments':
             tools.Clear()
         else:
             operator.SetTools(tools)
-        
+
         if self.occ_boolean_tolerance > 0:
             operator.SetFuzzyValue(self.occ_boolean_tolerance)
 
         operator.Build()
         if not operator.IsDone():
-            assert False, "fuse operation failed"
+            assert False, "boolean operation failed:" + operation
 
         result = operator.Shape()
 
@@ -1218,8 +1314,7 @@ class Geometry():
     def union(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
               keep_highest=False):
 
-        fuse = BRepAlgoAPI_Fuse()
-        return self.do_boolean(fuse, gid_objs, gid_tools,
+        return self.do_boolean('fuse', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
                                keep_highest=keep_highest)
@@ -1227,8 +1322,7 @@ class Geometry():
     def intersection(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
                      keep_highest=False):
 
-        common = BRepAlgoAPI_Common()
-        return self.do_boolean(common, gid_objs, gid_tools,
+        return self.do_boolean('common', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
                                keep_highest=keep_highest)
@@ -1236,8 +1330,7 @@ class Geometry():
     def difference(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
                    keep_highest=False):        
         
-        cut = BRepAlgoAPI_Cut()
-        return self.do_boolean(cut, gid_objs, gid_tools,
+        return self.do_boolean('cut', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
                                keep_highest=keep_highest)
@@ -1245,9 +1338,8 @@ class Geometry():
     def fragments(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
                  keep_highest=False):           
 
-        fuse = BRepAlgoAPI_BuilderAlgo()
         gid_objs = gid_objs + gid_tools
-        return self.do_boolean(fuse, gid_objs, gid_tools,
+        return self.do_boolean('fragments', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
                                keep_highest=keep_highest)    
@@ -1308,7 +1400,6 @@ class Geometry():
                          remove_obj=True, remove_tool=True)
 
     def remove(self, gid, recursive=True):
-
         topolist = self.get_topo_list_for_gid(gid)
         #topo_list_child = self.get_topo_list_for_gid(gid, child=1)
 
@@ -1443,14 +1534,12 @@ class Geometry():
             topolist = self.get_topo_list_for_gid(gid)
             shape = topolist[gid]
             delete_input = topolist.is_toplevel(gid, self.shape)
-            print("delete input", delete_input)
 
             if translation is not None:
                 dx, dy, dz = translation
                 p = BRepPrimAPI_MakePrism(shape, gp_Vec(dx, dy, dz), False)
 
             elif rotation is not None:
-                print(rotation)
                 x, y, z = rotation[0]
                 ax, ay, az = rotation[1]
                 angle = rotation[2]
@@ -1482,10 +1571,62 @@ class Geometry():
 
             gid_last = self.add_to_topo_list(last)
             gid_extruded = self.add_to_topo_list(result)
-                
+
             ret.append((gid_last, gid_extruded, result))
 
         return ret
+
+    '''
+    def update_topo_list_from_history(self, operator, list_of_shapes):
+        iterator = TopTools_ListIteratorOfListOfShape(list_of_shapes)
+        while iterator.More():
+            shape = iterator.Value()            
+            iterator.Next()
+            # Do I need to do something with modified?
+            # operator.Modified(shape)
+
+            shape_gone = operator.IsDeleted(shape)
+            if shape_gone:
+                print("shape gone", shape_gone)
+
+            shapes_new = operator.Generated(shape)
+            iterator2 = TopTools_ListIteratorOfListOfShape(shapes_new)            
+            while iterator2.More():
+                shape_new = iterator2.Value()
+                iterator2.Next()
+                print("shape new", shape_new)
+    '''
+    def defeature(self, gid, gids_face):
+
+        aSolid = self.solids[gid]
+        
+        features = TopTools_ListOfShape()
+        for tmp in gids_face:
+            topolist = self.get_topo_list_for_gid(tmp)
+            shape = topolist[tmp]
+            features.Append(shape)
+
+        aDF = BRepAlgoAPI_Defeaturing()
+        aDF.SetShape(aSolid)
+        aDF.AddFacesToRemove(features)
+        aDF.SetRunParallel(self.occ_parallel)
+        aDF.SetToFillHistory(False)
+        aDF.Build()
+
+        if not aDF.IsDone():
+            assert False, "Cannot remove faces"
+
+        result = aDF.Shape()
+        self.remove(gid)
+
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+
+        return new_objs
+
+    def add_sequence(self, gui_name, gui_param, geom_name):
+        self.geom_sequence.append((gui_name, gui_param, geom_name))
+
 
     '''
     high level interface:
@@ -1495,17 +1636,15 @@ class Geometry():
         2) register the name of shape
     '''
 
-    def add_sequence(self, gui_name, gui_param, geom_name):
-        self.geom_sequence.append((gui_name, gui_param, geom_name))
 
+    ## 0D vertices
     def Point_build_geom(self, objs, *args):
         xarr, yarr, zarr = args
 
         _newobjs = []
-
         try:
             pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except BaseException:
+        except:
             assert False, "can not make proper input array"
 
         PTs = [self.add_point(p) for p in pos]
@@ -1513,15 +1652,12 @@ class Geometry():
         for p in PTs:
             shape = self.vertices[p]
             self.builder.Add(self.shape, shape)
-
-        # apparently I should use this object (poly.surface)...?
-
-        for p in PTs:
             newkey = objs.addobj(p, 'pt')
             _newobjs.append(newkey)
 
         return list(objs), _newobjs
 
+    ## 1D edges
     def Line_build_geom(self, objs, *args):
         xarr, yarr, zarr, make_spline, periodic = args
         lcar = 0.0
@@ -1578,13 +1714,27 @@ class Geometry():
     def Spline_build_geom(self, objs, *args):
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
+        gids = self.get_target1(objs, pts, 'p')
 
-        #pts = [objs[x] for x in pts]
-        pts = get_target1(objs, pts, 'p')
-        spline = self.add_spline(pts)
-        newkey = objs.addobj(spline, 'sp')
+        if len(gids) < 3:
+            assert False, "Spline requires more than 2 guide points"
+        if len(gids) == 2 and gids[0] == gids[-1]:
+            assert False, "Spline loop requires more than 3 guide points"
+            
+        if len(gids) > 3 and gids[0] == gids[-1]:
+            periodic = True
+            gids = gids[:-1]
+        else:
+            periodic = False        
+            
+        pos = np.vstack([self.get_point_coord(gid) for gid in gids])
 
-        return list(objs), [newkey]
+        spline = self.add_spline(pos, periodic=periodic)
+        shape = self.edges[spline]
+        self.builder.Add(self.shape, shape)
+
+        newobj = objs.addobj(spline, 'sp')
+        return list(objs), [newobj]
 
     def CreateLine_build_geom(self, objs, *args):
         pts = args
@@ -1595,7 +1745,7 @@ class Geometry():
         
         for i in range(len(gids)-1):
             p0 = gids[i]
-            p1 = gids[i]            
+            p1 = gids[i+1]            
             ln = self.add_line(p0, p1)
             shape = self.edges[ln]
             self.builder.Add(self.shape, shape)
@@ -1606,51 +1756,7 @@ class Geometry():
     def LineLoop_build_geom(self, objs, *args):
         assert False, "We don't support this"        
 
-    def CreateSurface_build_geom(self, objs, *args):
-        pts, isFilling = args
-        pts = [x.strip() for x in pts.split(',')]
-
-        edges = self.get_target1(objs, pts, 'l')
-
-        if isFilling:
-            surface = self.add_surface_filling(ptx)
-            newobj2 = objs.addobj(surface, 'sf')
-#           newobj1 = objs.addobj(line, 'ln')
-#           newkeys = [newobj2, newobj1]
-#           surface = self.add_surface_filling(ptx)
-#
-            newkeys = [newobj2, ]
-        else:
-            ill = self.add_line_loop(edges)
-            ips = self.add_plane_surface(ill)
-
-            shape = self.faces[ips]
-            self.builder.Add(self.shape, shape)
-
-            newobj2 = objs.addobj(ips, 'ps')
-            newkeys = [newobj2]
-
-        return list(objs), newkeys
-
-    def SurfaceLoop_build_geom(self, objs, *args):
-        assert False, "We don't support this"
-
-    def CreateVolume_build_geom(self, objs, *args):
-
-        pts = args
-        pts = [x.strip() for x in pts[0].split(',')]
-
-        gids = self.get_target1(objs, pts, 'f')
-        sl = self.add_surface_loop(gids)
-        v1 = self.add_volume(sl)
-
-        shape = self.solids[v1]
-        self.builder.Add(self.shape, shape)
-
-        newobj2 = objs.addobj(v1, 'vol')
-
-        return list(objs), [newobj2]
-
+    ## 2D faces
     def Rect_build_geom(self, objs, *args):
         c1, e1, e2 = args
         lcar = 0.0
@@ -1690,20 +1796,70 @@ class Geometry():
         p3 = self.add_point(c - a1)
         p4 = self.add_point(c - a2)
         ca1 = self.add_circle_arc(p1, p2, p3)
-        ca2 = self.add_circle_arc(p3, p4, p1)        
+        ca2 = self.add_circle_arc(p3, p4, p1)
         ll1 = self.add_line_loop([ca1, ca2])
-        
+
         ps1 = self.add_plane_surface(ll1)
 
         shape = self.faces[ps1]
         self.builder.Add(self.shape, shape)
 
-        self.synchronize_topo_list(action='both')        
+        self.synchronize_topo_list(action='both')
         newkey = objs.addobj(ps1, 'ps')
         return list(objs), [newkey]
 
-        #self._objkeys = objs.keys()
-        #self._newobjs = [newkey]
+    def CreateSurface_build_geom(self, objs, *args):
+        pts, isFilling = args
+        pts = [x.strip() for x in pts.split(',')]
+
+        gids_edge = self.get_target1(objs, pts, 'l')
+
+        if isFilling:
+            gids_vertex = []
+            face_id = self.add_surface_filling(gids_edge, gids_vertex)            
+            shape = self.faces[face_id]
+            self.builder.Add(self.shape, shape)
+            newobj2 = objs.addobj(face_id, 'sf')
+            newkeys = [newobj2]
+            '''
+            gids_new = self.add_plate_surface(gids_edge, gids_vertex)
+
+            newkeys = []
+            for gid in gids_new:
+                newkeys.append(objs.addobj(gid, 'sf'))
+            '''
+
+        else:
+            ill = self.add_line_loop(edges)
+            ips = self.add_plane_surface(ill)
+
+            shape = self.faces[ips]
+            self.builder.Add(self.shape, shape)
+            newobj2 = objs.addobj(ips, 'ps')
+            newkeys = [newobj2]
+            
+        return list(objs), newkeys
+
+    def SurfaceLoop_build_geom(self, objs, *args):
+        assert False, "We don't support this"
+
+    ## 3D solids
+    def CreateVolume_build_geom(self, objs, *args):
+
+        pts = args
+        pts = [x.strip() for x in pts[0].split(',')]
+
+        gids = self.get_target1(objs, pts, 'f')
+        sl = self.add_surface_loop(gids)
+        v1 = self.add_volume(sl)
+
+        shape = self.solids[v1]
+        self.builder.Add(self.shape, shape)
+
+        newobj2 = objs.addobj(v1, 'vol')
+
+        return list(objs), [newobj2]
+
 
     def Box_build_geom(self, objs, *args):
         c1, e1, e2, e3 = args
@@ -1735,26 +1891,17 @@ class Geometry():
 
         gids_new = self.add_sphere(x0, rr, a1/180*np.pi, a2/180*np.pi, a3/180*np.pi)
         newkeys = []
-        for gid in gids_new:
-            newkeys.append(objs.addobj(gid, 'bl'))
-
-        return list(objs), newkeys
-        
-        shape = self.solids[gid]
-        self.builder.Add(self.shape, shape)
-        newkey = objs.addobj(gid, 'bl')
 
         ss = (l1/rr, l2/rr, l3/rr)
+        if ss[0] != ss[1] or ss[1] != ss[2]:
+            gids_new = [self.dilate(gids_new[0], x0, ss, copy=False)]
 
-        newkeys = []
-
-        new_gid = self.dilate(gid, x0, ss, copy=False)
-        if new_gid is not None:
-             newkeys.append(objs.addobj(new_gid, 'bl'))
+        for gid_new in gids_new:
+             newkeys.append(objs.addobj(gid_new, 'bl'))
 
         self.synchronize_topo_list(action='both')
 
-        return list(objs), [newkey]
+        return list(objs), newkeys
 
     def Cone_build_geom(self, objs, *args):
         x0, d0, r1, r2, angle = args
@@ -1776,6 +1923,8 @@ class Geometry():
         newkeys = []
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'cyl'))
+
+        print(self.solids.d, gids_new)
 
         return list(objs), newkeys
 
@@ -1811,7 +1960,7 @@ class Geometry():
     def Torus_build_geom(self, objs, *args):
         x0, r1, r2, angle, keep_interior = args
 
-        gids_new = self.add_torus(x0, r1, r2, angle)
+        gids_new = self.add_torus(x0, r1, r2, angle*np.pi/180)
         
         newkeys = []
         for gid in gids_new:
@@ -1819,61 +1968,7 @@ class Geometry():
 
         return list(objs), newkeys
 
-        '''
-        lcar = 0.0
-        a1 = np.array([r2, 0, 0])
-        a2 = np.array([0, 0, r2])
-
-        c = np.array(x0) + np.array([r1, 0, 0])
-        p1 = self.add_point(c + a1, lcar)
-        p2 = self.add_point(c + a2, lcar)
-        p3 = self.add_point(c - a1, lcar)
-        p4 = self.add_point(c - a2, lcar)
-        pc = self.add_point(c, lcar)
-        ca1 = self.add_circle_arc(p1, pc, p2)
-        ca2 = self.add_circle_arc(p2, pc, p3)
-        ca3 = self.add_circle_arc(p3, pc, p4)
-        ca4 = self.add_circle_arc(p4, pc, p1)
-        ll1 = self.add_line_loop([ca1, ca2, ca3, ca4])
-        ps1 = self.add_plane_surface(ll1)
-
-        dst = [id2dimtag(ps1), ]
-        volumes = []
-
-        if abs(angle) > 270:
-            seg = 4
-        elif abs(angle) > 180:
-            seg = 3
-        elif abs(angle) > 90:
-            seg = 2
-        else:
-            seg = 1
-
-        an = angle / seg
-
-        for i in range(seg):
-            ret = self.factory.revolve(dst,
-                                       x0[0], x0[1], x0[2],
-                                       0, 0, 1, an * np.pi / 180.)
-            dst = ret[:1]
-            volumes.append(ret[1])
-
-        if keep_interior:
-            newkey = []
-            for v in volumes:
-                v1 = VolumeID(v[1])
-                newkey.append(objs.addobj(v1, 'trs'))
-        else:
-            if seg > 1:
-                ret = self.factory.fuse(volumes[:1], volumes[1:])
-                v1 = VolumeID(ret[0][0][1])
-            else:
-                v1 = VolumeID(ret[1][1])
-
-            newkey = [objs.addobj(v1, 'trs')]
-        return list(objs), newkey
-        '''
-        
+    ## prutrusions
     def Extrude_build_geom(self, objs, *args):
         targets, tax, lengths = args
         
@@ -2005,6 +2100,7 @@ class Geometry():
 
         return list(objs), newkeys
 
+    ## translation
     def Move_build_geom(self, objs, *args):
         targets, dx, dy, dz, keep = args
         targets = [x.strip() for x in targets.split(',')]
@@ -2118,6 +2214,7 @@ class Geometry():
 
         return list(objs), newkeys
 
+    ## fillet/chamfer                           
     def Fillet_build_geom(self, objs, *args):
 
         volumes, curves, radii = args
@@ -2133,7 +2230,7 @@ class Geometry():
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'vol'))
 
-        self.synchronize_topo_list(verbose=True)
+        self.synchronize_topo_list()
         return list(objs), newkeys
 
     def Chamfer_build_geom(self, objs, *args):
@@ -2153,9 +2250,10 @@ class Geometry():
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'vol'))
 
-        self.synchronize_topo_list(verbose=True)
+        self.synchronize_topo_list()
         return list(objs), newkeys
 
+    ## copy/remove                           
     def Copy_build_geom(self, objs, *args):
         targets = args[0]
         targets = [x.strip() for x in targets.split(',')]
@@ -2205,6 +2303,27 @@ class Geometry():
             newkeys.append(objs.addobj(rr, 'kpt'))
 
         return list(objs), newkeys
+                               
+    def RemoveFaces_build_geom(self, objs, *args):
+        targets, faces = args
+        
+        targets = [x.strip() for x in targets.split(',')]
+        faces = [x.strip() for x in faces.split(',')]
+
+        if len(targets) != 1:
+            assert False, "Chose one volume"
+
+        gid = self.get_target1(objs, targets, 'v')[0]
+        gids_face = self.get_target1(objs, faces, 'f')
+
+        gids_new = self.defeature(gid, gids_face)
+
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'dftr'))
+
+        self.synchronize_topo_list(verbose=True)
+        return list(objs), newkeys
 
     def Union_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -2221,8 +2340,6 @@ class Geometry():
 
         newkeys = []
         for gid in gids_new:
-            #topolist = self.get_topo_list_for_gid(gid)
-            #shape = topolist[gid]
             newkeys.append(objs.addobj(gid, 'uni'))
 
         self.synchronize_topo_list(verbose=True)
@@ -2251,42 +2368,6 @@ class Geometry():
         self.synchronize_topo_list(verbose=True)
         return list(objs), newkeys
 
-    def Union2D_build_geom(self, objs, *args):
-        tp, tm, delete_input, delete_tool, keep_highest = args
-        tp = [x.strip() for x in tp.split(',')]
-        tm = [x.strip() for x in tm.split(',')]
-
-        input_entity = get_target2(objs, tp)
-        tool_entity = get_target2(objs, tm)
-
-        ret = self.boolean_union2d(
-            input_entity,
-            tool_entity,
-            removeObject=delete_input,
-            removeTool=delete_tool)
-
-        newkeys = []
-        for rr in ret:
-            if rr.dim == input_entity[0].dim:
-                newkeys.append(objs.addobj(rr, 'uni'))
-            else:
-                if keep_highest:
-                    self.remove([rr], recursive=True)
-                else:
-                    newkeys.append(objs.addobj(rr, get_geom_key(rr)))
-
-        if delete_input:
-            for x in tp:
-                if x in objs:
-                    del objs[x]
-
-        if delete_tool:
-            for x in tm:
-                if x in objs:
-                    del objs[x]
-
-        return list(objs), newkeys
-
     def Intersection_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
         tp = [x.strip() for x in tp.split(',')]
@@ -2308,37 +2389,6 @@ class Geometry():
 
         self.synchronize_topo_list(verbose=True)
         return list(objs), newkeys
-
-        '''
-        input_entity = get_target2(objs, tp)
-        tool_entity = get_target2(objs, tm)
-
-        ret = self.boolean_intersection(
-            input_entity,
-            tool_entity,
-            removeObject=delete_input,
-            removeTool=delete_tool)
-        newkeys = []
-        for rr in ret:
-            if rr.dim == input_entity[0].dim:
-                newkeys.append(objs.addobj(rr, 'its'))
-            else:
-                if keep_highest:
-                    self.remove([rr], recursive=True)
-                else:
-                    newkeys.append(objs.addobj(rr, get_geom_key(rr)))
-
-        if delete_input:
-            for x in tp:
-                if x in objs:
-                    del objs[x]
-        if delete_tool:
-            for x in tm:
-                if x in objs:
-                    del objs[x]
-
-        return list(objs), newkeys
-        '''
 
     def Fragments_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -2400,19 +2450,19 @@ class Geometry():
 
     def Point2D_build_geom(self, objs, *args):
         xarr, yarr = args
-        lcar = 0.0
         xarr = np.atleast_1d(xarr)
         yarr = np.atleast_1d(yarr)
         zarr = xarr * 0.0
         try:
             pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except BaseException:
-            print("can not make proper input array")
-            return
-        PTs = [self.add_point(p, lcar=lcar) for p in pos]
-        # apparently I should use this object (poly.surface)...?
-        _newobjs = []
+        except:
+            assert False, "can not make proper input array"
+
+        PTs = [self.add_point(p) for p in pos]
+
         for p in PTs:
+            shape = self.vertices[p]
+            self.builder.Add(self.shape, shape)
             newkey = objs.addobj(p, 'pt')
             _newobjs.append(newkey)
 
@@ -2423,7 +2473,7 @@ class Geometry():
 
     def Circle2D_build_geom(self, objs, *args):
         center, ax1, ax2, radius = args
-        lcar = 0.0
+
         a1 = np.array(ax1 + [0])
         a2 = np.array(ax2 + [0])
         a2 = np.cross(np.cross(a1, a2), a1)
@@ -2431,17 +2481,20 @@ class Geometry():
         a2 = a2 / np.sqrt(np.sum(a2**2)) * radius
 
         c = np.array(center + [0])
-        p1 = self.add_point(c + a1, lcar)
-        p2 = self.add_point(c + a2, lcar)
-        p3 = self.add_point(c - a1, lcar)
-        p4 = self.add_point(c - a2, lcar)
-        pc = self.add_point(c, lcar)
-        ca1 = self.add_circle_arc(p1, pc, p2)
-        ca2 = self.add_circle_arc(p2, pc, p3)
-        ca3 = self.add_circle_arc(p3, pc, p4)
-        ca4 = self.add_circle_arc(p4, pc, p1)
-        ll1 = self.add_line_loop([ca1, ca2, ca3, ca4])
+        p1 = self.add_point(c + a1)
+        p2 = self.add_point(c + a2)
+        p3 = self.add_point(c - a1)
+        p4 = self.add_point(c - a2)
+        ca1 = self.add_circle_arc(p1, p2, p3)
+        ca2 = self.add_circle_arc(p3, p4, p1)        
+        ll1 = self.add_line_loop([ca1, ca2])
+
         ps1 = self.add_plane_surface(ll1)
+
+        shape = self.faces[ps1]
+        self.builder.Add(self.shape, shape)
+
+        self.synchronize_topo_list(action='both')
         newkey = objs.addobj(ps1, 'ps')
 
         return list(objs), [newkey]
@@ -2495,39 +2548,27 @@ class Geometry():
         c1 = np.array(c1 + [0])
         e1 = np.array(e1 + [0])
         e2 = np.array(e2 + [0])
-        p1 = self.add_point(c1, lcar)
-        p2 = self.add_point(c1 + e1, lcar)
-        p3 = self.add_point(c1 + e1 + e2, lcar)
-        p4 = self.add_point(c1 + e2, lcar)
+        p1 = self.add_point(c1)
+        p2 = self.add_point(c1 + e1)
+        p3 = self.add_point(c1 + e1 + e2)
+        p4 = self.add_point(c1 + e2)
         l1 = self.add_line(p1, p2)
         l2 = self.add_line(p2, p3)
         l3 = self.add_line(p3, p4)
         l4 = self.add_line(p4, p1)
         ll1 = self.add_line_loop([l1, l2, l3, l4])
         rec1 = self.add_plane_surface(ll1)
+
+        shape = self.faces[rec1]
+        self.builder.Add(self.shape, shape)
+
         newkey = objs.addobj(rec1, 'rec')
         return list(objs), [newkey]
 
     def Polygon2D_build_geom(self, objs, *args):
-        xarr, yarr = args
-        zarr = [0] * len(yarr)
-        lcar = 0.0
-        if len(xarr) < 2:
-            return
-        try:
-            pos = np.vstack((xarr, yarr, zarr)).transpose()
-        except BaseException:
-            print("can not make proper input array")
-            return
-        # check if data is already closed...
-        if np.abs(np.sum((pos[0] - pos[-1])**2)) < 1e-17:
-            pos = pos[:-1]
-        poly = self.add_polygon(pos, lcar=lcar)
-
-        # apparently I should use this object (poly.surface)...?
-        newkey = objs.addobj(poly.surface, 'pol')
-
-        return list(objs), [newkey]
+        del objs
+        del args
+        assert False, "We dont support this"
 
     def Move2D_build_geom(self, objs, *args):
         targets, dx, dy, keep = args
@@ -2614,6 +2655,42 @@ class Geometry():
             self.translate(tt, dx, dy, dz)
             for t in tt:
                 newkeys.append(objs.addobj(t, 'cp'))
+
+        return list(objs), newkeys
+
+    def Union2D_build_geom(self, objs, *args):
+        tp, tm, delete_input, delete_tool, keep_highest = args
+        tp = [x.strip() for x in tp.split(',')]
+        tm = [x.strip() for x in tm.split(',')]
+
+        input_entity = get_target2(objs, tp)
+        tool_entity = get_target2(objs, tm)
+
+        ret = self.boolean_union2d(
+            input_entity,
+            tool_entity,
+            removeObject=delete_input,
+            removeTool=delete_tool)
+
+        newkeys = []
+        for rr in ret:
+            if rr.dim == input_entity[0].dim:
+                newkeys.append(objs.addobj(rr, 'uni'))
+            else:
+                if keep_highest:
+                    self.remove([rr], recursive=True)
+                else:
+                    newkeys.append(objs.addobj(rr, get_geom_key(rr)))
+
+        if delete_input:
+            for x in tp:
+                if x in objs:
+                    del objs[x]
+
+        if delete_tool:
+            for x in tm:
+                if x in objs:
+                    del objs[x]
 
         return list(objs), newkeys
 
@@ -2831,37 +2908,6 @@ class Geometry():
             d2 = -d2
 
         return self._WorkPlane_build_geom(objs, c1, d1, d2)
-
-    def get_toplevel_enteties(self):
-        non_top = []
-
-        ret_3D = self.model.getEntities(3)
-        tmp = ret_3D
-        if len(tmp) != 0:
-            non_top = list(
-                self.model.getBoundary(
-                    tmp,
-                    combined=False,
-                    oriented=False))
-
-        ret_2D = [x for x in self.model.getEntities(2) if x not in non_top]
-
-        tmp = non_top + ret_2D
-        if len(tmp) != 0:
-            non_top = self.model.getBoundary(
-                tmp, combined=False, oriented=False)
-
-        ret_1D = [x for x in self.model.getEntities(1) if x not in non_top]
-
-        tmp = non_top + ret_1D
-        if len(tmp) != 0:
-            non_top = self.model.getBoundary(
-                tmp, combined=False, oriented=False)
-
-        ret_0D = [x for x in self.model.getEntities(0) if x not in non_top]
-
-        ret = ret_3D + ret_2D + ret_1D + ret_0D
-        return ret
 
     def healShapes(self, dimtags, fix_tol, fixDegenerated=False,
                    fixSmallEdges=False,

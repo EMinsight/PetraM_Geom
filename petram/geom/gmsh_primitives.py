@@ -367,7 +367,17 @@ class SurfaceLoop(GeomPB):
 
 class CreateVolume(GeomPB):
     vt = Vtable(ldata)
-
+    
+ldata = (('target', VtableElement('target', type='string',
+                                 guilabel='Volume',
+                                 default="",
+                                 tip="volume to be defeatured")), 
+         ('surfs', VtableElement('surfs', type='string',
+                                 guilabel='Surfaces',
+                                 default="",
+                                 tip="surfacess to be removed")), )
+class RemoveFaces(GeomPB):
+    vt = Vtable(ldata)
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Target',

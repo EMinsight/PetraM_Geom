@@ -499,13 +499,14 @@ class GmshGeom(GeomTopBase):
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
                                                  SurfaceLoop, Union, Intersection, Difference, Fragments,
-                                                 SplitByPlane, Copy, Remove, Remove, Move, Rotate, Flip, Scale, WorkPlane,
+                                                 SplitByPlane, Copy, Remove, Remove, Remove2, RemoveFaces,
+                                                 Move, Rotate, Flip, Scale, WorkPlane,
                                                  WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet,
                                                  Chamfer, Array, ArrayRot)
         return [Point, Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder,
                 Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop,
                 Extrude, Revolve, Sweep, Union,
-                Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Remove2, Move, Rotate,
+                Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot]
 
@@ -514,7 +515,7 @@ class GmshGeom(GeomTopBase):
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
                                                  SurfaceLoop, Union, Intersection, Difference, Fragments,
-                                                 SplitByPlane, Copy, Remove, Remove2, Move, Rotate, Flip, Scale,
+                                                 SplitByPlane, Copy, Remove, Remove2, RemoveFaces,Move, Rotate, Flip, Scale,
                                                  WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer, Array, ArrayRot)
         return [("", Point), ("", Line), ("", Circle), ("", Rect),
@@ -525,7 +526,7 @@ class GmshGeom(GeomTopBase):
                 ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
                 #("", LineLoop), ("", SurfaceLoop),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
-                ("Copy/Remove", Copy), ("", Remove), ("!", Remove2),
+                ("Copy/Remove", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
                 ("Translate...", Move,), ("", Rotate), ("", Flip), ("", Scale),
                 ("", Array), ("!", ArrayRot),
                 ("Boolean...", Union), ("", Intersection),
