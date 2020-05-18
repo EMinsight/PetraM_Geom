@@ -643,6 +643,7 @@ class GmshGeom(GeomTopBase):
 
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
+        viewer.set_figure_data('mesh', self.name(), ret)        
         viewer.update_figure('geom', self.name())
 
         viewer._s_v_loop['geom'] = s, v

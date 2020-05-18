@@ -378,9 +378,9 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
                                            suffix=('x', 'y', 'z'),
                                            default=[0, 0, 1],
                                            tip="translation axis")),
-         ('ex_len', VtableElement('exlen', type='float',
+         ('ex_len', VtableElement('exlen', type='array',
                                   guilabel='Length',
-                                  default=1.0,
+                                  default='1.0',
                                   tip="Extrusion length")), )
 
 
@@ -398,13 +398,13 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
                                  default=[0, 0, 0],
                                  tip="point on axis")),
          ('raxis', VtableElement('raxis', type='float',
-                                 guilabel='Translation Axis',
+                                 guilabel='Revolution Axis',
                                  suffix=('x', 'y', 'z'),
                                  default=[0, 0, 1],
                                  tip="translation axis")),
-         ('angle', VtableElement('angel', type='float',
+         ('angle', VtableElement('angel', type='array',
                                  guilabel='angle',
-                                 default=180.,
+                                 default='90',
                                  tip="Extrusion length")), )
 
 
@@ -590,8 +590,8 @@ data0 = (('target_object', VtableElement('target_object', type='string',
                                   guilabel='Curves',
                                   default="",
                                   tip="curves to add fillet")),
-         ('radius', VtableElement('radisu', type='float',
-                                  guilabel='Radius',
+         ('radius', VtableElement('radisu', type='array',
+                                  guilabel='Radii',
                                   default=1.0,
                                   tip="radisu")),)
 
@@ -609,7 +609,7 @@ data0 = (('target_object', VtableElement('target_object', type='string',
                                   default="",
                                   tip="curves to add chamfer")),
          ('distance', VtableElement('distance', type='array',
-                                    guilabel='Distance',
+                                    guilabel='Distances',
                                     default="1.0",
                                     tip="distance")),
          ('surfaces', VtableElement('surfaces', type='string',
@@ -633,7 +633,7 @@ class Copy(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Copy object'
+        return 'Copy'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -651,7 +651,7 @@ class Remove(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Delete object'
+        return 'Delete'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -665,7 +665,7 @@ class Remove2(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Keep object'
+        return 'DeleteRest'
 
 
 class GeomPB_Bool(GeomPB):

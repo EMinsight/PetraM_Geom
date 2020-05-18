@@ -1356,8 +1356,9 @@ class Geometry(object):
         return list(objs), newkey
 
     def Extrude_build_geom(self, objs, *args):
-        targets, tax, length = args
+        targets, tax, lengths = args
 
+        length = lengths[0]
         targets = [x.strip() for x in targets.split(',')]
         targetID = get_target2(objs, targets)
 
@@ -1426,7 +1427,9 @@ class Geometry(object):
 
     def Revolve_build_geom(self, objs, *args):
 
-        targets, pax, rax, angle = args
+        targets, pax, rax, angles = args
+        angle = angles[0]
+        
         targets = [x.strip() for x in targets.split(',')]
         targetID = get_target2(objs, targets)
 
