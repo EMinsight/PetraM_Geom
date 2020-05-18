@@ -2133,7 +2133,6 @@ class Geometry():
                 newkeys.append(objs.addobj(new_gid, 'mv'))
 
         self.synchronize_topo_list(action='both')
-        print('faces', self.faces.d)
 
         return list(objs), newkeys
 
@@ -2590,71 +2589,83 @@ class Geometry():
 
     def Rotate2D_build_geom(self, objs, *args):
         targets, cc, angle, keep = args
-        cx, cy = cc
-        cz = 0.0
-        ax, ay, az = 0.0, 0.0, 1.0
+        
+        point_on_axis = cc[0], cc[1], 0.0
+        axis_dir = 0.0, 0.0, 1.0
+        
+        newkeys = []        
         targets = [x.strip() for x in targets.split(',')]
 
-        newkeys = []
-        tt = get_target2(objs, targets)
+        gids = self.get_target2(objs, targets)
 
-        if keep:
-            tt = self.copy(tt)
-        self.rotate(tt, cx, cy, cz, ax, ay, az, np.pi * angle / 180.)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'rot'))
+        for gid in gids:
+            new_gid = self.rotate(gid, point_on_axis, axis_dir,
+                                  np.pi * angle / 180., copy=keep)
+            if new_gid is not None:
+                newkeys.append(objs.addobj(new_gid, 'mv'))
 
-        return list(objs), newkeys
-
-    def Flip2D_build_geom(self, objs, *args):
-        targets, a, b, d, keep = args
-        c = 0.0
-        targets = [x.strip() for x in targets.split(',')]
-
-        newkeys = []
-        tt = get_target2(objs, targets)
-        if keep:
-            tt = self.copy(tt)
-        self.symmetrize(tt, a, b, c, d)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'flp'))
+        self.synchronize_topo_list(action='both')
 
         return list(objs), newkeys
 
     def Scale2D_build_geom(self, objs, *args):
         targets, cc, ss, keep = args
-        cx, cy = cc
-        cz = 0.0
-        sx, sy = ss
-        sz = 1.0
+        
+        cc = (cc[0], cc[1], 0.0)
+        ss = (ss[0], ss[1], 1.0)
         targets = [x.strip() for x in targets.split(',')]
 
         newkeys = []
-        tt = get_target2(objs, targets)
-        if keep:
-            tt = self.copy(tt)
-        self.dilate(tt, cx, cy, cz, sx, sy, sz)
-        if keep:
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'sc'))
+        gids = self.get_target2(objs, targets)
+
+        for gid in gids:
+            new_gid = self.dilate(gid, cc, ss, copy=keep)
+            if new_gid is not None:
+                newkeys.append(objs.addobj(new_gid, 'sc'))
+
+        self.synchronize_topo_list(action='both')
+
+        return list(objs), newkeys
+
+    def Flip2D_build_geom(self, objs, *args):
+        
+        targets, a, b, d, keep = args
+        
+        abcd = (a, b, 0.0, d)
+        targets = [x.strip() for x in targets.split(',')]
+
+        newkeys = []
+        gids = self.get_target2(objs, targets)
+
+        for gid in gids:
+            new_gid = self.symmetrize(gid, abcd, copy=keep)
+            if new_gid is not None:
+                newkeys.append(objs.addobj(new_gid, 'flp'))
+
+        self.synchronize_topo_list(action='both')
 
         return list(objs), newkeys
 
     def Array2D_build_geom(self, objs, *args):
+        
         targets, count, displacement = args
-        dx, dy = displacement
-        dz = 0.0
+        
+        dx, dy, dz = (displacement[0], displacement[0], 0.0)
         targets = [x.strip() for x in targets.split(',')]
 
         newkeys = []
-        tt = get_target2(objs, targets)
-        for i in range(count):
-            tt = self.copy(tt)
-            self.translate(tt, dx, dy, dz)
-            for t in tt:
-                newkeys.append(objs.addobj(t, 'cp'))
+        gids = self.get_target2(objs, targets)
+
+        i = 1
+        while i < count:
+            for gid in gids:
+                delta = (dx * i, dy * i, dz * i)
+                new_gid = self.translate(gid, delta, True)
+                if new_gid is not None:
+                    newkeys.append(objs.addobj(new_gid, 'cp'))
+            i = i + 1
+
+        self.synchronize_topo_list(action='add')
 
         return list(objs), newkeys
 
