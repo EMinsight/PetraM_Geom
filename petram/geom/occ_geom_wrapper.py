@@ -624,14 +624,14 @@ class Geometry():
 
         uMin, uMax, vMin, vMax = surface.Bounds()
 
-        dir= gp_Dir()
+        dirc = gp_Dir()
         tool = BOPTools_AlgoTools3D()
-        tool.GetNormalToSurface(surface, uMin, vMin, dir)
-        n1  = (dir.X(), dir.Y(), dir.Z())
-        tool.GetNormalToSurface(surface, uMin, vMax, dir)
-        n2  = (dir.X(), dir.Y(), dir.Z())        
-        tool.GetNormalToSurface(surface, uMax, vMin, dir)
-        n3  = (dir.X(), dir.Y(), dir.Z())        
+        tool.GetNormalToSurface(surface, uMin, vMin, dirc)
+        n1 = (dirc.X(), dirc.Y(), dirc.Z())
+        tool.GetNormalToSurface(surface, uMin, vMax, dirc)
+        n2 = (dirc.X(), dirc.Y(), dirc.Z())
+        tool.GetNormalToSurface(surface, uMax, vMin, dirc)
+        n3 = (dirc.X(), dirc.Y(), dirc.Z())
 
         if n1 != n2:
             assert False, "surface is not flat"
@@ -641,7 +641,7 @@ class Geometry():
         ptx = gp_Pnt()
         surface.D0(uMin, vMin, ptx)
         ptx = (ptx.X(), ptx.Y(), ptx.Z())
-            
+
         return np.array(n1), np.array(ptx)
 
     def write_brep(self, filename):
@@ -900,25 +900,106 @@ class Geometry():
 
         return shell_id
 
-    def add_sphere(self, x, y, z, radius):
-        v = self.factory.addSphere(x, y, z, radius)
-        return VolumeID(v)
+    def add_sphere(self, xyzc, radius, angle1, angle2, angle3):
+        if radius <= 0:
+            assert False, "Sphere radius should be > 0"
+
+        if (angle3 <= 0 or angle3 > 2 * np.pi):
+            assert False, "Cannot build sphere with angle <= 0 or angle > 2*pi"
+
+        pnt = gp_Pnt(xyzc[0], xyzc[1], xyzc[2])
+        s = BRepPrimAPI_MakeSphere(pnt, radius, angle1, angle2, angle3)
+
+        s.Build()
+        if not s.IsDone():
+            assert False, "Could not create sphere"
+
+        result = topods_Solid(s.Shape())
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+        
+        return new_objs
 
     def add_cone(self, x, y, z, dx, dy, dz, r1, r2, angle):
-        v = self.factory.addCone(x, y, z, dx, dy, dz, r1, r2, angle=angle)
-        return VolumeID(v)
+        H = np.sqrt(dx * dx + dy * dy + dz * dz);
+        if H == 0:
+            assert False, "Cone hight must be > 0"
+        if angle <= 0 :
+            assert False, "Cone angle should be positive"
 
-    def add_wedge(self, x, y, z, dx, dy, dz, ltx):
-        v = self.factory.addWedge(x, y, z, dx, dy, dz, -1, ltx)
-        return VolumeID(v)
+        pnt = gp_Pnt(x, y, z)
+        vec = gp_Dir(dx/H, dy/H, dz/H)
+        axis = gp_Ax2(pnt, vec)
 
-    def add_cylinder(self, x, y, z, dx, dy, dz, r, angle):
-        v = self.factory.addCylinder(x, y, z, dx, dy, dz, r, angle=angle)
-        return VolumeID(v)
+        c = BRepPrimAPI_MakeCone(axis, r1, r2, H, angle)
+        c.Build()
+        if not c.IsDone():
+            assert False, "Could not create cone"
 
-    def add_torus(self, x, y, z, r1, r2, angle):
-        v = self.factory.addTorus(x, y, z, r1, r2, -1, angle)
-        return VolumeID(v)
+        result = topods_Solid(c.Shape())
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+        
+        return new_objs
+        
+    def add_wedge(self, xyz, dxyz, ltx):
+        x, y, z = xyz
+        dx, dy, dz = dxyz
+        pnt = gp_Pnt(x, y, z)
+        vec = gp_Dir(0, 0, 1)
+        axis = gp_Ax2(pnt, vec)
+
+        w = BRepPrimAPI_MakeWedge(axis, dx, dy, dz, ltx)
+        w.Build()
+        if not w.IsDone():
+            assert False, "Could not create wedge"
+
+        result = topods_Solid(w.Shape())
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+        
+        return new_objs
+
+    def add_cylinder(self, xyz, dxyz, r, angle):
+        x, y, z = xyz
+        dx, dy, dz = dxyz
+        H = np.sqrt(dx * dx + dy * dy + dz * dz)
+        if H == 0:
+            assert False, "Cylinder height must be > 0"
+        if (angle <= 0 or angle > 2 * np.pi):
+            assert False, "Cannot build cylinder with angle <= 0 or angle > 2*pi"
+
+        pnt = gp_Pnt(x, y, z)
+        vec = gp_Dir(dx/H, dy/H, dz/H)
+        axis = gp_Ax2(pnt, vec)
+
+        cl = BRepPrimAPI_MakeCylinder(axis, r, H, angle)
+        cl.Build()
+        if not cl.IsDone():
+            assert False, "Can not create cylinder"
+
+        result = topods_Solid(cl.Shape())
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+        
+        return new_objs
+
+    def add_torus(self, xyz, r1, r2, angle):
+        x, y, z = xyz
+        pnt = gp_Pnt(x, y, z)
+        vec = gp_Dir(0, 0, 1)
+        axis = gp_Ax2(pnt, vec)
+
+        t = BRepPrimAPI_MakeTorus(axis, r1, r2, angle)
+        t.Build()
+        if not t.IsDone():
+            assert False, "Could not create torus"
+
+        result = topods_Solid(t.Shape())
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+        
+        return new_objs
 
     def add_volume(self, shells):
         tags = list(np.atleast_1d(shells))
@@ -1508,40 +1589,22 @@ class Geometry():
     def CreateLine_build_geom(self, objs, *args):
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
-        pts = get_target1(objs, pts, 'p')
-        pts0 = pts[:-1]
-        pts1 = pts[1:]
+        gids = self.get_target1(objs, pts, 'p')
 
         newkeys = []
-
-        for p0, p1 in zip(pts0, pts1):
-            # if not p0 in objs:
-            #    assert False, p0 + " does not exist"
-            # if not p1 in objs:
-            #    assert False, p1 + " does not exist"
-            line = self.add_line(p0, p1)
-            newkeys.append(objs.addobj(line, 'ln'))
+        
+        for i in range(len(gids)-1):
+            p0 = gids[i]
+            p1 = gids[i]            
+            ln = self.add_line(p0, p1)
+            shape = self.edges[ln]
+            self.builder.Add(self.shape, shape)
+            newkeys.append(objs.addobj(ln, 'ln'))
 
         return list(objs), newkeys
 
     def LineLoop_build_geom(self, objs, *args):
-        pts = args
-        pts = [x.strip() for x in pts[0].split(',')]
-
-        ptx = get_target1(objs, pts, 'l')
-        #pts = [(objs[x] if not x.startswith('-') else objs[x[1:]]) for x in pts]
-        for x in pts:
-            if x.startswith('-'):
-                if x[1:] in objs:
-                    del objs[x[1:]]
-            else:
-                if x in objs:
-                    del objs[x]
-
-        lloop = self.add_line_loop(ptx)
-        newkey = objs.addobj(lloop, 'll')
-
-        return list(objs), [newkey]
+        assert False, "We don't support this"        
 
     def CreateSurface_build_geom(self, objs, *args):
         pts, isFilling = args
@@ -1573,18 +1636,18 @@ class Geometry():
         assert False, "We don't support this"
 
     def CreateVolume_build_geom(self, objs, *args):
+
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
 
-        ptx = get_target1(objs, pts, 'f')
-        sl = self.add_surface_loop(ptx)
+        gids = self.get_target1(objs, pts, 'f')
+        sl = self.add_surface_loop(gids)
+        v1 = self.add_volume(sl)
 
-        self.factory.remove([(2, x) for x in ptx], recursive=True)
-        self.factory.synchronize()
+        shape = self.solids[v1]
+        self.builder.Add(self.shape, shape)
 
-        #newobj1 = objs.addobj(sl, 'sl')
-        vol = self.add_volume(sl)
-        newobj2 = objs.addobj(vol, 'vol')
+        newobj2 = objs.addobj(v1, 'vol')
 
         return list(objs), [newobj2]
 
@@ -1665,95 +1728,58 @@ class Geometry():
         return list(objs), [newkey]
 
     def Ball_build_geom(self, objs, *args):
-        self.factory.synchronize()
 
         x0, l1, l2, l3, a1, a2, a3 = args
-        lcar = 0.0
         radii = [l1, l2, l3]
         rr = min(radii)
 
-        volumes = []
+        gids_new = self.add_sphere(x0, rr, a1/180*np.pi, a2/180*np.pi, a3/180*np.pi)
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'bl'))
 
-        v1 = self.factory.addSphere(x0[0], x0[1], x0[2], rr,
-                                    angle1=a1 / 180 * np.pi, angle2=a2 / 180 * np.pi, angle3=a3 / 180 * np.pi)
-        if (l1 / rr != 1.0 or l2 / rr != 1.0 or l3 / rr != 1.0):
-            self.dilate([v1], (x0[0], x0[1], x0[2]), (l1 / rr, l2 / rr, l3 / rr))
-        v1 = VolumeID(v1)
-        newkey = objs.addobj(v1, 'bl')
+        return list(objs), newkeys
+        
+        shape = self.solids[gid]
+        self.builder.Add(self.shape, shape)
+        newkey = objs.addobj(gid, 'bl')
+
+        ss = (l1/rr, l2/rr, l3/rr)
+
+        newkeys = []
+
+        new_gid = self.dilate(gid, x0, ss, copy=False)
+        if new_gid is not None:
+             newkeys.append(objs.addobj(new_gid, 'bl'))
+
+        self.synchronize_topo_list(action='both')
+
         return list(objs), [newkey]
-
-        '''
-        v1 = self.factory.addSphere(x0[0], x0[1], x0[2], rr, angle1=-np.pi, angle2 = 0)
-        #v2 = self.factory.addSphere(x, y, z, radius, angle1= 0, angle2 = np.pi)
-        #v1 = self.add_sphere(x0[0], x0[1], x0[2], rr)
-
-        if (l1/rr != 1.0 or l2/rr != 1.0 or l3/rr != 1.0):
-            self.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
-
-        self.factory.synchronize()
-        gmsh.write('hoge.brep')
-        newkey = objs.addobj(v1, 'bl')
-        return  objs.keys(), [newkey]
-        '''
-        '''
-        pc = self.add_point(x0, lcar)
-        p1 = self.add_point([x0[0]+rr, x0[1], x0[2]], lcar=lcar)
-        p2 = self.add_point([x0[0], x0[1]+rr, x0[2]], lcar=lcar)
-        p3 = self.add_point([x0[0]-rr, x0[1], x0[2]], lcar=lcar)
-        ca1 = self.add_circle_arc(p1, pc, p2)
-        ca2 = self.add_circle_arc(p2, pc, p3)
-        ln1 = self.add_line(p3, p1)
-        ll1 = self.add_line_loop([ca1, ca2, ln1])
-        ps1 = self.add_plane_surface(ll1)
-        dst = [id2dimtag(ps1), ]
-
-
-        for i in range(4):
-           ret = self.factory.revolve(dst,
-                                   x0[0], x0[1], x0[2],
-                                    1, 0, 0, np.pi/2.)
-           dst = ret[:1]
-           volumes.append(ret[1])
-
-        ret = self.factory.fuse(volumes[:1], volumes[1:])
-        v1 = VolumeID(ret[0][0][1])
-
-        if (l1/rr != 1.0 or l2/rr != 1.0 or l3/rr != 1.0):
-            self.dilate([v1], x0[0], x0[1], x0[2], l1/rr, l2/rr, l3/rr)
-        '''
 
     def Cone_build_geom(self, objs, *args):
         x0, d0, r1, r2, angle = args
 
-        #an = angle if angle < 180 else angle/2
+        gids_new = self.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
+                           r1, r2, angle/180*np.pi)
 
-        v1 = self.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
-                           r1, r2, angle / 180 * np.pi)
-        '''
-        if angle >=180:
-           v2 = self.add_cone(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2],
-                              r1, r2,  an/180*np.pi)
-           v2 = [id2dimtag(v2), ]
-           self.factory.rotate(v2, x0[0], x0[1], x0[2],
-                               d0[0], d0[1], d0[2],  an/180*np.pi)
-           v1 = [id2dimtag(v1), ]
-           ret = self.factory.fuse(v1, v2)
-           v1 = VolumeID(ret[0][0][1])
-        '''
-        v1 = VolumeID(v1)
-        newkey = objs.addobj(v1, 'cn')
-        return list(objs), [newkey]
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'cn'))
+
+        return list(objs), newkeys
 
     def Cylinder_build_geom(self, objs, *args):
         x0, d0, r1, angle = args
-        lcar = 0.0
-        d0 = np.array(d0)
-        if np.sum(d0 * np.array([1, 0, 0])) > np.sum(d0 * np.array([0, 1, 0])):
-            a1 = np.cross(d0, [0, 1, 0])
-        else:
-            a1 = np.cross(d0, [1, 0, 0])
-        a2 = np.cross(d0, a1)
 
+        gids_new = self.add_cylinder(x0, d0, r1, angle/180*np.pi)
+        
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'cyl'))
+
+        return list(objs), newkeys
+
+        '''
         a1 = a1 / np.sqrt(np.sum(a1**2)) * r1
         a2 = a2 / np.sqrt(np.sum(a2**2)) * r1
 
@@ -1771,19 +1797,29 @@ class Geometry():
         ps1 = self.add_plane_surface(ll1)
 
         ret = self.extrude(ps1, translation=d0,)
-        newkey = objs.addobj(ret[0], 'cn')
-        return list(objs), [newkey]
-
+        '''
     def Wedge_build_geom(self, objs, *args):
         x0, d0, ltx = args
-        v1 = self.add_wedge(x0[0], x0[1], x0[2], d0[0], d0[1], d0[2], ltx)
+        gids_new = self.add_wedge(x0, d0, ltx)
 
-        newkey = objs.addobj(v1, 'wg')
-        return list(objs), [newkey]
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'wg'))
 
+        return list(objs), newkeys
+    
     def Torus_build_geom(self, objs, *args):
         x0, r1, r2, angle, keep_interior = args
 
+        gids_new = self.add_torus(x0, r1, r2, angle)
+        
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'trs'))
+
+        return list(objs), newkeys
+
+        '''
         lcar = 0.0
         a1 = np.array([r2, 0, 0])
         a2 = np.array([0, 0, r2])
@@ -1836,7 +1872,8 @@ class Geometry():
 
             newkey = [objs.addobj(v1, 'trs')]
         return list(objs), newkey
-
+        '''
+        
     def Extrude_build_geom(self, objs, *args):
         targets, tax, lengths = args
         
