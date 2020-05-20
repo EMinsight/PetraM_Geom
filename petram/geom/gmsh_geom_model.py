@@ -495,7 +495,9 @@ class GmshGeom(GeomTopBase):
         return v
 
     def get_possible_child(self):
-        from petram.geom.gmsh_primitives import (Point, Line, Spline, Circle, Rect, Polygon, Box, Ball,
+        from petram.geom.gmsh_primitives import (Point, PointByUV, Line, Spline,
+                                                 Circle, CircleByAxisPoint, CircleBy3Points,
+                                                 Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
                                                  SurfaceLoop, Union, Intersection, Difference, Fragments,
@@ -503,22 +505,31 @@ class GmshGeom(GeomTopBase):
                                                  Move, Rotate, Flip, Scale, WorkPlane,
                                                  WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet,
                                                  Chamfer, Array, ArrayRot)
-        return [Point, Line, Circle, Rect, Polygon, Spline, Box, Ball, Cone, Wedge, Cylinder,
+        return [Point, PointByUV, Line, Circle, CircleByAxisPoint, CircleBy3Points,
+                Rect, Polygon, Spline, Box,
+                Ball, Cone, Wedge, Cylinder,
                 Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop,
                 Extrude, Revolve, Sweep, Union,
-                Intersection, Difference, Fragments, SplitByPlane, Copy, Remove, Remove2, RemoveFaces, Move, Rotate,
+                Intersection, Difference, Fragments, SplitByPlane, Copy, Remove,
+                Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot]
 
     def get_possible_child_menu(self):
-        from petram.geom.gmsh_primitives import (Point, Line, Spline, Circle, Rect, Polygon, Box, Ball,
+        from petram.geom.gmsh_primitives import (Point, PointByUV,  Line, Spline,
+                                                 Circle, CircleByAxisPoint, CircleBy3Points,
+                                                 Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
                                                  SurfaceLoop, Union, Intersection, Difference, Fragments,
-                                                 SplitByPlane, Copy, Remove, Remove2, RemoveFaces,Move, Rotate, Flip, Scale,
+                                                 SplitByPlane, Copy, Remove, Remove2, RemoveFaces,
+                                                 Move, Rotate, Flip, Scale,
                                                  WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer, Array, ArrayRot)
-        return [("", Point), ("", Line), ("", Circle), ("", Rect),
+        return [("Add Points", Point), ("!", PointByUV),
+                ("", Line),
+                ("Add Circle", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
+                ("", Rect),
                 ("", Spline), ("", Fillet), ("", Chamfer),
                 ("3D shape...", Box),
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
@@ -698,11 +709,15 @@ class GmshGeom(GeomTopBase):
                     if child2 is stop2:
                         do_break = True
                         break            # for build after
-
+                else:
+                    if self.use_occ_preview:
+                         geom.add_sequence('WP_End_OCC', 'WP_End_OCC', 'WP_End_OCC')
+                    
                 # translate 2D objects in 3D space
                 #for x in org_keys: del objs2[x]
+                    
                 child.add_geom_sequence(geom)
-                geom.add_sequence('WP_End', 'WP_End', 'WP_End')
+                geom.add_sequence('WP_End', 'WP_End', 'WP_End')                    
 
                 if do_break:
                     break
@@ -746,10 +761,10 @@ class GmshGeom(GeomTopBase):
             import pickle
 
         if self.use_occ_preview:
-            if self._p.__class__.__name__ == 'GMSHGeometryGenerator':
+            if self._p[0].__class__.__name__ == 'GMSHGeometryGenerator':
                 return True
         else:
-            if self._p.__class__.__name__ != 'GMSHGeometryGenerator':
+            if self._p[0].__class__.__name__ != 'GMSHGeometryGenerator':
                 return True
 
         for k, s in enumerate(self._prev_sequence):

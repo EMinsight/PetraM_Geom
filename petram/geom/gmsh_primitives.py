@@ -43,6 +43,33 @@ def get_numbers(objs, targets):
 
 class Point(GeomPB):
     vt = Vtable(pdata)
+    
+    @classmethod
+    def fancy_menu_name(self):
+        return 'By XYZ'
+
+pdata = ( ('surf', VtableElement('surf', type='string',
+                                 guilabel='Surface',
+                                 default="",
+                                 tip="surfaces")), 
+         ('u_coord', VtableElement('uarr', type='array',
+                                guilabel='U',
+                                default='0.',
+                                tip="U coords")),
+         ('v_coord', VtableElement('varr', type='array',
+                                guilabel='V',
+                                default='0.',
+                                tip="V coords.")),)
+    
+class PointByUV(GeomPB):
+    vt = Vtable(pdata)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'On surface'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'PointOnSurface'
 
 
 cdata = (('center', VtableElement('center', type='float',
@@ -68,6 +95,50 @@ cdata = (('center', VtableElement('center', type='float',
 
 class Circle(GeomPB):
     vt = Vtable(cdata)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Two axes and radius'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Circle'
+
+cdata = (('center', VtableElement('axis', type='float',
+                                  guilabel='Center',
+                                  suffix=('x', 'y', 'z'),
+                                  default=[0, 0, 0],
+                                  tip="Axis of revolution")),
+         ('ax1', VtableElement('pnt_on_ax', type='float',
+                               guilabel='point on axis',
+                               suffix=('x', 'y', 'z'),
+                               default=[0, 0, 1],
+                               tip="Point on axis"),),
+         ('point_on_cirlce', VtableElement('point_on_circle', type='string',
+                                           guilabel='point on circle',
+                                           default="",
+                                           tip="Point on circle")),)
+    
+class CircleByAxisPoint(GeomPB):
+    vt = Vtable(cdata)
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'Axis and point'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Circle'
+    
+cdata = (('point_on_cirlce', VtableElement('point_on_circle', type='string',
+                                           guilabel='points on circle',
+                                           default="",
+                                           tip="Points on circle")),)
+    
+class CircleBy3Points(GeomPB):
+    vt = Vtable(cdata)
+    @classmethod        
+    def fancy_menu_name(self):
+        return '3 points'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Circle'
 
 
 rdata = (('corner', VtableElement('corner', type='float',

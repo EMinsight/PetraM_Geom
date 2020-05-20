@@ -106,7 +106,7 @@ class GeomSequenceOperator(object):
         else:
             self.gui_data, self.objs, brep_file, data, mappings = ret[1]
 
-            if no_mesh:
+            if no_mesh or data is None:
                 ret =  self.gui_data, self.objs, brep_file, None, None, None
 
             else:
