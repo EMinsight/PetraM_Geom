@@ -78,19 +78,23 @@ cdata = (('center', VtableElement('center', type='float',
                                   default=[0, 0, 0],
                                   tip="Center of Circle")),
          ('ax1', VtableElement('ax1', type='float',
-                               guilabel='axis1',
+                               guilabel='Axis1',
                                suffix=('x', 'y', 'z'),
                                default=[1, 0, 0],
                                tip="axis 1")),
          ('ax2', VtableElement('ax2', type='float',
-                               guilabel='axis2',
+                               guilabel='Axis2',
                                suffix=('x', 'y', 'z'),
                                default=[0, 1, 0],
                                tip="axis 2")),
          ('radius', VtableElement('radius', type='float',
                                   guilabel='r',
                                   default=1.0,
-                                  tip="radius")),)
+                                  tip="radius")),
+          ('fill_circle', VtableElement('fill circle', type='bool',
+                                          guilabel='Fill circle',
+                                          default=True,
+                                          tip="Make surface ")), )
 
 
 class Circle(GeomPB):
@@ -102,20 +106,25 @@ class Circle(GeomPB):
     def fancy_tree_name(self):
         return 'Circle'
 
-cdata = (('center', VtableElement('axis', type='float',
-                                  guilabel='Center',
+cdata = (('axis', VtableElement('axis', type='float',
+                                  guilabel='Normal',
                                   suffix=('x', 'y', 'z'),
-                                  default=[0, 0, 0],
+                                  default=[0, 0, 1],
                                   tip="Axis of revolution")),
-         ('ax1', VtableElement('pnt_on_ax', type='float',
-                               guilabel='point on axis',
+         ('pnt_on_ax', VtableElement('pnt_on_ax', type='float',
+                               guilabel='Point on axis',
                                suffix=('x', 'y', 'z'),
-                               default=[0, 0, 1],
+                               default=[0, 0, 0],
                                tip="Point on axis"),),
-         ('point_on_cirlce', VtableElement('point_on_circle', type='string',
-                                           guilabel='point on circle',
+          ('point_on_cirlce', VtableElement('point_on_circle', type='string',
+                                           guilabel='Point on circle',
                                            default="",
-                                           tip="Point on circle")),)
+                                           tip="Point on circle")),
+          ('fill_circle', VtableElement('fill circle', type='bool',
+                                          guilabel='Fill circle',
+                                          default=True,
+                                          tip="Make surface ")), )
+
     
 class CircleByAxisPoint(GeomPB):
     vt = Vtable(cdata)
@@ -127,9 +136,14 @@ class CircleByAxisPoint(GeomPB):
         return 'Circle'
     
 cdata = (('point_on_cirlce', VtableElement('point_on_circle', type='string',
-                                           guilabel='points on circle',
+                                           guilabel='Points on circle',
                                            default="",
-                                           tip="Points on circle")),)
+                                           tip="Points on circle")),
+          ('fill_circle', VtableElement('fill circle', type='bool',
+                                          guilabel='Fill circle',
+                                          default=True,
+                                          tip="Make surface ")), )
+
     
 class CircleBy3Points(GeomPB):
     vt = Vtable(cdata)
@@ -400,17 +414,36 @@ class Spline(GeomPB):
 
 class CreateLine(GeomPB):
     vt = Vtable(ldata)
-
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Line'
 
 ldata = (('lines', VtableElement('lines', type='string',
                                  guilabel='Lines',
                                  default="",
                                  tip="lines to be connected")), )
-
-
 class LineLoop(GeomPB):
     vt = Vtable(ldata)
 
+ldata = (('loop1', VtableElement('loop1', type='string',
+                                 guilabel='Edges(loop1)',
+                                 default="",
+                                 tip="edges to define the 1st loop")), 
+         ('loop2', VtableElement('loop2', type='string',
+                                 guilabel='Edges(loop2)',
+                                 default="",
+                                 tip="edges to define the 2nd loop")),
+          ('solid', VtableElement('solid', type='bool',
+                                  guilabel='Solid',
+                                  default=True,
+                                  tip="create solid ")), )
+          ('ruled', VtableElement('ruled', type='bool',
+                                  guilabel='Ruled surface',
+                                  default=True,
+                                  tip="create ruled surface ")), )
+
+class ThruSection(GeomPB):
+    vt = Vtable(ldata)
 
 ldata = (('lines', VtableElement('lines', type='string',
                                  guilabel='Lines',
@@ -424,7 +457,9 @@ ldata = (('lines', VtableElement('lines', type='string',
 
 class CreateSurface(GeomPB):
     vt = Vtable(ldata)
-
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Surface'
 
 ldata = (('surfs', VtableElement('surfs', type='string',
                                  guilabel='Surfaces',
@@ -438,6 +473,9 @@ class SurfaceLoop(GeomPB):
 
 class CreateVolume(GeomPB):
     vt = Vtable(ldata)
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'Volume'
     
 ldata = (('target', VtableElement('target', type='string',
                                  guilabel='Volume',
@@ -602,6 +640,32 @@ class Array(GeomPB):
                                             default=[1, 0, 0],
                                             tip="displacemnt")),)
     vt = Vtable(data0)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Linear (by displacement)'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Array'
+    
+class ArrayByPoints(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Object',
+                                             default="",
+                                             tip="object to move")),
+             ('array_count', VtableElement('array_count', type='int',
+                                           guilabel='Count', default=1,
+                                           tip="Center of Circle")),
+             ('ref_ptx', VtableElement('ref_ptx', type='string',
+                                         guilabel='Points',
+                                         default="",
+                                         tip="Reference points to define linear translation")),)
+    vt = Vtable(data0)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Linear (by points)'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Array'
 
 
 class ArrayRot(GeomPB):
@@ -627,11 +691,42 @@ class ArrayRot(GeomPB):
                                      default=180.0,
                                      tip="angle of revoluiton")),)
     vt = Vtable(data0)
-
-    @classmethod
+    @classmethod        
     def fancy_menu_name(self):
+        return 'Angular (by angle)'
+    @classmethod
+    def fancy_tree_name(self):
         return 'ArrayRot'
 
+class ArrayRotByPoints(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Object',
+                                             default="",
+                                             tip="object to move")),
+             ('array_count', VtableElement('array_count', type='int',
+                                           guilabel='Count', default=1,
+                                           tip="Center of Circle")),
+             ('ctr_rot', VtableElement('ctr_rot', type='float',
+                                       guilabel='Center',
+                                       suffix=('x', 'y', 'z'),
+                                       default=[0, 0, 0],
+                                       tip="point on revolustion axis")),
+             ('ax_rot', VtableElement('ax_rot', type='float',
+                                      guilabel='Axis',
+                                      suffix=('x', 'y', 'z'),
+                                      default=[0., 0., 1.0],
+                                      tip="direction of revolustion axis")),
+             ('ref_ptx', VtableElement('ref_ptx', type='string',
+                                         guilabel='Points',
+                                         default="",
+                                         tip="Reference points to define angular translation")),)
+    vt = Vtable(data0)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Angular (by points)'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'ArrayRot'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Object',

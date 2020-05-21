@@ -47,7 +47,8 @@ from OCC.Core.BRepPrimAPI import (BRepPrimAPI_MakePrism,
 from OCC.Core.BRepFilletAPI import (BRepFilletAPI_MakeFillet,
                                     BRepFilletAPI_MakeChamfer)
 from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
-                                    BRepOffsetAPI_MakeFilling)
+                                    BRepOffsetAPI_MakeFilling,
+                                    BRepOffsetAPI_ThruSections)
 from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_Sewing,
                                      BRepBuilderAPI_Copy,
                                      BRepBuilderAPI_Transform,
@@ -66,7 +67,9 @@ from OCC.Core.BRepAlgoAPI import (BRepAlgoAPI_Fuse,
 from OCC.Core.gp import (gp_Ax1, gp_Ax2, gp_Pnt,
                          gp_Dir, gp_Pnt2d, gp_Trsf,
                          gp_Vec, gp_XYZ, gp_GTrsf, gp_Mat)
-from OCC.Core.GC import GC_MakeArcOfCircle, GC_MakeSegment
+from OCC.Core.GC import (GC_MakeArcOfCircle,
+                         GC_MakeSegment,
+                         GC_MakeCircle)                         
 from OCC.Core.BOPTools import BOPTools_AlgoTools3D
 
 from petram.geom.gmsh_geom_model import get_geom_key
@@ -471,16 +474,12 @@ class topo_list_solid(topo_list):
 
 class Geometry():
     def __init__(self, **kwargs):
-        self._point_loc = {}
-
         self.process_kwargs(kwargs)
 
         self.builder = BRep_Builder()
         self.bt = BRep_Tool()
 
         self.geom_sequence = []
-        self._point = {}
-        self._point_mask = []
         gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
 
         write_log = kwargs.pop('write_log', False)
@@ -515,6 +514,19 @@ class Geometry():
         self.shells = topo_list_shell()
         self.solids = topo_list_solid()
 
+        self.edge_2_wire = {}
+
+    def register_wire(self, edges, wire):
+        idx = tuple(sorted([int(x) for x in edges]))
+        self.edge_2_wire[idx] = wire
+
+    def check_wire_registered(self, edges):
+        idx = tuple(sorted([int(x) for x in edges]))
+        if idx in self.edge_2_wire:
+            return self.edge_2_wire[idx]
+        return None
+
+    
     def new_compound(self, gids=None):
         comp = TopoDS_Compound()
         self.builder.MakeCompound(comp)
@@ -671,18 +683,31 @@ class Geometry():
         return ret
 
     def get_point_coord(self, gid):
-        if not gid in self.vertices:
+        if gid not in self.vertices:
             assert False, "can not find point: "+str(int(gid))
         shape = self.vertices[gid]
         pnt = self.bt.Pnt(shape)
         return np.array((pnt.X(), pnt.Y(), pnt.Z(),))
 
+    def get_line_center(self, gid):
+        if gid not in self.edges:
+            assert False, "can not find edge: "+str(int(gid))
+        shape = self.edges[gid]
+        curve, first, last = self.bt.Curve(shape)
+        pnt1 = gp_Pnt()
+        pnt2 = gp_Pnt()
+        curve.D0(first, pnt1)
+        curve.D0(last, pnt2)
+        p1 = np.array((pnt1.X(), pnt1.Y(), pnt1.Z(),))
+        p2 = np.array((pnt2.X(), pnt2.Y(), pnt2.Z(),))
+        return (p1+p2)/2.0
+
     def get_face_normal(self, gid, check_flat=True):
         '''
-        return normal vector of flat surface and a representative point on 
+        return normal vector of flat surface and a representative point on
         the plane
         '''
-        if not gid in self.faces:
+        if gid not in self.faces:
             assert False, "can not find surface: "+str(int(gid))
 
         shape = self.faces[gid]
@@ -692,7 +717,7 @@ class Geometry():
 
         dirc = gp_Dir()
         tool = BOPTools_AlgoTools3D()
-        
+
         if check_flat:
             tool.GetNormalToSurface(surface, uMin, vMin, dirc)
             n1 = (dirc.X(), dirc.Y(), dirc.Z())
@@ -707,8 +732,8 @@ class Geometry():
                 assert False, "surface is not flat"
         else:
             tool.GetNormalToSurface(surface, 0., 0., dirc)
-            n1= (dirc.X(), dirc.Y(), dirc.Z())
-            
+            n1 = (dirc.X(), dirc.Y(), dirc.Z())
+
         ptx = gp_Pnt()
         surface.D0(0.0, 0.0, ptx)
         ptx = (ptx.X(), ptx.Y(), ptx.Z())
@@ -884,8 +909,40 @@ class Geometry():
         if not edgeMaker.IsDone():
             assert False, "Can not make circle arc"
         edge = edgeMaker.Edge()
+        return self.edges.add(edge)
 
-        return self.edges.add(edge)        
+    def add_circle_by_axis_radius(self, center, dirct, radius):
+        x, y, z = center
+        dx, dy, dz = dirct
+        pnt = gp_Pnt(x, y, z)
+        vec = gp_Dir(dx, dy, dz)
+        axis = gp_Ax1(pnt, vec)
+
+        print("radius", radius, type(radius))
+        cl = GC_MakeCircle(axis, radius)
+        edgeMaker = BRepBuilderAPI_MakeEdge(cl.Value())
+        edgeMaker.Build()
+        if not edgeMaker.IsDone():
+            assert False, "Can not make circle"
+        edge = edgeMaker.Edge()
+
+        return self.edges.add(edge)
+
+    def add_circle_by_3points(self, p1, p2, p3):
+        bt = self.bt
+        pnt1 = bt.Pnt(self.vertices[p1])
+        pnt2 = bt.Pnt(self.vertices[p2])
+        pnt3 = bt.Pnt(self.vertices[p3])
+
+        cl = GC_MakeCircle(pnt1, pnt3, pnt2)
+
+        edgeMaker = BRepBuilderAPI_MakeEdge(cl.Value())
+        edgeMaker.Build()
+        if not edgeMaker.IsDone():
+            assert False, "Can not make circle"
+        edge = edgeMaker.Edge()
+
+        return self.edges.add(edge)
 
     def add_ellipse_arc(self, startTag, centerTag, endTag):
         a = self._point[startTag] - self._point[centerTag]
@@ -973,7 +1030,6 @@ class Geometry():
         if not wireMaker.IsDone():
             assert False, "Failed to make wire"
         wire = wireMaker.Wire()
-
 
         # make wire constraints
         ex1 = BRepTools_WireExplorer(wire)
@@ -1074,11 +1130,37 @@ class Geometry():
 
         return face_id
     
+    def add_thrusection(self, gid_wire1, gid_wire2,
+                        makeSolid=False, makeRuled=False):
+        
+        wire1 = self.wires(gid_wire1)
+        wire2 = self.wires(gid_wire2)
+        maker = BRepOffsetAPI_ThruSections(makeSolid, makeRuled)
+        makder.AddWire(wire1)
+        makder.AddWire(wire2)
+        maker.CheckCompatibility(False)
+        maker.Build()
+        if not maker.IsDone():
+            assert False, "Could not create ThruSection"
+        result = maker.Shape()
+
+        print(result)
+        if makeSolid:
+            gid_new = self.solids.add(result)
+        else:
+            gid_new = self.faces.add(result)
+
+        return gid_new
+        
     def add_line_loop(self, pts, sign=None):
-        tags = list(np.atleast_1d(pts))
+        edges = list(np.atleast_1d(pts))
+
+        w_id = self.check_wire_registered(edges)
+        if w_id is not None:
+            return w_id
 
         wireMaker = BRepBuilderAPI_MakeWire()
-        for t in tags:
+        for t in edges:
             edge = self.edges[t]
             wireMaker.Add(edge)
         wireMaker.Build()
@@ -1088,6 +1170,8 @@ class Geometry():
         wire = wireMaker.Wire()
 
         w_id = self.wires.add(wire)
+        self.register_wire(edges, w_id)
+        
         return w_id
 
     def add_curve_loop(self, pts):
@@ -1559,11 +1643,11 @@ class Geometry():
         #topo_list_child = self.get_topo_list_for_gid(gid, child=1)
 
         shape = topolist[gid]
-        children = list(topolist.get_children(gid))
 
         self.builder.Remove(self.shape, shape)
 
-        if not recursive:
+        if not recursive and not isinstance(gid, VertexID):
+            children = list(topolist.get_children(gid))            
             child_mapper = topolist.get_chilld_mapper(self.shape)
             for child in children:
                 flag = child_mapper.Contains(shape)
@@ -1941,7 +2025,7 @@ class Geometry():
         return list(objs), [newkey]
 
     def Circle_build_geom(self, objs, *args):
-        center, ax1, ax2, radius = args
+        center, ax1, ax2, radius, make_face = args
 
         assert radius!=0, "Circle radius must be >0"
 
@@ -1958,15 +2042,76 @@ class Geometry():
         p4 = self.add_point(c - a2)
         ca1 = self.add_circle_arc(p1, p2, p3)
         ca2 = self.add_circle_arc(p3, p4, p1)
-        ll1 = self.add_line_loop([ca1, ca2])
-
-        ps1 = self.add_plane_surface(ll1)
-
-        shape = self.faces[ps1]
-        self.builder.Add(self.shape, shape)
+        
+        if make_face:        
+            ll1 = self.add_line_loop([ca1, ca2])
+            ps1 = self.add_plane_surface(ll1)
+            shape = self.faces[ps1]
+            self.builder.Add(self.shape, shape)
+            newkey = [objs.addobj(ps1, 'ps')]
+        else:
+            shape = self.edges[ca1]
+            self.builder.Add(self.shape, shape)
+            newkey1 = objs.addobj(shape, 'cl')
+            shape = self.edges[ca2]
+            self.builder.Add(self.shape, shape)
+            newkey2 = objs.addobj(shape, 'cl')
+            newkey = [newkey1, newkey2]
 
         self.synchronize_topo_list(action='both')
-        newkey = objs.addobj(ps1, 'ps')
+
+        return list(objs), newkey
+
+    def CircleByAxisPoint_build_geom(self, objs, *args):
+        ax1, pt_on_ax, pts, make_face = args
+
+        pts = [x.strip() for x in pts.split(',')]
+        gids_vertex = self.get_target1(objs, pts, 'p')
+        
+        ptx1 = self.get_point_coord(gids_vertex[0])
+        d = ptx1 - np.array(pt_on_ax)
+        dirct = np.array(ax1)
+        dirct = dirct/np.sqrt(np.sum(dirct**2))
+
+        center = np.array(pt_on_ax) + np.sum(d*dirct)*dirct
+        radius = np.sqrt(np.sum(d**2) - np.sum(d*dirct)**2)
+
+        edge = self.add_circle_by_axis_radius(center, dirct, radius)
+
+        if make_face:
+            ll1 = self.add_line_loop([edge])
+            ps1 = self.add_plane_surface(ll1)
+            shape = self.faces[ps1]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(ps1, 'ps')
+        else:
+            shape = self.edges[edge]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(edge, 'cl')
+
+        self.synchronize_topo_list(action='both')
+        return list(objs), [newkey]
+
+    def CircleBy3Points_build_geom(self, objs, *args):
+        pts, make_face = args
+        pts = [x.strip() for x in pts.split(',')]
+        gids_vertex = self.get_target1(objs, pts, 'p')
+
+        assert len(gids_vertex)==3, "Need 3 points to define circle"
+        edge = self.add_circle_by_3points(*gids_vertex)
+
+        if make_face:
+            ll1 = self.add_line_loop([edge])
+            ps1 = self.add_plane_surface(ll1)
+            shape = self.faces[ps1]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(ps1, 'ps')
+        else:
+            shape = self.edges[edge]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(edge, 'cl')
+
+        self.synchronize_topo_list(action='both')
         return list(objs), [newkey]
 
     def CreateSurface_build_geom(self, objs, *args):
@@ -2000,6 +2145,25 @@ class Geometry():
 
         self.synchronize_topo_list(action='both')
         return list(objs), newkeys
+
+    def ThruSection_build_geom(self, objs, *args):
+        loop1, loop2, makeSolid, makeRuled = args
+        loop1 = [x.strip() for x in loop1.split(',')]
+        loop2 = [x.strip() for x in loop2.split(',')]
+        
+        gids_loop1 = self.get_target1(objs, loop1, 'l')
+        gids_loop2 = self.get_target1(objs, loop2, 'l')
+
+        gid_wire1 = self.add_line_loop(gids_loop1)
+        gid_wire2 = self.add_line_loop(gids_loop2)
+        
+        print(gid_wire1, gid_wire2)
+
+        gid_new = self.add_thrusection(gid_wire1, gid_wire2,
+                                       makeSolid = makeSolid,
+                                       makeRuled = makeRuled)
+
+        return list(objs), newkeys        
 
     def SurfaceLoop_build_geom(self, objs, *args):
         assert False, "We don't support this"
@@ -2114,7 +2278,11 @@ class Geometry():
         
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
-
+        print(tax)
+        offset = 0
+        if lengths[0] < 0:
+            offset = lengths[0]
+            lengths = lengths[1:] 
         trans = []        
         if tax[0] == 'normal':
             for length in lengths:
@@ -2136,14 +2304,15 @@ class Geometry():
             n1, p0 = self.get_face_normal(gids[0], check_flat=False)
 
             dests = [x.strip() for x in tax[1].split(',')]
-            gid_dests = self.get_target2(objs, dests)
-
-            p1 = self.get_point_coord(gid_dest)
-            if tax[2]:
-                tt = -n1 * np.sum((p1 - p0) * n1) * length
-            else:
-                tt = n1 * np.sum((p1 - p0) * n1) * length
-            trans.append(trans_delta(tt))                
+            gid_dests = self.get_target1(objs, dests, 'p')
+            length = lengths[0]
+            for gid_dest in gid_dests:
+                p1 = self.get_point_coord(gid_dest)
+                if tax[2]:
+                    tt = -n1 * np.sum((p1 - p0) * n1) * length
+                else:
+                    tt = n1 * np.sum((p1 - p0) * n1) * length
+                trans.append(trans_delta(tt))
 
         elif tax[0] == 'fromto_points':
             dests1 = [x.strip() for x in tax[1].split(',')]
@@ -2166,6 +2335,54 @@ class Geometry():
 
             for length in lengths:
                 trans.append(trans_delta(length*n1))
+        elif tax[0] == 'radial':
+            print(tax)
+            axis = np.array(eval(tax[1]))
+            axis = axis/np.sqrt(np.sum(axis**2))
+            point_on_axis = np.array(eval(tax[2]))
+
+            for length in lengths:
+                trans2 = []
+                for gid in gids:
+                    if isinstance(gid, SurfaceID):
+                        n1, p0 = self.get_face_normal(gid, check_flat=False)
+                    elif isinstance(gid, LineID):
+                        p0 = self.get_line_center(gid)
+                    elif isinstance(gid, VertexID):
+                        p0 = self.get_point_coord(gid)
+                    else:
+                        assert False, "unsupported input (polar extrude)"
+
+                    n1 = p0 - axis*np.sum((p0-point_on_axis)*axis) 
+                    n1 = n1/np.sqrt(np.sum(n1**2))
+                    if tax[3]:
+                        tt = -n1 * length
+                    else:
+                        tt = n1 * length
+                    trans2.append(trans_delta(tt))
+                trans.append(trans2)
+            print(trans)
+        elif tax[0] == 'polar':
+            center = np.array(eval(tax[1]))
+            for length in lengths:
+                trans2 = []
+                for gid in gids:
+                    if isinstance(gid, SurfaceID):
+                        n1, p0 = self.get_face_normal(gid, check_flat=False)
+                    elif isinstance(gid, LineID):
+                        p0 = self.get_line_center(gid)
+                    elif isinstance(gid, VertexID):
+                        p0 = self.get_point_coord(gid)
+                    else:
+                        assert False, "unsupported input (polar extrude)"
+                    n1 = p0 - center
+                    n1 = n1/np.sqrt(np.sum(n1**2))
+                    if tax[2]:
+                        tt = -n1 * length
+                    else:
+                        tt = n1 * length
+                    trans2.append(trans_delta(tt))
+                trans.append(trans2)
 
         else:
             tax = np.array(tax).flatten()
@@ -2174,6 +2391,22 @@ class Geometry():
                 trans.append(trans_delta(length*tax))
 
         newkeys = []
+
+        if offset != 0:
+            print(trans)
+            tt0 = trans[0]
+
+            new_gids = []
+            for kk, gid in enumerate(gids):
+                if not isinstance(tt, trans_delta):
+                    tt = tt0[kk]
+                else:
+                    tt = tt0
+                tt = np.array(tt)
+                tt = tt*offset/np.sqrt(np.sum(tt**2))
+                
+                new_gids.append(self.translate(gid, tt, copy=False))
+            gids = new_gids
 
         for tt in trans:
             new_shapes = self.extrude(gids, translation=tt)
@@ -2329,6 +2562,41 @@ class Geometry():
 
         return list(objs), newkeys
 
+    def ArrayByPoints_build_geom(self, objs, *args):
+        targets, count, ref_ptx = args
+        targets = [x.strip() for x in targets.split(',')]
+        ref_ptx = [x.strip() for x in ref_ptx.split(',')]
+
+        newkeys = []
+        gids = self.get_target2(objs, targets)
+        gids_ref = self.get_target1(objs, ref_ptx, 'p')
+
+
+        delta_arr = []
+        if count == 1:
+            count = len(gids_ref) - 1
+            for i in range(count):
+                delta = (self.get_point_coord(gids_ref[i+1]) -
+                         self.get_point_coord(gids_ref[0]))
+                delta_arr.append(delta)
+        else:
+            delta = (self.get_point_coord(gids_ref[1]) -
+                     self.get_point_coord(gids_ref[0]))
+            i = 1
+            while i < count:
+                delta_arr.append(delta*i)
+                i = i + 1 
+
+        for delta in delta_arr:
+            for gid in gids:
+                new_gid = self.translate(gid, delta, True)
+                if new_gid is not None:
+                    newkeys.append(objs.addobj(new_gid, 'cp'))
+
+        self.synchronize_topo_list(action='add')
+
+        return list(objs), newkeys
+    
     def ArrayRot_build_geom(self, objs, *args):
         targets, count, point_on_axis, axis_dir, angle = args
 
@@ -2347,6 +2615,60 @@ class Geometry():
                 if new_gid is not None:
                     newkeys.append(objs.addobj(new_gid, 'cp'))
             i = i + 1
+
+        self.synchronize_topo_list(action='add')
+
+        return list(objs), newkeys
+
+    def ArrayRotByPoints_build_geom(self, objs, *args):
+        targets, count, point_on_axis, axis_dir, ref_ptx = args
+                        
+        targets = [x.strip() for x in targets.split(',')]
+        ref_ptx = [x.strip() for x in ref_ptx.split(',')]
+
+        newkeys = []
+        gids = self.get_target2(objs, targets)
+        gids_ref = self.get_target1(objs, ref_ptx, 'p')
+
+        def get_angle(p1, p2):
+            dirct = np.array(axis_dir)
+            dirct = dirct/np.sqrt(np.sum(dirct**2))
+            d = p1 - np.array(point_on_axis)
+            arm1 = p1 - (np.array(point_on_axis) + np.sum(d*dirct)*dirct)
+            d = p2 - np.array(point_on_axis)
+            arm2 = p2 - (np.array(point_on_axis) + np.sum(d*dirct)*dirct)
+            d2 = np.cross(dirct, arm1)
+            d2 = d2/np.sqrt(np.sum(d2**2))
+            arm1 = arm1/np.sqrt(np.sum(arm1**2))
+            arm2 = arm2/np.sqrt(np.sum(arm2**2))
+            yy = np.sum(arm2*d2)
+            xx = np.sum(arm2*arm1)
+            return np.arctan2(yy, xx)
+
+        angle_arr = []
+        if count == 1:
+            count = len(gids_ref) - 1
+            for i in range(count):
+                angle = get_angle(self.get_point_coord(gids_ref[0]),
+                                  self.get_point_coord(gids_ref[i+1]))
+                angle_arr.append(angle)
+            print("angle arr", angle_arr)
+        else:
+            angle = get_angle(self.get_point_coord(gids_ref[0]),
+                              self.get_point_coord(gids_ref[1]))
+            print("angle", angle*180/np.pi)
+            i = 1
+            while i < count:
+                angle_arr.append(angle*i)
+                i = i + 1
+
+        for angle1 in angle_arr:
+            for gid in gids:
+                new_gid = self.rotate(gid, point_on_axis, axis_dir,
+                                      angle1, True)
+
+                if new_gid is not None:
+                    newkeys.append(objs.addobj(new_gid, 'cp'))
 
         self.synchronize_topo_list(action='add')
 

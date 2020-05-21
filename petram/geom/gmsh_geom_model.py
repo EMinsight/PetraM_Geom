@@ -291,155 +291,17 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         geom.add_sequence(gui_name, gui_param, geom_name)
 
 
-'''
-class BrepFile(GeomTopBase):
-    has_2nd_panel = False
-    def __init__(self, *args, **kwargs):
-        super(BrepFile, self).__init__(*args, **kwargs)
-        NS_mixin.__init__(self, *args, **kwargs)
-
-    @property
-    def is_finalized(self):
-        if not hasattr(self, "_geom_finalized"):
-            self._geom_finalized = False
-        return self._geom_finalized
-
-    @property
-    def _geom_brep(self):
-        return self.brep_file_path
-
-    @property
-    def geom_finalized(self):
-        if not hasattr(self, "_geom_finalized"):
-            self._geom_finalized = False
-        return self._geom_finalized
-
-    @geom_finalized.setter
-    def geom_finalized(self, value):
-        self._geom_finalized = value
-
-    def attribute_set(self, v):
-        v = super(BrepFile, self).attribute_set(v)
-        v['brep_file_path'] = ''
-        v['geom_timestamp'] = 0
-        v['geom_prev_algorithm'] = 2
-        v['geom_prev_res'] = 30
-        return v
-
-    def panel1_param(self):
-        import wx
-
-        wc = "ANY|*|Brep|*.brep"
-        return [["File(.brep)", None, 45, {'wildcard':wc}],
-                ["PreviewAlgorith", "Automatic", 4, {"style":wx.CB_READONLY,
-                                                     "choices": ["Auto", "MeshAdpat",
-                                                                 "Delaunay", "Frontal"]}],
-                ["PreviewResolution", 30,  400, None],
-                [None, None, 341, {"label": "Finalize Geom",
-                                   "func": 'onBuildAll',
-                                   "noexpand": True}],]
-
-    def get_panel1_value(self):
-        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
-        txt = aname[self.geom_prev_algorithm]
-        return [self.brep_file_path, txt, self.geom_prev_res, self]
-
-    def import_panel1_value(self, v):
-        aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6:"Frontal"}
-        for k in aname:
-            if v[1] == aname[k]:
-                self.geom_prev_algorithm = k
-
-        self.geom_prev_res = int(v[2])
-        self.brep_file_path = str(v[0])
-
-    def get_special_menu(self):
-        return [('Load File', self.onBuildAll, None),]
-
-    def onBuildAll(self, evt):
-        import gmsh
-
-        if not hasattr(self, "_gmsh4_data"):
-            self._gmsh4_data = None
-        #if self._gmsh4_data is not  None:
-        #    self._gmsh4_data[-1].finalize()
-
-        objs = GeomObjs()
-        self._objs = objs
-
-        from petram.geom.gmsh_geom_wrapper import Geometry
-        geom = Geometry()
-
-        import gmsh
-        geom.clear()
-        gmsh.model.occ.importShapes(self.brep_file_path, highestDimOnly=False)
-        gmsh.model.occ.synchronize()
-
-
-        # here we ask for 2D mesh for plotting.
-        # size control is done based on geometry size.
-        size = []
-        for dim, tag in gmsh.model.getEntities():
-            x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
-            s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
-            size.append((dim, tag, s))
-        maxsize = max([x[-1] for x in size])
-        lcar = defaultdict(lambda: maxsize)
-        for dim, tag in gmsh.model.getEntities(1):
-            x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
-            s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
-            bdimtags = gmsh.model.getBoundary(((dim, tag,),), oriented=False)
-            for bdim, btag in bdimtags:
-                lcar[btag] = min((lcar[btag], s))
-        lcar = dict(lcar)
-        print(lcar)
-        #dim2_size = min([s[2] for s in ss if s[0]==2]+[3e20])
-        #dim1_size = min([s[2] for s in ss if s[0]==1]+[3e20])
-
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", maxsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", min(lcar))
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        geom.model.mesh.generate(1)
-
-        gmsh.option.setNumber("Mesh.Algorithm", self.geom_prev_algorithm)
-        #gmsh.option.setNumber("Mesh.CharacteristicLengthMax", 1e22)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax",maxsize/self.geom_prev_res)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
-        geom.model.mesh.generate(2)
-
-
-        self.geom_finalized = True
-        self.geom_timestamp = time.ctime()
-
-        from petram.geom.read_gmsh import read_pts_groups, read_loops
-        ptx, cells, cell_data = read_pts_groups(geom)
-        l, s, v = read_loops(gmsh)
-        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, geom)
-
-        ret = ptx, cells, {}, cell_data, {}
-
-        # set clmax guess from geometry size
-        clmax = max(lcar)/3.
-        clmin = min(lcar)/3.
-        self._clmax_guess = (clmax, clmin)
-        self._geom_coords = ret
-
-        dlg = evt.GetEventObject().GetTopLevelParent()
-        viewer = dlg.GetParent()
-
-        viewer.set_figure_data('geom', self.name(), ret)
-        viewer.update_figure('geom', self.name())
-
-        viewer._s_v_loop['geom'] = s, v
-        viewer._s_v_loop['mesh'] = s, v
-
-        evt.Skip()
-'''
-
 
 class GmshGeom(GeomTopBase):
     has_2nd_panel = False
-
+    
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'OCC Geometry'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'OCCSequence'
+    
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
@@ -486,7 +348,7 @@ class GmshGeom(GeomTopBase):
         v['maxthreads'] = 1
         v['skip_final_frag'] = False
         v['use_1d_preview'] = False
-        v['use_occ_preview'] = False
+        v['use_occ_preview'] = True
         v['use_curvature'] = False
         v['long_edge_thr'] = 0.3
         v['small_edge_thr'] = 0.001
@@ -503,8 +365,10 @@ class GmshGeom(GeomTopBase):
                                                  SurfaceLoop, Union, Intersection, Difference, Fragments,
                                                  SplitByPlane, Copy, Remove, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale, WorkPlane,
-                                                 WorkPlaneByPoints, healCAD, CADImport, BrepImport, Fillet,
-                                                 Chamfer, Array, ArrayRot)
+                                                 WorkPlaneByPoints, healCAD, CADImport, BrepImport,
+                                                 Fillet,Chamfer,
+                                                 Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                                                 ThruSection,)
         return [Point, PointByUV, Line, Circle, CircleByAxisPoint, CircleBy3Points,
                 Rect, Polygon, Spline, Box,
                 Ball, Cone, Wedge, Cylinder,
@@ -513,7 +377,8 @@ class GmshGeom(GeomTopBase):
                 Intersection, Difference, Fragments, SplitByPlane, Copy, Remove,
                 Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
-                Fillet, Chamfer, Array, ArrayRot]
+                Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                ThruSection]
 
     def get_possible_child_menu(self):
         from petram.geom.gmsh_primitives import (Point, PointByUV,  Line, Spline,
@@ -525,21 +390,23 @@ class GmshGeom(GeomTopBase):
                                                  SplitByPlane, Copy, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale,
                                                  WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
-                                                 Fillet, Chamfer, Array, ArrayRot)
-        return [("Add Points", Point), ("!", PointByUV),
+                                                 Fillet, Chamfer,
+                                                 Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                                                 ThruSection,)
+        return [("Add Points...", Point), ("!", PointByUV),
                 ("", Line),
-                ("Add Circle", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
+                ("Add Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
                 ("", Rect),
                 ("", Spline), ("", Fillet), ("", Chamfer),
                 ("3D shape...", Box),
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
-                ("", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                #("", LineLoop), ("", SurfaceLoop),
+                ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
+                ("!", ThruSection), #("", SurfaceLoop),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
-                ("Copy/Remove", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
-                ("Translate...", Move,), ("", Rotate), ("", Flip), ("", Scale),
-                ("", Array), ("!", ArrayRot),
+                ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
+                ("Translate...", Move,), ("", Rotate), ("", Flip), ("!", Scale),
+                ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("!", ArrayRotByPoints), 
                 ("Boolean...", Union), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
