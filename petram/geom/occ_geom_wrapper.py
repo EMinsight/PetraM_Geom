@@ -1133,25 +1133,24 @@ class Geometry():
     def add_thrusection(self, gid_wire1, gid_wire2,
                         makeSolid=False, makeRuled=False):
         
-        wire1 = self.wires(gid_wire1)
-        wire2 = self.wires(gid_wire2)
+        wire1 = self.wires[gid_wire1]
+        wire2 = self.wires[gid_wire2]
         maker = BRepOffsetAPI_ThruSections(makeSolid, makeRuled)
-        makder.AddWire(wire1)
-        makder.AddWire(wire2)
+        maker.AddWire(wire1)
+        maker.AddWire(wire2)
         maker.CheckCompatibility(False)
         maker.Build()
         if not maker.IsDone():
             assert False, "Could not create ThruSection"
         result = maker.Shape()
 
-        print(result)
         if makeSolid:
             gid_new = self.solids.add(result)
         else:
-            gid_new = self.faces.add(result)
+            gid_new = self.shells.add(result)
 
-        return gid_new
-        
+        return gid_new, result
+    
     def add_line_loop(self, pts, sign=None):
         edges = list(np.atleast_1d(pts))
 
@@ -2159,11 +2158,22 @@ class Geometry():
         
         print(gid_wire1, gid_wire2)
 
-        gid_new = self.add_thrusection(gid_wire1, gid_wire2,
+        gid_new, shape_new = self.add_thrusection(gid_wire1, gid_wire2,
                                        makeSolid = makeSolid,
                                        makeRuled = makeRuled)
+        
+        self.builder.Add(self.shape, shape_new)
+        
+        self.synchronize_topo_list(action='both')
 
-        return list(objs), newkeys        
+        if makeSolid:
+            newobj2 = objs.addobj(gid_new, 'vol')
+            newkeys = [newobj2]
+        else:
+            newkeys = []
+            
+        return list(objs), newkeys
+
 
     def SurfaceLoop_build_geom(self, objs, *args):
         assert False, "We don't support this"
@@ -2336,7 +2346,6 @@ class Geometry():
             for length in lengths:
                 trans.append(trans_delta(length*n1))
         elif tax[0] == 'radial':
-            print(tax)
             axis = np.array(eval(tax[1]))
             axis = axis/np.sqrt(np.sum(axis**2))
             point_on_axis = np.array(eval(tax[2]))
@@ -2361,7 +2370,6 @@ class Geometry():
                         tt = n1 * length
                     trans2.append(trans_delta(tt))
                 trans.append(trans2)
-            print(trans)
         elif tax[0] == 'polar':
             center = np.array(eval(tax[1]))
             for length in lengths:

@@ -435,11 +435,11 @@ ldata = (('loop1', VtableElement('loop1', type='string',
                                  tip="edges to define the 2nd loop")),
           ('solid', VtableElement('solid', type='bool',
                                   guilabel='Solid',
-                                  default=True,
-                                  tip="create solid ")), )
+                                  default=False,
+                                  tip="create solid ")),
           ('ruled', VtableElement('ruled', type='bool',
                                   guilabel='Ruled surface',
-                                  default=True,
+                                  default=False,
                                   tip="create ruled surface ")), )
 
 class ThruSection(GeomPB):
