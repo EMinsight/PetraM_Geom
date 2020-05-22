@@ -370,7 +370,7 @@ class GmshGeom(GeomTopBase):
                                                  WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet,Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                                                 ThruSection)
+                                                 ThruSection, RotateCenterPoints)
         return [Point, PointCenter, PointOnEdge, PointByUV,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
                 Rect, Polygon, Spline, Box,
@@ -381,7 +381,7 @@ class GmshGeom(GeomTopBase):
                 Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ThruSection, ProjectOnWP]
+                ThruSection, ProjectOnWP, RotateCenterPoints]
 
     def get_possible_child_menu(self):
         from petram.geom.gmsh_primitives import (Point, PointCenter, PointOnEdge, PointByUV,  Line, Spline,  
@@ -395,7 +395,7 @@ class GmshGeom(GeomTopBase):
                                                  WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                                                 ThruSection)
+                                                 ThruSection, RotateCenterPoints)
         return [("Add Points...", Point), ("", PointCenter), ("", PointOnEdge), ("!", PointByUV),
                 ("", Line),
                 ("Add Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
@@ -408,7 +408,7 @@ class GmshGeom(GeomTopBase):
                 ("!", ThruSection), #("", SurfaceLoop),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
-                ("Translate...", Move,), ("", Rotate), ("", Flip), ("!", Scale),
+                ("Translate...", Move,), ("", Rotate), ("", RotateCenterPoints), ("", Flip), ("!", Scale),
                 ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("!", ArrayRotByPoints), 
                 ("Boolean...", Union), ("", Union2), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),

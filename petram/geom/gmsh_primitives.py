@@ -662,6 +662,31 @@ data0 = (('target_object', VtableElement('target_object', type='string',
 class Rotate(GeomPB):
     vt = Vtable(data0)
 
+data0 = (('target_object', VtableElement('target_object', type='string',
+                                         guilabel='Objects (v/f/l/p)',
+                                         default="",
+                                         tip="object to move")),
+         ('cpoint', VtableElement('cpoint', type='string',
+                                  guilabel='Center',
+                                  default="",
+                                  tip="center of rotation")), 
+         ('twopoints', VtableElement('twopoints', type='string',
+                                  guilabel='Point Pair',
+                                  default="",
+                                  tip="pair of points to match")), 
+         ('keep_org', VtableElement('kepp_org', type='bool',
+                                    guilabel='Copy',
+                                    default=True,
+                                    tip="Keep original")), )
+    
+class RotateCenterPoints(GeomPB):
+    vt = Vtable(data0)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Rotate (by points)'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Rotate'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Objects (v/f/l/p)',
@@ -1405,7 +1430,11 @@ data0 = (('center', VtableElement('pts1', type='string',
          ('flip2', VtableElement('flip2', type='bool',
                                  guilabel='flip 2nd axis',
                                  default=False,
-                                 tip="flip 2nd axis")), )
+                                 tip="flip 2nd axis")), 
+         ('offset', VtableElement('offset', type='float',
+                                 guilabel='offset',
+                                 default=0.0,
+                                 tip="offset in normal direction")), )
 
 
 class WorkPlaneByPoints(WPBase):

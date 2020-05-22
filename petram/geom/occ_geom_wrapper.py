@@ -1696,7 +1696,7 @@ class Geometry():
         topolist = self.get_topo_list_for_gid(gid)
         shape = topolist[gid]
 
-        transformer.Perform(shape, False)
+        transformer.Perform(shape, True)
 
         if not transformer.IsDone():
             assert False, "can not translate"
@@ -1935,6 +1935,7 @@ class Geometry():
 
         gids_1 = self.get_target1(objs, targets1, 'p')
         gids_2 = self.get_target1(objs, targets2, 'p')
+
 
         PTs = []
         for g1, g2 in zip(gids_1, gids_2):
@@ -2381,7 +2382,7 @@ class Geometry():
         
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
-        print(tax)
+
         offset = 0
         if lengths[0] < 0:
             offset = lengths[0]
@@ -2421,11 +2422,11 @@ class Geometry():
             dests1 = [x.strip() for x in tax[1].split(',')]
             dests2 = [x.strip() for x in tax[2].split(',')]
 
-            gid_dests1 = self.get_target2(objs, dests1)
-            gid_dests2 = self.get_target2(objs, dests2)
+            gid_dests1 = self.get_target1(objs, dests1, 'p')
+            gid_dests2 = self.get_target1(objs, dests2, 'p')
 
-            assert len(gid_dests1) > 1, "Incorrect destination setting"
-            assert len(gid_dests2) > 1, "Incorrect destination setting"
+            assert len(gid_dests1) == 1, "Incorrect destination setting"
+            assert len(gid_dests2) == 1, "Incorrect destination setting"
 
             p1 = self.get_point_coord(gid_dests1[0])
             p2 = self.get_point_coord(gid_dests2[0])
@@ -2607,6 +2608,49 @@ class Geometry():
 
         self.synchronize_topo_list(action='both')
 
+        return list(objs), newkeys
+
+    def RotateCenterPoints_build_geom(self, objs, *args):
+        targets, center, points, keep = args
+
+        targets = [x.strip() for x in targets.split(',')]
+        gids = self.get_target2(objs, targets)
+
+        center = [x.strip() for x in center.split(',')]
+        points = [x.strip() for x in points.split(',')]
+        gids_1 = self.get_target1(objs, center, 'p')
+        gids_2 = self.get_target1(objs, points, 'p')
+        print(gids_1, gids_2)
+        c1 = self.get_point_coord(gids_1[0])
+
+        p1 = self.get_point_coord(gids_2[0])
+        p2 = self.get_point_coord(gids_2[1])
+        print(c1, p1, p2)
+        
+        d1 = p1 - c1
+        d2 = p2 - c1
+        print(d1, d2)
+        
+        arm1 = d1/np.sqrt(np.sum(d1**2))
+        arm2 = d2/np.sqrt(np.sum(d2**2))
+
+        dirct = np.cross(arm1, arm2)
+        d2 = np.cross(dirct, arm1)
+        d2 = d2/np.sqrt(np.sum(d2**2))
+        yy = np.sum(arm2*d2)
+        xx = np.sum(arm2*arm1)
+        print(xx, yy)
+
+        angle = np.arctan2(yy, xx)
+
+        print("angle", angle)
+        newkeys = []
+        for gid in gids:
+            new_gid = self.rotate(gid, c1, dirct, angle, copy=keep)
+            if new_gid is not None:
+                newkeys.append(objs.addobj(new_gid, 'mv'))
+
+        self.synchronize_topo_list(action='both')
         return list(objs), newkeys
 
     def Scale_build_geom(self, objs, *args):
@@ -3515,7 +3559,7 @@ class Geometry():
         return self._WorkPlane_build_geom(objs, c1, a1, a2)
     '''
     def WorkPlaneByPointsStart_build_geom(self, objs, *args):
-        c1, a1, a2, flip1, flip2 = args
+        c1, a1, a2, flip1, flip2, offset = args
 
         c1, a1, a2 = self.get_target1(objs, [c1, a1, a2], 'p')
         
@@ -3541,6 +3585,7 @@ class Geometry():
         if flip2:
             d2 = -d2
 
+        c1 = c1 + np.cross(d1, d2)*offset
         self._last_wp_param = c1, d1, d2
         return objs, []
         #return self._WorkPlane_build_geom(objs, c1, d1, d2)
