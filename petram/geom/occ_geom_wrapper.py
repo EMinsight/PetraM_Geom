@@ -48,7 +48,8 @@ from OCC.Core.BRepFilletAPI import (BRepFilletAPI_MakeFillet,
                                     BRepFilletAPI_MakeChamfer)
 from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
                                     BRepOffsetAPI_MakeFilling,
-                                    BRepOffsetAPI_ThruSections)
+                                    BRepOffsetAPI_ThruSections,
+                                    BRepOffsetAPI_NormalProjection)
 from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_Sewing,
                                      BRepBuilderAPI_Copy,
                                      BRepBuilderAPI_Transform,
@@ -88,6 +89,71 @@ import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('OCCGeomWrapper')
 
 
+def do_rotate(shape, ax, an, txt=''):
+    trans = gp_Trsf()
+    axis_revolution = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(ax[0], ax[1], ax[2]))
+    trans.SetRotation(axis_revolution, an)
+    transformer = BRepBuilderAPI_Transform(trans)
+    transformer.Perform(shape)
+    if not transformer.IsDone():
+        assert False, "can not rotate (WP "+txt+")"
+    return transformer.ModifiedShape(shape)
+
+
+def do_translate(shape, delta):
+    trans = gp_Trsf()
+    trans.SetTranslation(gp_Vec(delta[0], delta[1], delta[2]))
+    transformer = BRepBuilderAPI_Transform(trans)
+    transformer.Perform(shape)
+    if not transformer.IsDone():
+        assert False, "can not translate (WP) "
+    return transformer.ModifiedShape(shape)
+
+
+def calc_wp_projection(c1, a1, a2):
+    x1 = np.array([1., 0., 0.])
+
+    ax = np.cross(x1, a1)
+    an = np.arctan2(np.sqrt(np.sum(ax**2)), np.dot(a1, x1))
+
+    if np.sum(ax**2) == 0.0:
+        if an != 0.0:
+            # if a1 is [0, 0, -1], rotate 180 deg
+            ax = np.array([0, 1, 0])
+            an = np.pi
+        else:
+            ax = x1
+            an = 0.0
+    if np.sum(ax**2) != 0.0 and an != 0.0:
+        ax1 = ax
+        an1 = an
+    else:
+        ax1 = x1
+        an1 = 0.0
+
+    from petram.geom.geom_utils import rotation_mat
+    R = rotation_mat(ax1, an1)
+    y2 = np.dot(R, np.array([0, 1, 0]))
+    ax = a1
+    aaa = np.cross(a1, y2)
+    an = np.arctan2(np.dot(a2, aaa), np.dot(a2, y2))
+
+    if np.sum(ax**2) == 0.0 and an != 0.0:
+        # rotate 180 deg around a1
+        ax2 = a1
+        an2 = np.pi
+    else:
+        ax2 = ax
+        an2 = an
+
+    if c1[0] != 0.0 or c1[1] != 0.0 or c1[2] != 0.0:
+        cxyz = c1
+    else:
+        cxyz = None
+
+    return ax1, an1, ax2, an2, cxyz
+
+
 class Counter():
     def __init__(self):
         self.value = 0
@@ -97,75 +163,6 @@ class Counter():
 
     def __call__(self):
         return self.value
-
-
-def id2dimtag(en):
-    if isinstance(en, VertexID):
-        return (0, int(en))
-
-    if isinstance(en, LineID):
-        return (1, int(en))
-
-    if isinstance(en, SurfaceID):
-        return (2, int(en))
-
-    if hasattr(en, 'surface'):
-        return (2, int(en))
-
-    if isinstance(en, VolumeID):
-        return (3, int(en))
-
-    assert False, "Illegal entity" + str(en)
-    #    return None
-
-
-def get_dimtag(entity):
-    dimtags = []
-    for en in entity:
-        dimtags.append(id2dimtag(en))
-    return dimtags
-
-
-def dimtag2id(dimtags):
-    out3 = []
-    out2 = []
-    out1 = []
-    out0 = []
-    for dim, tag in dimtags:
-        if dim == 3 and not tag in out3:
-            out3.append(VolumeID(tag))
-        elif dim == 2 and not tag in out2:
-            out2.append(SurfaceID(tag))
-        elif dim == 1 and not tag in out1:
-            out1.append(LineID(tag))
-        elif dim == 0 and not tag in out1:
-            out0.append(VertexID(tag))
-    return out3 + out2 + out1 + out0
-
-
-def find_combined_bbox(model, dimtags):
-    xmax = -np.inf
-    xmin = np.inf
-    ymax = -np.inf
-    ymin = np.inf
-    zmax = -np.inf
-    zmin = np.inf
-
-    def update_maxmin(dim, tag, xmin, ymin, zmin, xmax, ymax, zmax):
-        x1, y1, z1, x2, y2, z2 = model.getBoundingBox(dim, tag)
-        xmax = np.max([xmax, x2])
-        ymax = np.max([ymax, y2])
-        zmax = np.max([zmax, z2])
-        xmin = np.min([xmin, x1])
-        ymin = np.min([ymin, y1])
-        zmin = np.min([zmin, z1])
-        return xmin, ymin, zmin, xmax, ymax, zmax
-
-    for dim, tag in dimtags:
-        xmin, ymin, zmin, xmax, ymax, zmax = update_maxmin(dim, tag,
-                                                           xmin, ymin, zmin,
-                                                           xmax, ymax, zmax)
-    return xmin, ymin, zmin, xmax, ymax, zmax
 
 class trans_delta(list):
     def __init__(self, xyz):
@@ -229,6 +226,11 @@ class topo_list():
         if not group in self.gg:
             self.gg[group] = {}
         self.d = self.gg[group]
+
+    def current_group(self):
+        for g in self.gg:
+            if g is self.d:
+                return g
     
     def __iter__(self):
         return self.d.__iter__()
@@ -242,6 +244,9 @@ class topo_list():
     def __contains__(self, val):
         return val in self.d
 
+    def get_item_from_group(self, val, group=0):
+        return self.gg[group][val]
+        
     def is_toplevel(self, *args):
         del args  # not used
         assert False, "subclass need to add this"
@@ -259,7 +264,7 @@ class topo_list():
                     removal.append(k)
             for k in removal:
                 del self.d[k]
-            if verbose: print("removed gid", removal)
+            if verbose: print("removed gid", removal, list(self.d))
 
         if action in ('add', 'both'):
             found_idx = []
@@ -552,6 +557,9 @@ class Geometry():
         group = self.solids.new_group()
         return group
 
+    def current_toppolist_group(self):
+        return self.vertices.current_group()
+        
     def set_toppolist_group(self, val):
         self.vertices.set_group(val)
         self.edges.set_group(val) 
@@ -682,6 +690,7 @@ class Geometry():
 
         return ret
 
+        
     def get_point_coord(self, gid):
         if gid not in self.vertices:
             assert False, "can not find point: "+str(int(gid))
@@ -863,16 +872,15 @@ class Geometry():
     def add_point(self, p, lcar=0.0, mask=True):
         p = BRepBuilderAPI_MakeVertex(gp_Pnt(p[0], p[1], p[2])).Shape()
         return self.vertices.add(p)
-    
+
     def add_point_on_face(self, gid, uarr, varr):
         face = self.faces[gid]
 
-        location = TopLoc_Location()        
+        location = TopLoc_Location()
         surf = self.bt.Surface(face, location)
         uMin, uMax, vMin, vMax = surf.Bounds()
-        print(uMin, uMax, vMin, vMax)
         value = [surf.Value(u, v) for u, v in zip(uarr, varr)]
-                 
+
         if not location.IsIdentity():
             trans = location.Transformation()
             xyz = [v.XYZ() for v in value]
@@ -883,6 +891,21 @@ class Geometry():
         ret = []
         for pnt in value:
             p = BRepBuilderAPI_MakeVertex(pnt).Shape()
+            ret.append(self.vertices.add(p))
+
+        return ret
+
+    def add_point_on_edge(self, gid, uarr):
+        shape = self.edges[gid]
+
+        curve, first, last = self.bt.Curve(shape)
+        pnt1 = gp_Pnt()
+
+        ret = []
+        for uu in uarr:
+            uuu = first*(1-uu) + last*uu
+            curve.D0(uuu, pnt1)
+            p = BRepBuilderAPI_MakeVertex(pnt1).Shape()
             ret.append(self.vertices.add(p))
 
         return ret
@@ -900,10 +923,10 @@ class Geometry():
         bt = self.bt
         pnt1 = bt.Pnt(self.vertices[p1])
         pnt2 = bt.Pnt(self.vertices[p2])
-        pnt3 = bt.Pnt(self.vertices[p3])        
+        pnt3 = bt.Pnt(self.vertices[p3])
 
         arc = GC_MakeArcOfCircle(pnt1, pnt3, pnt2)
-        
+
         edgeMaker = BRepBuilderAPI_MakeEdge(arc.Value())
         edgeMaker.Build()
         if not edgeMaker.IsDone():
@@ -1489,7 +1512,7 @@ class Geometry():
 
     def do_boolean(self, operation, gid_objs, gid_tools,
                    remove_tool=True, remove_obj=True,
-                   keep_highest=False):
+                   keep_highest=False, upgrade=False):
 
         if operation == 'fuse':
             operator = BRepAlgoAPI_Fuse()
@@ -1543,6 +1566,16 @@ class Geometry():
             for gid in gid_objs:
                 self.remove(gid)
 
+        # apparenlty I have to do it just after removing shape...
+        self.synchronize_topo_list()
+
+        if upgrade:
+            from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+            unifier = ShapeUpgrade_UnifySameDomain(result)
+            unifier.Build();
+            result = unifier.Shape()
+
+        
         if keep_highest:
             result = self.select_highest_dim(result)
         new_objs = self.register_shaps_balk(result)
@@ -1550,12 +1583,13 @@ class Geometry():
         return new_objs
 
     def union(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
-              keep_highest=False):
+              keep_highest=False, upgrade=False):
 
         return self.do_boolean('fuse', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
-                               keep_highest=keep_highest)
+                               keep_highest=keep_highest,
+                               upgrade=upgrade)
                                
     def intersection(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
                      keep_highest=False):
@@ -1582,39 +1616,15 @@ class Geometry():
                                remove_obj=remove_obj,
                                keep_highest=keep_highest)    
 
-    def boolean_union2d(self, input_entity, tool_entity,
-                        removeObject=False, removeTool=False, delete=False):
+    def union2d(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
+                        keep_highest=False):
 
-        def get_dimtag(entity):
-            dimtags = []
-            for en in entity:
-                dimtags.append(id2dimtag(en))
-            return dimtags
+        return self.do_boolean('fuse', gid_objs, gid_tools,
+                               remove_tool=remove_tool,
+                               remove_obj=remove_obj,
+                               keep_highest=keep_highest,
+                               upgrade=True)
 
-        all_entity = input_entity + tool_entity
-        out_entity = self._boolean_xxx('fuse', input_entity, tool_entity,
-                                       removeObject=removeObject, removeTool=removeTool,
-                                       delete=delete)
-
-        self.factory.synchronize()
-
-        out_dimtag = get_dimtag(out_entity)
-        xmin, ymin, zmin, xmax, ymax, zmax = find_combined_bbox(
-            self.model, out_dimtag)
-
-        dprint1("bounding box", xmin, ymin, zmin, xmax, ymax, zmax)
-
-        dx = xmax - xmin
-        dy = ymax - ymin
-        bbx = self.factory.addRectangle(xmin - dx / 10., ymin - dy / 10., (zmin + zmax) / 2.,
-                                        dx * 1.2, dy * 1.2)
-        out_dimtag2, dimtagMap = self.factory.cut(((2, bbx),), out_dimtag)
-        # print(out_dimtag2)
-        bbx = self.factory.addRectangle(xmin - dx / 10., ymin - dy / 10., (zmin + zmax) / 2.,
-                                        dx * 1.2, dy * 1.2)
-        out_dimtag3, dimtagMap = self.factory.cut(((2, bbx),), out_dimtag2)
-        self.factory.synchronize()
-        return dimtag2id(out_dimtag3)
 
     def apply_fragments(self):
         if len(self.solids) > 1:
@@ -1845,6 +1855,46 @@ class Geometry():
 
         return new_objs
 
+    def project_shape_on_wp(self, gids, c1, d1, d2):
+        shapes = []
+        for gid in gids:
+            topolist = self.get_topo_list_for_gid(gid)
+            shapes.append(topolist.get_item_from_group(gid, group=0))
+
+        n1 = np.cross(d1, d2)
+        pnt = gp_Pnt(c1[0], c1[1], c1[2])
+        dr = gp_Dir(n1[0], n1[1], n1[2])
+
+        from OCC.Core.Geom import Geom_Plane
+        pl = Geom_Plane(pnt, dr)
+
+        maker = BRepBuilderAPI_MakeFace(pl, self.occ_geom_tolerance)
+        maker.Build()
+        if not maker.IsDone():
+            assert False, "Faild to generate plane"
+        plane = maker.Face()
+
+        proj = BRepOffsetAPI_NormalProjection(plane)
+        for s in shapes:
+            proj.Add(s)
+        proj.Build()
+        if not proj.IsDone():
+            assert False, "Failed to perform projection"
+        result = proj.Projection()
+
+        print(result)
+
+        ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, d1, d2)
+        if np.sum(c1**2) != 0.0:
+            result = do_translate(result, -c1)
+        if np.sum(ax2**2) != 0.0 and an2 != 0.0:
+            result = do_rotate(result, ax2, -an2, txt='2nd')
+        if np.sum(ax1**2) != 0.0 and an1 != 0.0:
+            result = do_rotate(result, ax1, -an1, txt='1st')
+
+        gids_new = self.register_shaps_balk(result)
+        return gids_new
+
     def add_sequence(self, gui_name, gui_param, geom_name):
         self.geom_sequence.append((gui_name, gui_param, geom_name))
 
@@ -1877,7 +1927,50 @@ class Geometry():
             _newobjs.append(newkey)
 
         return list(objs), _newobjs
-    
+
+    def PointCenter_build_geom(self, objs, *args):
+        targets1, targets2 = args
+        targets1 = [x.strip() for x in targets1.split(',')]
+        targets2 = [x.strip() for x in targets2.split(',')]
+
+        gids_1 = self.get_target1(objs, targets1, 'p')
+        gids_2 = self.get_target1(objs, targets2, 'p')
+
+        PTs = []
+        for g1, g2 in zip(gids_1, gids_2):
+            ptx1 = self.get_point_coord(g1)
+            ptx2 = self.get_point_coord(g2)
+            PTs.append(self.add_point((ptx1+ptx2)/2.0))
+
+        _newobjs = []
+        for p in PTs:
+            shape = self.vertices[p]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(p, 'pt')
+            _newobjs.append(newkey)
+
+        return list(objs), _newobjs
+
+    def PointOnEdge_build_geom(self, objs, *args):
+        targets, uarr = args
+        targets = [x.strip() for x in targets.split(',')]
+        gids = self.get_target1(objs, targets, 'l')
+
+        uarr = np.array(uarr, dtype=float)
+
+        PTs = []
+        for gid in gids:
+            PTs.extend(self.add_point_on_edge(gid, uarr))
+
+        _newobjs = []
+        for p in PTs:
+            shape = self.vertices[p]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(p, 'pt')
+            _newobjs.append(newkey)
+
+        return list(objs), _newobjs
+
     def PointByUV_build_geom(self, objs, *args):
         targets, uarr, varr = args
         targets = [x.strip() for x in targets.split(',')]
@@ -2060,7 +2153,7 @@ class Geometry():
         self.synchronize_topo_list(action='both')
 
         return list(objs), newkey
-
+    
     def CircleByAxisPoint_build_geom(self, objs, *args):
         ax1, pt_on_ax, pts, make_face = args
 
@@ -2793,8 +2886,10 @@ class Geometry():
         self.synchronize_topo_list()
         return list(objs), newkeys
 
-    def Union_build_geom(self, objs, *args):
+    def _Union_build_geom(self, objs, *args, **kwargs):
         tp, tm, delete_input, delete_tool, keep_highest = args
+        do_upgrade = kwargs.pop("upgrade", False)
+        
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]
 
@@ -2804,15 +2899,32 @@ class Geometry():
         gids_new = self.union(gid_objs, gid_tools,
                               remove_obj=delete_input,
                               remove_tool=delete_tool,
-                              keep_highest=keep_highest)
+                              keep_highest=keep_highest,
+                              upgrade=do_upgrade)
 
         newkeys = []
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'uni'))
 
         self.synchronize_topo_list()
+
+        if delete_input:
+            for x in tp:
+                if x in objs:
+                    del objs[x]
+        if delete_tool:
+            for x in tm:
+                if x in objs:
+                    del objs[x]
+
         return list(objs), newkeys
 
+    def Union_build_geom(self, objs, *args):
+        return self._Union_build_geom(objs, *args)
+
+    def Union2_build_geom(self, objs, *args):
+        kwargs = {"upgrade":True}
+        return self._Union_build_geom(objs, *args, **kwargs)
 
     def Difference_build_geom(self, objs, *args):
         tp, tm, delete_input, delete_tool, keep_highest = args
@@ -2967,6 +3079,38 @@ class Geometry():
         self.synchronize_topo_list(action='both')
         newkey = objs.addobj(ps1, 'ps')
 
+        return list(objs), [newkey]
+
+    def Circle2DCenterOnePoint_build_geom(self, objs, *args):
+        center, pts, make_face = args
+
+        center = [x.strip() for x in center.split(',')]
+        gids_1= self.get_target1(objs, center, 'p')
+        
+        pts = [x.strip() for x in pts.split(',')]
+        gids_2= self.get_target1(objs, pts, 'p')
+
+        c1 = self.get_point_coord(gids_1[0])
+        p1 = self.get_point_coord(gids_2[0])
+
+        r1 = np.sqrt(np.sum((c1-p1)**2))
+        n1 = (0.0, 0.0, 1.0)
+
+        print(n1, r1, c1)
+        edge = self.add_circle_by_axis_radius(c1, n1, r1)
+
+        if make_face:
+            ll1 = self.add_line_loop([edge])
+            ps1 = self.add_plane_surface(ll1)
+            shape = self.faces[ps1]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(ps1, 'ps')
+        else:
+            shape = self.edges[edge]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(edge, 'cl')
+
+        self.synchronize_topo_list(action='both')
         return list(objs), [newkey]
 
     def Arc2D_build_geom(self, objs, *args):
@@ -3145,30 +3289,24 @@ class Geometry():
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]
 
-        input_entity = get_target2(objs, tp)
-        tool_entity = get_target2(objs, tm)
+        gid_objs = self.get_target2(objs, tp)
+        gid_tools = self.get_target2(objs, tm)
 
-        ret = self.boolean_union2d(
-            input_entity,
-            tool_entity,
-            removeObject=delete_input,
-            removeTool=delete_tool)
+        gids_new = self.union2d(gid_objs, gid_tools,
+                              remove_obj=delete_input,
+                              remove_tool=delete_tool,
+                              keep_highest=keep_highest)
 
         newkeys = []
-        for rr in ret:
-            if rr.dim == input_entity[0].dim:
-                newkeys.append(objs.addobj(rr, 'uni'))
-            else:
-                if keep_highest:
-                    self.remove([rr], recursive=True)
-                else:
-                    newkeys.append(objs.addobj(rr, get_geom_key(rr)))
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'uni'))
+
+        self.synchronize_topo_list()
 
         if delete_input:
             for x in tp:
                 if x in objs:
                     del objs[x]
-
         if delete_tool:
             for x in tm:
                 if x in objs:
@@ -3240,6 +3378,7 @@ class Geometry():
                 assert False, "three points does not span a surface."
             normal = n / np.sqrt(np.sum(n**2))
             cptx = (ptx1 + ptx2 + ptx3) / 3.0
+
         elif args[1][0] == 'by_abc':
             data = np.array(args[1][1]).flatten()
             normal = data[:3]
@@ -3247,13 +3386,13 @@ class Geometry():
                 [(xmin + xmax) / 2, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0])
             s = data[-1] - np.sum(normal * xx)
             cptx = xx + s * normal
-            
+
         elif args[1][0] == 'face_parallel':
             gid_face = self.get_target1(objs, [args[1][1], ], 'f')[0]
-            gid_ptx = get_target1(objs, [args[1][2], ], 'p')[0]
+            gid_ptx = self.get_target1(objs, [args[1][2], ], 'p')[0]
             cptx = self.get_point_coord(gid_ptx)
 
-            normal = self.get_face_normal(gid_face, check_flat=True)
+            normal, _void = self.get_face_normal(gid_face, check_flat=True)
 
         else:
             assert False, "unknown option:" + args
@@ -3262,21 +3401,16 @@ class Geometry():
             normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
         v = self.add_box(points)
 
-        ret1 = self.boolean_difference(tt, (v,),
-                                       removeObject=False,
-                                       removeTool=False)
-        ret2 = selfbo.olean_intersection(tt, (v,),
-                                         removeObject=True,
-                                         removeTool=True)
+        ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=False,
+                               keep_highest=True)
+        ret2 = self.intersection(gids, (v,), remove_obj=True, remove_tool=True,
+                                 keep_highest=True)
+
+        self.synchronize_topo_list()
+
         newkeys = []
         for rr in ret1 + ret2:
-            if rr.dim == tt[0].dim:
-                newkeys.append(objs.addobj(rr, 'splt'))
-            else:
-                if keep_highest:
-                    self.remove([rr], recursive=True)
-                else:
-                    newkeys.append(objs.addobj(rr, get_geom_key(rr)))
+            newkeys.append(objs.addobj(rr, 'splt'))
 
         for x in targets:
             if x in objs:
@@ -3284,38 +3418,42 @@ class Geometry():
 
         return list(objs), newkeys
 
-        return list(objs), []
+    def ProjectOnWP_build_geom(self, objs, *args):
+        targets = args[0]
+        targets = [x.strip() for x in targets.split(',')]
+        gids = self.get_target2(objs, targets)
+
+        c1, d1, d2 = self._last_wp_param
+        gids_new = self.project_shape_on_wp(gids, c1, d1, d2)
+
+        self.synchronize_topo_list()
+
+        newobjs = []
+        for gid in gids_new:
+            newkey = objs.addobj(gid, gid.name)
+            newobjs.append(newkey)
+
+        return list(objs), newobjs
 
     def _WorkPlane_build_geom(self, objs, c1, a1, a2):
 
-        def do_rotate(shape, ax, an, txt=''):
-            trans = gp_Trsf()            
-            axis_revolution = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(ax[0], ax[1], ax[2]))
-            trans.SetRotation(axis_revolution, an)
-            transformer = BRepBuilderAPI_Transform(trans)
-            transformer.Perform(shape)
-            if not transformer.IsDone():
-                assert False, "can not rotate (WP "+txt+")"
-            return transformer.ModifiedShape(shape)
+        ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, a1, a2)
 
-        def do_translate(shape, delta):
-            trans = gp_Trsf()
-            trans.SetTranslation(gp_Vec(delta[0], delta[1], delta[2]))
-            transformer = BRepBuilderAPI_Transform(trans)
-            transformer.Perform(shape)
-            if not transformer.IsDone():
-                assert False, "can not translate (WP) "
-            return transformer.ModifiedShape(shape)
+        if np.sum(ax1**2) != 0.0 and an1 != 0.0:
+            self.shape = do_rotate(self.shape, ax1, an1, txt='1st')
+        if np.sum(ax2**2) != 0.0 and an2 != 0.0:
+            self.shape = do_rotate(self.shape, ax2, an2, txt='2nd')
+        if np.sum(c1**2) != 0.0:
+            self.shape = do_translate(self.shape, c1)
         
+        '''
         x1 = np.array([1., 0., 0.])
 
         ax = np.cross(x1, a1)
         an = np.arctan2(np.sqrt(np.sum(ax**2)), np.dot(a1, x1))
 
-        #print("first rot ???", ax, an, np.sum(ax**2))
         if np.sum(ax**2) == 0.0:
             if an != 0.0:
-                # if a1 is [0, 0, -1], rotate 180 deg
                 ax = np.array([0, 1, 0])
                 an = np.pi
             else:
@@ -3323,77 +3461,71 @@ class Geometry():
                 an = 0.0
         if np.sum(ax**2) != 0.0 and an != 0.0:
             self.shape =do_rotate(self.shape, ax, an, txt='1st')
-            #self.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
 
         from petram.geom.geom_utils import rotation_mat
         R = rotation_mat(ax, an)
-        '''
-        c = np.cos(an); s = np.sin(an)
-        R = np.array(
-            [[c + (1-c)*ax[0]**2, ax[0]*ax[1]*(1-c)-ax[2]*s, ax[0]*ax[2]*(1-c)+ax[1]*s],
-             [ax[0]*ax[1]*(1-c)+ax[2]*s, c + (1-c)*ax[1]**2,  ax[1]*ax[2]*(1-c)-ax[0]*s],
-             [ax[0]*ax[2]*(1-c)-ax[1]*s, ax[1]*ax[2]*(1-c)+ax[0]*s, c + (1-c)*ax[2]**2]]
-            )
-        '''
         y2 = np.dot(R, np.array([0, 1, 0]))
         ax = a1
         aaa = np.cross(a1, y2)
         an = np.arctan2(np.dot(a2, aaa), np.dot(a2, y2))
 
-        # for t in tt:
-        #     if isinstance(t, SurfaceID): continue
-        #     print("working on t", t)
-        #
-        #     geom.rotate([t], 0, 0, 0, ax[0], ax[1], ax[2], an)
-        #print("2nd rot ???", ax, an, np.sum(ax**2))
         if np.sum(ax**2) == 0.0 and an != 0.0:
-            # rotate 180 deg around a1
             ax = a1
             an = np.pi
         if np.sum(ax**2) != 0.0 and an != 0.0:
             self.shape =do_rotate(self.shape, ax, an, txt='2nd')
-            #self.rotate(tt, 0, 0, 0, ax[0], ax[1], ax[2], an)
 
         if c1[0] != 0.0 or c1[1] != 0.0 or c1[2] != 0.0:
-            self.shape = do_translate(self.shape, c1)            
-            #self.translate(tt, c1[0], c1[1], c1[2])
+            self.shape = do_translate(self.shape, c1)
+        '''
 
         shape = self.shape
         self.pop_shape_and_topolist()
         gids_new = self.register_shaps_balk(shape)
-        
-        self.synchronize_topo_list(action='add')
+
+        self.synchronize_topo_list(action='both')
         self.inspect_shape(self.shape, verbose=True)
 
         newkeys = []
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'wp'))
-        
+
         return list(objs), newkeys
 
-    def WorkPlane_build_geom(self, objs, *args):
+    def WorkPlaneStart_build_geom(self, objs, *args):
         c1, a1, a2 = args
         c1 = np.array(c1)
         a1 = np.array(a1)
         a1 = a1 / np.sqrt(np.sum(a1**2))
         a2 = np.array(a2)
         a2 = a2 / np.sqrt(np.sum(a2**2))
-
+        self._last_wp_param = c1, a1, a2
+        return objs, []
+    
+    def WorkPlaneEnd_build_geom(self, objs, *args):
         if self.isWP != 0:
-            self._last_wp_param = c1, a1, a2
             return objs, []
-        else:
-            return self._WorkPlane_build_geom(objs, c1, a1, a2)
-
-    def WorkPlaneByPoints_build_geom(self, objs, *args):
-           
+        c1, a1, a2 = self._last_wp_param
+        return self._WorkPlane_build_geom(objs, c1, a1, a2)
+    '''
+    def WorkPlane_build_geom(self, objs, *args):
+        if self.isWP != 0:
+            return objs, []
+        c1, a1, a2 = self._last_wp_param
+        return self._WorkPlane_build_geom(objs, c1, a1, a2)
+    '''
+    def WorkPlaneByPointsStart_build_geom(self, objs, *args):
         c1, a1, a2, flip1, flip2 = args
 
-        self.factory.synchronize()
-        c1 = gmsh.model.getValue(0, int(c1), [])
-        a1 = gmsh.model.getValue(0, int(a1), [])
-        a2 = gmsh.model.getValue(0, int(a2), [])
-
+        c1, a1, a2 = self.get_target1(objs, [c1, a1, a2], 'p')
+        
+        cgroup = self.vertices.current_group()
+        self.set_toppolist_group(0)
+        c1 = self.get_point_coord(c1)
+        a1 = self.get_point_coord(a1)
+        a2 = self.get_point_coord(a2)
+        self.set_toppolist_group(cgroup)
+        
         d1 = np.array(a1) - np.array(c1)
         d1 = d1 / np.sqrt(np.sum(d1**2))
         if flip1:
@@ -3408,13 +3540,18 @@ class Geometry():
         d2 = d2 / np.sqrt(np.sum(d2**2))
         if flip2:
             d2 = -d2
-            
+
+        self._last_wp_param = c1, d1, d2
+        return objs, []
+        #return self._WorkPlane_build_geom(objs, c1, d1, d2)
+
+    '''    
+    def WorkPlaneByPoints_build_geom(self, objs, *args):
         if self.isWP != 0:
-            self._last_wp_param = c1, a1, a2            
             return objs, []
-        else:
-            return self._WorkPlane_build_geom(objs, c1, d1, d2)
-        
+        c1, a1, a2 = self._last_wp_param
+        return self._WorkPlane_build_geom(objs, c1, a1, a2)
+    '''    
     def healShapes(self, dimtags, fix_tol, fixDegenerated=False,
                    fixSmallEdges=False,
                    fixSmallFaces=False,
@@ -3522,8 +3659,8 @@ class Geometry():
         while ex1.More():
             solid = topods_Solid(ex1.Current())
             if usolids.check_shape(solid) == 0:
-                solid_id = self.solids.add(solid)
-                new_objs.append(solid_id)
+                 solid_id = self.solids.add(solid)
+                 new_objs.append(solid_id)
             ex1.Next()
 
         def register_topo(shape, ucounter, topabs, topabs_p, topods, topods_p,
@@ -3581,8 +3718,8 @@ class Geometry():
             topods_Wire,
             self.edges,
             dim=1)
-        register_topo(shape, uvertices, TopAbs_VERTEX, TopAbs_EDGE, topods_Vertex, topods_Edge,
-                      self.vertices, dim=0)
+        register_topo(shape, uvertices, TopAbs_VERTEX, TopAbs_EDGE,
+                      topods_Vertex, topods_Edge,self.vertices, dim=0)
 
         b = self.builder
         comp = self.shape
@@ -3710,8 +3847,8 @@ class Geometry():
         
         if adeviation == 0:
             return None
-
         else:
+            fac = 1./self.geom_prev_res
             BRepMesh_IncrementalMesh(self.shape, 0.05 * adeviation * mesh_quality,
                                  False, 0.5, self.occ_parallel)
 
@@ -3916,9 +4053,22 @@ class Geometry():
         return geom_msh, l, s, v, vcl, esize, ptx, shape, idx
 
     def move_wp_points(self, ptx, c1, a1, a2):
-
         from petram.geom.geom_utils import rotation_mat
         
+        ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, a1, a2)
+        if np.sum(ax1**2) != 0.0 and an1 != 0.0:
+            R = rotation_mat(ax1, an1)
+            ptx = np.dot(R, ptx.transpose()).transpose()
+        if np.sum(ax2**2) != 0.0 and an2 != 0.0:
+            R = rotation_mat(ax2, an2)
+            ptx = np.dot(R, ptx.transpose()).transpose()
+
+        if np.sum(c1**2) != 0.0:
+            ptx = ptx + np.array(c1)
+
+        return ptx
+    
+        '''
         x1 = np.array([1., 0., 0.])
         ax = np.cross(x1, a1)
         an = np.arctan2(np.sqrt(np.sum(ax**2)), np.dot(a1, x1))
@@ -3955,6 +4105,7 @@ class Geometry():
             ptx = ptx + np.array(c1)
             
         return ptx
+        '''
 
     def generate_preview_mesh(self):
         def merge_preview_data(data1, data2):
@@ -3974,13 +4125,19 @@ class Geometry():
 
             shape = {}
             for k in data1[7]:
-                shape[k] = np.vstack((data1[7][k], data2[7][k] + offset))
-
+                if k in data2[7]:
+                     shape[k] = np.vstack((data1[7][k], data2[7][k] + offset))
+                else:
+                     shape[k] = data1[7][k]
             idx = {}
             for k in data1[8]:
                 data = {}
-                for kk in data1[8][k]:
-                    data[kk] = np.hstack((data1[8][k][kk], data2[8][k][kk],))
+                if k in data2[8]:
+                    for kk in data1[8][k]:
+                        data[kk] = np.hstack((data1[8][k][kk], data2[8][k][kk],))
+                else:
+                    for kk in data1[8][k]:            
+                        data[kk] = data1[8][k][kk]
                 idx[k] = data
 
             return (data1[0], data1[1], data1[2], data1[3],
@@ -3993,8 +4150,8 @@ class Geometry():
         if data_wp is not None:
             geom_msh, l, s, v, vcl, esize, ptx, shape, idx = data_wp
             ptx = self.move_wp_points(ptx, *self._last_wp_param)
-            data_wp =  geom_msh, l, s, v, vcl, esize, ptx, shape, idx
-        
+            data_wp = geom_msh, l, s, v, vcl, esize, ptx, shape, idx
+
         wp_shape = self.shape
         self.pop_shape_and_topolist()
         data_main = self.generate_preview_mesh0()

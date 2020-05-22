@@ -71,6 +71,67 @@ class PointByUV(GeomPB):
     def fancy_tree_name(self):
         return 'PointOnSurface'
 
+pdata = ( ('edge', VtableElement('edge', type='string',
+                                 guilabel='Line/Curve',
+                                 default="",
+                                 tip="surfaces")), 
+         ('u_coord', VtableElement('uarr', type='array',
+                                guilabel='U_n',
+                                default='0.',
+                                tip="U coords")),)
+class PointOnEdge(GeomPB):
+    vt = Vtable(pdata)
+    
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'On line'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return  "Point"
+          
+pdata = ( ('points1', VtableElement('points1', type='string',
+                                    guilabel='1st Points',
+                                    default="",
+                                    tip="1st points (must be the same lenght as 2nd points)")),
+          ('points2', VtableElement('points2', type='string',
+                                    guilabel='2nd Points',
+                                    default="",
+                                    tip="1st points (must be the same lenght as 1srt points)")),)
+
+class PointCenter(GeomPB):
+    vt = Vtable(pdata)        
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Center of 2 points'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return  "Point"
+    
+pdata = ( ('cpoint', VtableElement('cpoint', type='string',
+                                    guilabel='Center point',
+                                    default="",
+                                    tip="center of circle")),
+          ('point', VtableElement('points', type='string',
+                                    guilabel='Point on circle',
+                                    default="",
+                                    tip="point on circle")),
+          ('fill_circle', VtableElement('fill circle', type='bool',
+                                          guilabel='Fill circle',
+                                          default=True,
+                                          tip="Make surface ")), )
+
+
+class Circle2DCenterOnePoint(GeomPB):
+    vt = Vtable(pdata)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Center and Point'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return  "Circle"
 
 cdata = (('center', VtableElement('center', type='float',
                                   guilabel='Center',
@@ -489,7 +550,7 @@ class RemoveFaces(GeomPB):
     vt = Vtable(ldata)
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
-                                     guilabel='Target',
+                                     guilabel='Targets (v/f/l/p)',
                                      default="",
                                      tip="extrusion target")),
          ('taxis', VtableElement_Direction('taxis', type='float',
@@ -508,7 +569,7 @@ class Extrude(GeomPB):
 
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
-                                     guilabel='Target',
+                                     guilabel='Targets (v/f/l/p)',
                                      default="",
                                      tip="extrusion target")),
          ('paxis', VtableElement('paxis', type='float',
@@ -532,7 +593,7 @@ class Revolve(GeomPB):
 
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
-                                     guilabel='Target',
+                                     guilabel='Targets (v/f/l/p)',
                                      default="",
                                      tip="extrusion target")),
          ('path', VtableElement('path', type='string',
@@ -549,7 +610,7 @@ class Sweep(GeomPB):
  objection transformations
 '''
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),
          ('dx', VtableElement('dx', type='float',
@@ -575,7 +636,7 @@ class Move(GeomPB):  # tanslate in gmsh
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),
          ('ctr_rot', VtableElement('ctr_rot', type='float',
@@ -603,7 +664,7 @@ class Rotate(GeomPB):
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),
          ('ctr_scale', VtableElement('ctr_scale', type='float',
@@ -628,7 +689,7 @@ class Scale(GeomPB):  # Dilate in gmsh
 
 class Array(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
-                                             guilabel='Object',
+                                             guilabel='Objects (v/f/l/p)',
                                              default="",
                                              tip="object to move")),
              ('array_count', VtableElement('array_count', type='int',
@@ -649,7 +710,7 @@ class Array(GeomPB):
     
 class ArrayByPoints(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
-                                             guilabel='Object',
+                                             guilabel='Objects (v/f/l/p)',
                                              default="",
                                              tip="object to move")),
              ('array_count', VtableElement('array_count', type='int',
@@ -670,7 +731,7 @@ class ArrayByPoints(GeomPB):
 
 class ArrayRot(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
-                                             guilabel='Object',
+                                             guilabel='Objects (v/f/l/p)',
                                              default="",
                                              tip="object to move")),
              ('array_count', VtableElement('array_count', type='int',
@@ -700,7 +761,7 @@ class ArrayRot(GeomPB):
 
 class ArrayRotByPoints(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
-                                             guilabel='Object',
+                                             guilabel='Objects (v/f/l/p)',
                                              default="",
                                              tip="object to move")),
              ('array_count', VtableElement('array_count', type='int',
@@ -729,7 +790,7 @@ class ArrayRotByPoints(GeomPB):
         return 'ArrayRot'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),
          ('flip_ax', VtableElement('flip_ax', type='float',
@@ -799,7 +860,7 @@ class Chamfer(GeomPB):
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")), )
 
@@ -813,7 +874,7 @@ class Copy(GeomPB):
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),
          ('recursive', VtableElement('recursive', type='bool',
@@ -831,7 +892,7 @@ class Remove(GeomPB):
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
-                                         guilabel='Object',
+                                         guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),)
 
@@ -920,6 +981,15 @@ udata = (('objplus', VtableElement('obj1', type='string',
 
 class Union(GeomPB_Bool):
     vt = Vtable(udata)
+    
+class Union2(GeomPB_Bool):
+    vt = Vtable(udata)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Union(merge face)'
+    @classmethod    
+    def fancy_tree_name(self):
+        return "Union"
 
 
 class Union2D(GeomPB_Bool):
@@ -937,6 +1007,13 @@ class Intersection(GeomPB_Bool):
 class Fragments(GeomPB_Bool):
     vt = Vtable(udata)
 
+pdata = (('objp', VtableElement("obj1p", type='string',
+                                   guilabel='Edges/Points (l/p)',
+                                   default="",
+                                   tip="objects")),)
+
+class ProjectOnWP(GeomPB):
+    vt = Vtable(pdata)
 
 pdata = (('xarr', VtableElement('xarr', type='array',
                                 guilabel='X',
@@ -1262,26 +1339,44 @@ data0 = (('center', VtableElement('center', type='float',
                                default=[0, 0, 1],
                                tip="2nd Axis")),)
 
-
-class WorkPlane(GeomPB):
-    vt = Vtable(data0)
-
+class WPBase(GeomPB):
     def get_possible_child(self):
         return [Point2D, Line2D, Circle2D, Arc2D, Rect2D, Polygon2D, Spline2D,
                 Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
                 Union2D, Intersection, Difference, Fragments, Copy, Remove,
-                CreateLine, CreateSurface]
+                CreateLine, CreateSurface, ProjectOnWP]
 
     def get_possible_child_menu(self):
-        return [("", Point2D), ("", Line2D), ("", Circle2D), ("", Arc2D),
-                ("", Rect2D), ("", Polygon2D), ("", Spline2D),
-                ("", CreateLine), ("", CreateSurface),
-                ("", Copy), ("", Remove),
+        return [("Add Points...", Point2D),("", PointCenter), ("!", PointOnEdge),
+                ("", Line2D), ("", Arc2D), 
+                ("", Rect2D),
+                ("Add Circles...", Circle2D), ("", CircleBy3Points),
+                ("!", Circle2DCenterOnePoint),
+                ("", Spline2D),
+                ("Create...", CreateLine), ("!", CreateSurface),
+                ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
-                ("", Flip2D), ("", Scale2D), ("!", Array2D),
+                ("", Flip2D), ("", Scale2D), ("", Array2D), ("!", ProjectOnWP),
                 ("Boolean...", Union2D),
                 ("", Intersection), ("", Difference), ("!", Fragments),
                 ]
+    def add_geom_sequence_wp_start(self, geom):
+        gui_name = self.fullname()
+        self.vt.preprocess_params(self)
+        gui_param = self.vt.make_value_or_expression(self)
+        geom_name = self.__class__.__name__+"Start"
+        geom.add_sequence(gui_name, gui_param, geom_name)
+        
+    def add_geom_sequence_wp_end(self, geom):
+        gui_name = self.fullname()
+        self.vt.preprocess_params(self)
+        gui_param = self.vt.make_value_or_expression(self)
+        geom_name = "WorkPlaneEnd"
+        geom.add_sequence(gui_name, gui_param, geom_name)
+
+class WorkPlane(WPBase):
+    isWP=True    
+    vt = Vtable(data0)
 
     @classmethod
     def fancy_menu_name(self):
@@ -1290,7 +1385,6 @@ class WorkPlane(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'WorkPlane'
-
 
 data0 = (('center', VtableElement('pts1', type='string',
                                   guilabel='center',
@@ -1314,25 +1408,9 @@ data0 = (('center', VtableElement('pts1', type='string',
                                  tip="flip 2nd axis")), )
 
 
-class WorkPlaneByPoints(GeomPB):
+class WorkPlaneByPoints(WPBase):
+    isWP=True
     vt = Vtable(data0)
-
-    def get_possible_child(self):
-        return [Point2D, Line2D, Circle2D, Arc2D, Rect2D, Polygon2D, Spline2D,
-                Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
-                Union2D, Intersection, Difference, Fragments, Copy, Remove,
-                CreateLine, CreateSurface]
-
-    def get_possible_child_menu(self):
-        return [("", Point2D), ("", Line2D), ("", Circle2D), ("", Arc2D),
-                ("", Rect2D), ("", Polygon2D), ("", Spline2D),
-                ("", CreateLine), ("", CreateSurface),
-                ("", Copy), ("", Remove),
-                ("Translate...", Move2D), ("", Rotate2D),
-                ("", Flip2D), ("", Scale2D), ("!", Array2D),
-                ("Boolean...", Union2D),
-                ("", Intersection), ("", Difference), ("!", Fragments),
-                ]
 
     @classmethod
     def fancy_menu_name(self):

@@ -12,12 +12,14 @@ class GeomIDBase(int):
 class VertexID(GeomIDBase):
     dim = 0
     idx = 0
+    name = 'pt'
     def __add__(self, v):
         return VertexID(int(self) + v)
 
 class LineID(GeomIDBase):
     dim = 1
     idx = 1
+    name = 'ln'
     def __add__(self, v):
         return LineID(int(self) + v)
     def __neg__(self):
@@ -25,6 +27,7 @@ class LineID(GeomIDBase):
 
 class LineLoopID(GeomIDBase):
     idx = 2
+    name = 'll'
     def __add__(self, v):
         return LineLoopID(int(self) + v)
     def __neg__(self):
@@ -33,6 +36,7 @@ class LineLoopID(GeomIDBase):
 class SurfaceID(GeomIDBase):
     dim = 2
     idx = 3
+    name = 'sf'
     def __add__(self, v):
         return SurfaceID(int(self) + v)
     def __neg__(self):
@@ -40,6 +44,7 @@ class SurfaceID(GeomIDBase):
 
 class SurfaceLoopID(GeomIDBase):
     idx = 4
+    name = 'sl'
     def __add__(self, v):
         return SurfaceLoopID(int(self) + v)
     def __neg__(self):
@@ -48,6 +53,7 @@ class SurfaceLoopID(GeomIDBase):
 class VolumeID(GeomIDBase):
     dim = 3
     idx = 5
+    name = 'vol'
     def __add__(self, v):
         return VolumeID(int(self) + v)
     def __neg__(self):

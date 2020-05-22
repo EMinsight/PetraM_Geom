@@ -180,6 +180,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
     hide_ns_menu = True
     has_2nd_panel = False
     isGeom = True
+    isWP = False
 
     def __init__(self, *args, **kwargs):
         super(GmshPrimitiveBase, self).__init__(*args, **kwargs)
@@ -357,43 +358,45 @@ class GmshGeom(GeomTopBase):
         return v
 
     def get_possible_child(self):
-        from petram.geom.gmsh_primitives import (Point, PointByUV, Line, Spline,
+        from petram.geom.gmsh_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
+                                                 Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
-                                                 SurfaceLoop, Union, Intersection, Difference, Fragments,
+                                                 SurfaceLoop, Union, Union2, Intersection, Difference, Fragments,
                                                  SplitByPlane, Copy, Remove, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale, WorkPlane,
                                                  WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet,Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                                                 ThruSection,)
-        return [Point, PointByUV, Line, Circle, CircleByAxisPoint, CircleBy3Points,
+                                                 ThruSection)
+        return [Point, PointCenter, PointOnEdge, PointByUV,
+                Line, Circle, CircleByAxisPoint, CircleBy3Points,
                 Rect, Polygon, Spline, Box,
                 Ball, Cone, Wedge, Cylinder,
                 Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop,
-                Extrude, Revolve, Sweep, Union,
+                Extrude, Revolve, Sweep, Union, Union2,
                 Intersection, Difference, Fragments, SplitByPlane, Copy, Remove,
                 Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ThruSection]
+                ThruSection, ProjectOnWP]
 
     def get_possible_child_menu(self):
-        from petram.geom.gmsh_primitives import (Point, PointByUV,  Line, Spline,
+        from petram.geom.gmsh_primitives import (Point, PointCenter, PointOnEdge, PointByUV,  Line, Spline,  
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
-                                                 SurfaceLoop, Union, Intersection, Difference, Fragments,
+                                                 SurfaceLoop, Union, Union2, Intersection, Difference, Fragments,
                                                  SplitByPlane, Copy, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale,
                                                  WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                                                 ThruSection,)
-        return [("Add Points...", Point), ("!", PointByUV),
+                                                 ThruSection)
+        return [("Add Points...", Point), ("", PointCenter), ("", PointOnEdge), ("!", PointByUV),
                 ("", Line),
                 ("Add Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
                 ("", Rect),
@@ -407,7 +410,7 @@ class GmshGeom(GeomTopBase):
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
                 ("Translate...", Move,), ("", Rotate), ("", Flip), ("!", Scale),
                 ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("!", ArrayRotByPoints), 
-                ("Boolean...", Union), ("", Intersection),
+                ("Boolean...", Union), ("", Union2), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
                 ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
@@ -548,7 +551,7 @@ class GmshGeom(GeomTopBase):
             if not child.enabled:
                 continue
 
-            if len(child.get_children()) == 0:
+            if len(child.get_children()) == 0 and not child.isWP:
                 child.vt.preprocess_params(child)
                 if child is stop1:
                     break            # for build before
@@ -556,7 +559,7 @@ class GmshGeom(GeomTopBase):
                 if child is stop2:
                     break            # for build after
 
-            else:  # workplane
+            elif child.isWP:
                 children2 = child.get_children()
                 child.vt.preprocess_params(child)
                 if child is stop1:
@@ -565,6 +568,7 @@ class GmshGeom(GeomTopBase):
                 do_break = False
 
                 geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
+                child.add_geom_sequence_wp_start(geom)                
                 for child2 in children2:
                     if not child2.enabled:
                         continue
@@ -583,13 +587,16 @@ class GmshGeom(GeomTopBase):
                 # translate 2D objects in 3D space
                 #for x in org_keys: del objs2[x]
                     
-                child.add_geom_sequence(geom)
+                child.add_geom_sequence_wp_end(geom)
                 geom.add_sequence('WP_End', 'WP_End', 'WP_End')                    
 
                 if do_break:
                     break
                 if child is stop2:
                     break            # for build after
+            else:
+                assert False, "Should not come here"
+                
         if stop1 is not None:
             self._build_stop = (stop1, None)
             return stop1.name()
