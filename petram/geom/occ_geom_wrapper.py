@@ -3359,8 +3359,6 @@ class Geometry():
         return list(objs), newkeys
 
     def SplitByPlane_build_geom(self, objs, *args):
-        print(args)
-
         def project_ptx_2_plain(normal, cptx, p):
             dp = p - cptx
             dp = dp - np.sum(dp * normal) * normal
@@ -3435,24 +3433,30 @@ class Geometry():
             gid_face = self.get_target1(objs, [args[1][1], ], 'f')[0]
             gid_ptx = self.get_target1(objs, [args[1][2], ], 'p')[0]
             cptx = self.get_point_coord(gid_ptx)
-
             normal, _void = self.get_face_normal(gid_face, check_flat=True)
 
         else:
             assert False, "unknown option:" + args
 
+        offset = args[-1]
+        if offset != 0:
+               cptx = cptx + normal*offset
+               
         points = containing_bbox(
             normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
         v = self.add_box(points)
 
-        ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=False,
+
+        ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=True,
                                keep_highest=True)
+
+        v = self.add_box(points)    
         ret2 = self.intersection(gids, (v,), remove_obj=True, remove_tool=True,
                                  keep_highest=True)
 
         self.synchronize_topo_list()
 
-        newkeys = []
+        newkeys = []        
         for rr in ret1 + ret2:
             newkeys.append(objs.addobj(rr, 'splt'))
 

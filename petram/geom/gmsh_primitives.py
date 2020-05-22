@@ -1341,7 +1341,11 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
                                        guilabel='cut plane',
                                        suffix=('a', 'b', 'c', 'd'),
                                        default=[1, 0, 0, 0],
-                                       tip="Cutting Plane")),)
+                                       tip="Cutting Plane")),
+         ('offset', VtableElement('offset', type='float',
+                                 guilabel='offset',
+                                 default=0.0,
+                                 tip="offset in normal direction")), )
 
 
 class SplitByPlane(GeomPB):
