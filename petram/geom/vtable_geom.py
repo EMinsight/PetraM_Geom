@@ -1,3 +1,4 @@
+import numpy as np
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 '''
@@ -24,7 +25,7 @@ class VtableElement_Direction(VtableElement):
         v['normalp_dest'] = ''
         v['reverse_dir_normalp'] = False
         v['reverse_dir_polar'] = False
-        v['reverse_dir_radial'] = False        
+        v['reverse_dir_radial'] = False
 
         return v
 
@@ -48,8 +49,8 @@ class VtableElement_Direction(VtableElement):
         elp6 = [["Axis Dir.",    None, 0,  {}],
                 ["Point on axis",    None, 0,  {}],
                 [None, True, 3,  {"text": "Reverse direction"}], ]
-        elp7 = [["Center",    None, 0,  {}], 
-                [None, True, 3,  {"text": "Reverse direction"}], ]        
+        elp7 = [["Center",    None, 0,  {}],
+                [None, True, 3,  {"text": "Reverse direction"}], ]
 
         ret[3].append({'elp': elp3})
         ret[3].append({'elp': elp4})
@@ -84,9 +85,9 @@ class VtableElement_Direction(VtableElement):
                     obj.reverse_dir_normalp,
                     '(Note) Face must be flat-plane. Distance below is ignored', ])
         ret.append([obj.radial_axis_txt,
-                    obj.radial_point_txt, 
-                    obj.reverse_dir_radial, ])        
-        ret.append([obj.polar_center_txt, 
+                    obj.radial_point_txt,
+                    obj.reverse_dir_radial, ])
+        ret.append([obj.polar_center_txt,
                     obj.reverse_dir_polar, ])
 
         return ret
@@ -115,11 +116,11 @@ class VtableElement_Direction(VtableElement):
             obj.fromto_points_use_dist = v[3][2]
             obj.reverse_dir_fromto = v[3][3]
         elif v[0] == 'Radial':
-            setattr(obj, 'use_m_'+self.name, False)           
+            setattr(obj, 'use_m_'+self.name, False)
             obj.use_radial = True
             obj.radial_axis_txt = v[6][0]
             obj.radial_point_txt = v[6][1]
-            obj.reverse_dir_radial = v[6][2]            
+            obj.reverse_dir_radial = v[6][2]
         elif v[0] == 'Polar':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_polar = True
@@ -144,11 +145,136 @@ class VtableElement_Direction(VtableElement):
             ret = ['radial',
                    obj.radial_axis_txt,
                    obj.radial_point_txt,
-                   obj.reverse_dir_radial]            
+                   obj.reverse_dir_radial]
         elif obj.use_polar:
             ret = ['polar',
-                   obj.polar_center_txt, 
+                   obj.polar_center_txt,
                    obj.reverse_dir_polar]
+        else:
+            pass
+        return ret
+
+
+class VtableElement_Rotation(VtableElement):
+    def add_attribute(self, v):
+        v = VtableElement.add_attribute(self, v)
+        v['use_fromto_points'] = False
+        v['use_normalp'] = False
+        v['use_edgep'] = False
+        v['use_xyz'] = False
+        v['xyz_txt1'] = '0, 0, 1'
+        v['xyz_txt2'] = '0, 0, 0'        
+        v['fromto_points_txt1'] = ''
+        v['fromto_points_txt2'] = ''
+        v['normalp_face'] = ''
+        v['normalp_point'] = ''
+        v['edgep_point'] = ''
+        v['edgep_edge'] = ''
+
+        return v
+
+    def panel_param(self, obj, validator=None):
+        ret = VtableElement.panel_param(self, obj, validator=validator)
+        print(ret)
+
+        elp2 = [["Axis", [0, 0, 0], 0, ret[-1]],
+                ["Point on axis", [0, 0, 0], 0, ret[-1]],]
+        
+        ret = [None, None, 34, [{'text':'Rotation', 'choices':[]},],]
+        
+        ret[3][0]['choices'].append('By xyz')
+        ret[3][0]['choices'].append('By two points')
+        ret[3][0]['choices'].append('Edge and point')
+        ret[3][0]['choices'].append('Face normal and point')
+
+        elp3 = [["Point(from)", None, 0, {}],
+                ["Point(to)", None, 0, {}], ]
+        elp4 = [["Edge", None, 0, {}],
+                ["Point", None, 0, {}], ]
+        elp5 = [["Face", None, 0, {}],
+                ["Point", None, 0, {}], ]
+
+        ret[3].append({'elp': elp2})
+        ret[3].append({'elp': elp3})
+        ret[3].append({'elp': elp4})
+        ret[3].append({"elp": elp5})
+
+        return ret
+
+    def get_panel_value(self, obj):
+        ret = VtableElement.get_panel_value(self, obj)
+
+        ret = ['', ]
+        if obj.use_xyz:
+            ret[0] = 'By xyz'
+        elif obj.use_fromto_points:
+            ret[0] = 'By two points'
+        elif obj.use_edgep:
+            ret[0] = 'Edge and point'
+        elif obj.use_normalp:
+            ret[0] = 'Face normal and point'
+        else:
+            pass
+        
+        ret.append([obj.xyz_txt1,
+                    obj.xyz_txt2, ])
+        ret.append([obj.fromto_points_txt1,
+                    obj.fromto_points_txt2, ])
+        ret.append([obj.edgep_edge,
+                    obj.edgep_point, ])
+        ret.append([obj.normalp_face,
+                    obj.normalp_point, ])
+
+        return ret
+
+    def import_panel_value(self, obj, v):
+        obj.use_fromto_points = False
+        obj.use_normalp = False
+        obj.use_edgep = False
+        obj.use_xyz = False
+        
+        if v[0] == 'By xyz':
+            obj.use_xyz = True
+            obj.xyz_txt1 = v[1][0]
+            obj.xyz_txt2 = v[1][1]
+        if v[0] == 'By two points':
+            obj.use_fromto_points = True
+            obj.fromto_points_txt1 = v[2][0]
+            obj.fromto_points_txt2 = v[2][1]
+
+        elif v[0] == 'Edge and point':
+            obj.use_edgep = True
+            obj.edgep_edge = v[3][0]
+            obj.edgep_point = v[3][1]
+
+        elif v[0] == 'Face normal and point':
+            obj.use_normalp = True
+            obj.normalp_face = v[4][0]
+            obj.normalp_point = v[4][1]
+
+        else:
+            pass
+
+    def make_value_or_expression(self, obj):
+        if obj.use_xyz:
+            try:
+                a1 = np.array(eval(obj.xyz_txt1))
+                c1 = np.array(eval(obj.xyz_txt2))
+            except:
+                assert False, "failed to generate array"
+            ret = ['xyz', a1, c1]
+        elif obj.use_normalp:
+            ret = ['normalp',
+                   obj.normalp_face,
+                   obj.normalp_point, ]
+        elif obj.use_fromto_points:
+            ret = ['fromto_points',
+                   obj.fromto_points_txt1,
+                   obj.fromto_points_txt2, ]
+        elif obj.use_edgep:
+            ret = ['edgep',
+                   obj.edgep_edge,
+                   obj.edgep_point]
         else:
             pass
         return ret

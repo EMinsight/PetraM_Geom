@@ -132,7 +132,27 @@ class Circle2DCenterOnePoint(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return  "Circle"
+    
+pdata = ( ('points', VtableElement('points', type='string',
+                                    guilabel='Ends of diameter',
+                                    default="",
+                                    tip="two points to define diameter")),
+          ('fill_circle', VtableElement('fill circle', type='bool',
+                                          guilabel='Fill circle',
+                                          default=True,
+                                          tip="Make surface ")), )
+    
+class Circle2DByDiameter(GeomPB):
+    vt = Vtable(pdata)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Diamter'
 
+    @classmethod
+    def fancy_tree_name(self):
+        return  "Circle"
+
+    
 cdata = (('center', VtableElement('center', type='float',
                                   guilabel='Center',
                                   suffix=('x', 'y', 'z'),
@@ -554,7 +574,7 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
                                      default="",
                                      tip="extrusion target")),
          ('taxis', VtableElement_Direction('taxis', type='float',
-                                           guilabel='Translation Axis',
+                                           guilabel='Translation',
                                            suffix=('x', 'y', 'z'),
                                            default=[0, 0, 1],
                                            tip="translation axis")),
@@ -572,16 +592,10 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Targets (v/f/l/p)',
                                      default="",
                                      tip="extrusion target")),
-         ('paxis', VtableElement('paxis', type='float',
-                                 guilabel='Point on Axis',
-                                 suffix=('x', 'y', 'z'),
-                                 default=[0, 0, 0],
-                                 tip="point on axis")),
-         ('raxis', VtableElement('raxis', type='float',
-                                 guilabel='Revolution Axis',
-                                 suffix=('x', 'y', 'z'),
-                                 default=[0, 0, 1],
-                                 tip="translation axis")),
+         ('taxis', VtableElement_Rotation('taxis', type='array',
+                                           guilabel='Axis',
+                                           default='0, 0, 1',
+                                           tip="translation axis")),         
          ('angle', VtableElement('angel', type='array',
                                  guilabel='angle',
                                  default='90',
@@ -634,6 +648,31 @@ data0 = (('target_object', VtableElement('target_object', type='string',
 class Move(GeomPB):  # tanslate in gmsh
     vt = Vtable(data0)
 
+data0 = (('target_object', VtableElement('target_object', type='string',
+                                         guilabel='Objects (v/f/l/p)',
+                                         default="",
+                                         tip="object to move")),
+         ('point1', VtableElement('point1', type='string',
+                                  guilabel='Point (from)',
+                                  default="",
+                                  tip="first point to define translation")),
+         ('point2', VtableElement('point2', type='string',
+                                  guilabel='Point (to)',
+                                  default="",
+                                  tip="2nd point to define translation")),
+         ('keep_org', VtableElement('kepp_org', type='bool',
+                                    guilabel='Copy',
+                                    default=True,
+                                    tip="Keep original")), )
+    
+class MoveByPoints(GeomPB):
+    vt = Vtable(data0)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Move (by points)'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Move'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Objects (v/f/l/p)',
@@ -657,7 +696,6 @@ data0 = (('target_object', VtableElement('target_object', type='string',
                                     guilabel='Copy',
                                     default=True,
                                     tip="Keep original")), )
-
 
 class Rotate(GeomPB):
     vt = Vtable(data0)
@@ -1149,9 +1187,48 @@ class Arc2D(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
+        return 'Arc by coords'
+
+    @classmethod
+    def fancy_tree_name(self):
         return 'Arc'
 
+cdata = (('point_on_cirlce', VtableElement('point_on_circle', type='string',
+                                           guilabel='Points (3) on arc',
+                                           default="",
+                                           tip="Points on arc")),)
 
+class Arc2DBy3Points(GeomPB):
+    vt = Vtable(cdata)
+    
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Arc by 3 points'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Arc'
+
+cdata = (('point_on_cirlce', VtableElement('point_on_circle', type='string',
+                                           guilabel='Points (3) on arc',
+                                           default="",
+                                           tip="Points on arc")),
+         ('angle2', VtableElement('angle2', type='float',
+                                  guilabel='Angle',
+                                  default=90.0,
+                                  tip="Angle of arc")),)
+    
+class Arc2DBy2PointsAngle(GeomPB):
+    vt = Vtable(cdata)
+    
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Arc by 2 points and angle'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Arc'
+
+    
 rdata = (('corner', VtableElement('corner', type='float',
                                   guilabel='Corner',
                                   suffix=('x', 'y'),
@@ -1176,7 +1253,22 @@ class Rect2D(GeomPB):
     def fancy_menu_name(self):
         return 'Rect'
 
+cdata = (('corner_of_rect', VtableElement('corner_of_rect', type='string',
+                                           guilabel='Points (2) at corner',
+                                           default="",
+                                           tip="Points at two corners")),)
 
+class Rect2DByCorners(GeomPB):
+    vt = Vtable(cdata)    
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Rect by 2 corners'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Rect'
+
+
+    
 pdata = (('xarr', VtableElement('xarr', type='array',
                                 guilabel='X',
                                 default='0.0',
@@ -1189,7 +1281,6 @@ pdata = (('xarr', VtableElement('xarr', type='array',
 
 class Polygon2D(GeomPB):
     vt = Vtable(pdata)
-
     @classmethod
     def fancy_menu_name(self):
         return 'Polygon'
@@ -1370,17 +1461,21 @@ data0 = (('center', VtableElement('center', type='float',
 
 class WPBase(GeomPB):
     def get_possible_child(self):
-        return [Point2D, Line2D, Circle2D, Arc2D, Rect2D, Polygon2D, Spline2D,
+        return [Point2D, Line2D,
+                Circle2D, CircleBy3Points, Circle2DCenterOnePoint, Circle2DByDiameter,
+                Arc2D, Arc2DBy3Points, Arc2DBy2PointsAngle,
+                Rect2D, Rect2DByCorners,
+                Polygon2D, Spline2D,
                 Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
                 Union2D, Intersection, Difference, Fragments, Copy, Remove,
                 CreateLine, CreateSurface, ProjectOnWP]
 
     def get_possible_child_menu(self):
-        return [("Add Points...", Point2D),("", PointCenter), ("!", PointOnEdge),
-                ("", Line2D), ("", Arc2D), 
-                ("", Rect2D),
-                ("Add Circles...", Circle2D), ("", CircleBy3Points),
-                ("!", Circle2DCenterOnePoint),
+        return [("Add Point...", Point2D),("", PointCenter), ("!", PointOnEdge),
+                ("Add Line/Arc", Line2D), ("", Arc2D), ("", Arc2DBy3Points),("!", Arc2DBy2PointsAngle), 
+                ("Add Rect", Rect2D), ("!", Rect2DByCorners),
+                ("Add Circle...", Circle2D), ("", CircleBy3Points),
+                ("", Circle2DCenterOnePoint),("!", Circle2DByDiameter),
                 ("", Spline2D),
                 ("Create...", CreateLine), ("!", CreateSurface),
                 ("Copy/Remove...", Copy), ("!", Remove),

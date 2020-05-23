@@ -90,6 +90,7 @@ dprint1, dprint2, dprint3 = debug.init_dprints('OCCGeomWrapper')
 
 
 def do_rotate(shape, ax, an, txt=''):
+    ax = [float(x) for x in ax]
     trans = gp_Trsf()
     axis_revolution = gp_Ax1(gp_Pnt(0, 0, 0), gp_Dir(ax[0], ax[1], ax[2]))
     trans.SetRotation(axis_revolution, an)
@@ -101,6 +102,7 @@ def do_rotate(shape, ax, an, txt=''):
 
 
 def do_translate(shape, delta):
+    delta = [float(x) for x in delta]
     trans = gp_Trsf()
     trans.SetTranslation(gp_Vec(delta[0], delta[1], delta[2]))
     transformer = BRepBuilderAPI_Transform(trans)
@@ -711,6 +713,22 @@ class Geometry():
         p2 = np.array((pnt2.X(), pnt2.Y(), pnt2.Z(),))
         return (p1+p2)/2.0
 
+    def get_line_direction(self, gid):
+        if gid not in self.edges:
+            assert False, "can not find edge: "+str(int(gid))
+        shape = self.edges[gid]
+        curve, first, last = self.bt.Curve(shape)
+        pnt1 = gp_Pnt()
+        pnt2 = gp_Pnt()
+        curve.D0(first, pnt1)
+        curve.D0(last, pnt2)
+        p1 = np.array((pnt1.X(), pnt1.Y(), pnt1.Z(),))
+        p2 = np.array((pnt2.X(), pnt2.Y(), pnt2.Z(),))
+
+        p = p2-p1
+        p = p/np.sqrt(np.sum(p**2))
+        return p
+
     def get_face_normal(self, gid, check_flat=True):
         '''
         return normal vector of flat surface and a representative point on
@@ -869,7 +887,7 @@ class Geometry():
             return 1
         return 0
 
-    def add_point(self, p, lcar=0.0, mask=True):
+    def add_point(self, p):
         p = BRepBuilderAPI_MakeVertex(gp_Pnt(p[0], p[1], p[2])).Shape()
         return self.vertices.add(p)
 
@@ -1808,7 +1826,7 @@ class Geometry():
 
             p.Build()
             if not p.IsDone():
-                assert False, "can not extrude : " + gid
+                assert False, "can not extrude : " + str(gid)
 
             if delete_input:
                 self.builder.Remove(self.shape, shape)
@@ -2527,7 +2545,46 @@ class Geometry():
 
     def Revolve_build_geom(self, objs, *args):
 
-        targets, pax, rax, angles = args
+        targets, params, angles = args
+
+        if params[0] == 'xyz':
+            rax = params[1]
+            pax = params[2]
+        elif params[0] == 'fromto_points':
+            param1 = [x.strip() for x in params[1].split(',')]
+            param2 = [x.strip() for x in params[2].split(',')]
+            gid1 = self.get_target1(objs, param1, 'p')[0]
+            gid2 = self.get_target1(objs, param2, 'p')[0]
+
+            p1 = self.get_point_coord(gid1)
+            p2 = self.get_point_coord(gid2)
+            rax = p2 - p1
+            pax = p1
+        elif params[0] == 'normalp':
+            param1 = [x.strip() for x in params[1].split(',')]
+            param2 = [x.strip() for x in params[2].split(',')]
+            gid1 = self.get_target1(objs, param1, 'f')[0]
+            gid2 = self.get_target1(objs, param2, 'p')[0]
+
+            n1 = self.get_face_normal(gid1)
+            p1 = self.get_point_coord(gid2)
+
+            rax = n1
+            pax = p1
+        elif params[0] == 'edgep':
+            param1 = [x.strip() for x in params[1].split(',')]
+            param2 = [x.strip() for x in params[2].split(',')]
+            gid1 = self.get_target1(objs, param1, 'l')[0]
+            gid2 = self.get_target1(objs, param2, 'p')[0]
+
+            n1 = self.get_line_direction(gid1)
+            p1 = self.get_point_coord(gid2)
+
+            rax = n1
+            pax = p1
+        else:
+            assert False, "Unknonw parameter" + str(params)
+        
 
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
@@ -2592,10 +2649,36 @@ class Geometry():
 
         return list(objs), newkeys
 
+    def MoveByPoints_build_geom(self, objs, *args):
+        targets, point1, point2, keep = args
+
+        targets = [x.strip() for x in targets.split(',')]
+        gids = self.get_target2(objs, targets)
+
+        point1 = [x.strip() for x in point1.split(',')]
+        point2 = [x.strip() for x in point2.split(',')]
+        gids_1 = self.get_target1(objs, point1, 'p')[0]
+        gids_2 = self.get_target1(objs, point2, 'p')[0]
+
+        p1 = self.get_point_coord(gids_1)
+        p2 = self.get_point_coord(gids_2)
+
+        dx, dy, dz = p2-p1
+
+        newkeys = []
+        for gid in gids:
+            new_gid = self.translate(gid, (dx, dy, dz), copy=keep)
+            if new_gid is not None:
+                newkeys.append(objs.addobj(new_gid, 'mv'))
+
+        self.synchronize_topo_list(action='both')
+
+        return list(objs), newkeys
+
     def Rotate_build_geom(self, objs, *args):
         targets, point_on_axis, axis_dir, angle, keep = args
 
-        newkeys = []        
+        newkeys = []
         targets = [x.strip() for x in targets.split(',')]
 
         gids = self.get_target2(objs, targets)
@@ -2629,7 +2712,6 @@ class Geometry():
         
         d1 = p1 - c1
         d2 = p2 - c1
-        print(d1, d2)
         
         arm1 = d1/np.sqrt(np.sum(d1**2))
         arm2 = d2/np.sqrt(np.sum(d2**2))
@@ -3084,13 +3166,14 @@ class Geometry():
 
         PTs = [self.add_point(p) for p in pos]
 
+        newobjs = []
         for p in PTs:
             shape = self.vertices[p]
             self.builder.Add(self.shape, shape)
             newkey = objs.addobj(p, 'pt')
-            _newobjs.append(newkey)
+            newobjs.append(newkey)
 
-        return list(objs), _newobjs
+        return list(objs), newobjs
 
     # Define 2D version the same as 3D
     Line2D_build_geom = Line_build_geom
@@ -3140,7 +3223,6 @@ class Geometry():
         r1 = np.sqrt(np.sum((c1-p1)**2))
         n1 = (0.0, 0.0, 1.0)
 
-        print(n1, r1, c1)
         edge = self.add_circle_by_axis_radius(c1, n1, r1)
 
         if make_face:
@@ -3157,6 +3239,36 @@ class Geometry():
         self.synchronize_topo_list(action='both')
         return list(objs), [newkey]
 
+    def Circle2DByDiameter_build_geom(self, objs, *args):
+        pts, make_face = args
+
+        pts = [x.strip() for x in pts.split(',')]
+        gids_1= self.get_target1(objs, pts, 'p')
+
+        p1 = self.get_point_coord(gids_1[0])
+        p2 = self.get_point_coord(gids_1[1])
+
+        
+        c1 = (p1 + p2)/2.0
+        r1 = np.sqrt(np.sum((p2-p1)**2))/2.0
+        n1 = (0.0, 0.0, 1.0)
+
+        edge = self.add_circle_by_axis_radius(c1, n1, r1)
+
+        if make_face:
+            ll1 = self.add_line_loop([edge])
+            ps1 = self.add_plane_surface(ll1)
+            shape = self.faces[ps1]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(ps1, 'ps')
+        else:
+            shape = self.edges[edge]
+            self.builder.Add(self.shape, shape)
+            newkey = objs.addobj(edge, 'cl')
+
+        self.synchronize_topo_list(action='both')
+        return list(objs), [newkey]
+        
     def Arc2D_build_geom(self, objs, *args):
         center, ax1, ax2, radius, an1, an2, do_fill = args
         lcar = 0.0
@@ -3202,7 +3314,7 @@ class Geometry():
 
     def Rect2D_build_geom(self, objs, *args):
         c1, e1, e2 = args
-        lcar = 0.0
+
         c1 = np.array(c1 + [0])
         e1 = np.array(e1 + [0])
         e2 = np.array(e2 + [0])
@@ -3223,6 +3335,42 @@ class Geometry():
         newkey = objs.addobj(rec1, 'rec')
         return list(objs), [newkey]
 
+    def Rect2DByCorners_build_geom(self, objs, *args):
+        pts = args[0]
+
+        targets = [x.strip() for x in pts.split(',')]
+        gids = self.get_target1(objs, targets, 'p')
+
+
+        print(gids)
+        p1 = self.get_point_coord(gids[0])
+        p2 = self.get_point_coord(gids[1])
+
+        print(p1, p2)
+        c1, d1, d2 = self._last_wp_param
+
+        x1, y1  = p1[:2]
+        x2, y2  = p2[:2]
+
+        p1 = gids[0]
+        p2 = self.add_point([x1, y2, 0])
+        p3 = gids[1]
+        p4 = self.add_point([x2, y1, 0])
+        l1 = self.add_line(p1, p2)
+        l2 = self.add_line(p2, p3)
+        l3 = self.add_line(p3, p4)
+        l4 = self.add_line(p4, p1)
+        ll1 = self.add_line_loop([l1, l2, l3, l4])
+        rec1 = self.add_plane_surface(ll1)
+
+        shape = self.faces[rec1]
+        self.builder.Add(self.shape, shape)
+
+        newkey = objs.addobj(rec1, 'rec')
+        return list(objs), [newkey]
+        
+
+        
     def Polygon2D_build_geom(self, objs, *args):
         del objs
         del args
@@ -3446,6 +3594,7 @@ class Geometry():
             normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
         v = self.add_box(points)
 
+        print(xmin, ymin, zmin, xmax, ymax, zmax)
 
         ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=True,
                                keep_highest=True)
@@ -4117,45 +4266,6 @@ class Geometry():
 
         return ptx
     
-        '''
-        x1 = np.array([1., 0., 0.])
-        ax = np.cross(x1, a1)
-        an = np.arctan2(np.sqrt(np.sum(ax**2)), np.dot(a1, x1))
-
-        #print("first rot ???", ax, an, np.sum(ax**2))
-        if np.sum(ax**2) == 0.0:
-            if an != 0.0:
-                # if a1 is [0, 0, -1], rotate 180 deg
-                ax = np.array([0, 1, 0])
-                an = np.pi
-            else:
-                ax = x1
-                an = 0.0
-                
-        if np.sum(ax**2) != 0.0 and an != 0.0:
-            R = rotation_mat(ax, an)
-            ptx = np.dot(R, ptx.transpose()).transpose()
-
-        R = rotation_mat(ax, an)        
-        y2 = np.dot(R, np.array([0, 1, 0]))
-        ax = a1
-        aaa = np.cross(a1, y2)
-        an = np.arctan2(np.dot(a2, aaa), np.dot(a2, y2))
-
-        if np.sum(ax**2) == 0.0 and an != 0.0:
-            # rotate 180 deg around a1
-            ax = a1
-            an = np.pi
-        if np.sum(ax**2) != 0.0 and an != 0.0:
-            R = rotation_mat(ax, an)                    
-            ptx = np.dot(R, ptx.transpose()).transpose()            
-
-        if c1[0] != 0.0 or c1[1] != 0.0 or c1[2] != 0.0:
-            ptx = ptx + np.array(c1)
-            
-        return ptx
-        '''
-
     def generate_preview_mesh(self):
         def merge_preview_data(data1, data2):
             for k in data2[1]:  # merge l
