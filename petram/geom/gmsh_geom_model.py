@@ -298,10 +298,11 @@ class GmshGeom(GeomTopBase):
     
     @classmethod        
     def fancy_menu_name(self):
-        return 'OCC Geometry'
+        return 'Gmsh Geometry'
     @classmethod
     def fancy_tree_name(self):
-        return 'OCCSequence'
+        return 'GmshSequence'
+
     
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
@@ -359,7 +360,7 @@ class GmshGeom(GeomTopBase):
 
     def get_possible_child(self):
         from petram.geom.gmsh_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
-                                                 Line, Spline,
+                                                 PointCircleCenter, Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
@@ -368,10 +369,10 @@ class GmshGeom(GeomTopBase):
                                                  SplitByPlane, Copy, Remove, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale, WorkPlane,
                                                  WorkPlaneByPoints, healCAD, CADImport, BrepImport,
-                                                 Fillet,Chamfer,
+                                                 Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ThruSection, RotateCenterPoints, MoveByPoints)
-        return [Point, PointCenter, PointOnEdge, PointByUV,
+        return [Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
                 Rect, Polygon, Spline, Box,
                 Ball, Cone, Wedge, Cylinder,
@@ -381,10 +382,11 @@ class GmshGeom(GeomTopBase):
                 Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ThruSection,  RotateCenterPoints,  MoveByPoints]
+                ThruSection, RotateCenterPoints, MoveByPoints]
 
     def get_possible_child_menu(self):
-        from petram.geom.gmsh_primitives import (Point, PointCenter, PointOnEdge, PointByUV,  Line, Spline,  
+        from petram.geom.gmsh_primitives import (Point, PointCenter, PointCircleCenter,
+                                                 PointOnEdge, PointByUV,  Line, Spline,  
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
@@ -396,7 +398,8 @@ class GmshGeom(GeomTopBase):
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ThruSection, RotateCenterPoints, MoveByPoints)
-        return [("Add Points...", Point), ("", PointCenter), ("", PointOnEdge), ("!", PointByUV),
+        return [("Add Points...", Point), ("", PointCenter), ("", PointOnEdge),
+                ("", PointCircleCenter), ("!", PointByUV),
                 ("", Line),
                 ("Add Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
                 ("", Rect),
@@ -955,3 +958,5 @@ def read_loops(unrolled):
             tmp.extend(ll[k])
         s[ks] = list(set(tmp))
     return s, v
+
+

@@ -72,9 +72,9 @@ class PointByUV(GeomPB):
         return 'PointOnSurface'
 
 pdata = ( ('edge', VtableElement('edge', type='string',
-                                 guilabel='Line/Curve',
+                                 guilabel='Line',
                                  default="",
-                                 tip="surfaces")), 
+                                 tip="Edge to put point")), 
          ('u_coord', VtableElement('uarr', type='array',
                                 guilabel='U_n',
                                 default='0.',
@@ -89,7 +89,23 @@ class PointOnEdge(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return  "Point"
-          
+    
+pdata = ( ('edge', VtableElement('edge', type='string',
+                                 guilabel='Line',
+                                 default="",
+                                 tip="Edge to find center")), )
+class PointCircleCenter(GeomPB):
+    vt = Vtable(pdata)
+    
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'On center'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return  "Point"
+
+    
 pdata = ( ('points1', VtableElement('points1', type='string',
                                     guilabel='1st Points',
                                     default="",
@@ -187,16 +203,10 @@ class Circle(GeomPB):
     def fancy_tree_name(self):
         return 'Circle'
 
-cdata = (('axis', VtableElement('axis', type='float',
-                                  guilabel='Normal',
-                                  suffix=('x', 'y', 'z'),
-                                  default=[0, 0, 1],
-                                  tip="Axis of revolution")),
-         ('pnt_on_ax', VtableElement('pnt_on_ax', type='float',
-                               guilabel='Point on axis',
-                               suffix=('x', 'y', 'z'),
-                               default=[0, 0, 0],
-                               tip="Point on axis"),),
+cdata = (('axis_by_points', VtableElement('axis_by_points', type='string',
+                                          guilabel='Points on axis',
+                                          default="",
+                                          tip="Points to define axis")),
           ('point_on_cirlce', VtableElement('point_on_circle', type='string',
                                            guilabel='Point on circle',
                                            default="",
@@ -488,6 +498,14 @@ ldata = (('points', VtableElement('pts', type='string',
                                   default="",
                                   tip="points to be connected")), )
 
+class OCCPolygon(GeomPB):
+    vt = Vtable(ldata)
+    @classmethod        
+    def fancy_menu_name(self):
+        return 'Polygon'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Polygon'
 
 class Spline(GeomPB):
     vt = Vtable(ldata)
@@ -707,21 +725,27 @@ data0 = (('target_object', VtableElement('target_object', type='string',
          ('cpoint', VtableElement('cpoint', type='string',
                                   guilabel='Center',
                                   default="",
-                                  tip="center of rotation")), 
-         ('twopoints', VtableElement('twopoints', type='string',
-                                  guilabel='Point Pair',
-                                  default="",
-                                  tip="pair of points to match")), 
-         ('keep_org', VtableElement('kepp_org', type='bool',
-                                    guilabel='Copy',
-                                    default=True,
-                                    tip="Keep original")), )
-    
+                                  tip="center of rotation")),
+         ('twopoints', VtableElement('twopoints', type = 'string',
+                                  guilabel = 'Point Pair',
+                                  default =  "",
+                                  tip="pair of points to match")),
+         ('use_sup', VtableElement('use_sup', type='bool',
+                                    guilabel = 'Use supplementary angle',
+                                    default = False,
+                                    tip = "Use 180 - angle (deg)")),
+         ('keep_org', VtableElement('kepp_org', type = 'bool',
+                                    guilabel = 'Copy',
+                                    default = True,
+                                    tip = "Keep original")), )
+
 class RotateCenterPoints(GeomPB):
     vt = Vtable(data0)
-    @classmethod        
+    
+    @classmethod
     def fancy_menu_name(self):
         return 'Rotate (by points)'
+
     @classmethod
     def fancy_tree_name(self):
         return 'Rotate'
@@ -1460,9 +1484,11 @@ data0 = (('center', VtableElement('center', type='float',
                                tip="2nd Axis")),)
 
 class WPBase(GeomPB):
+    isWP = True        
     def get_possible_child(self):
-        return [Point2D, Line2D,
-                Circle2D, CircleBy3Points, Circle2DCenterOnePoint, Circle2DByDiameter,
+        return [Point2D, PointCircleCenter, Line2D,
+                Circle2D, CircleBy3Points, Circle2DCenterOnePoint,
+                Circle2DByDiameter,
                 Arc2D, Arc2DBy3Points, Arc2DBy2PointsAngle,
                 Rect2D, Rect2DByCorners,
                 Polygon2D, Spline2D,
@@ -1471,26 +1497,28 @@ class WPBase(GeomPB):
                 CreateLine, CreateSurface, ProjectOnWP]
 
     def get_possible_child_menu(self):
-        return [("Add Point...", Point2D),("", PointCenter), ("!", PointOnEdge),
-                ("Add Line/Arc", Line2D), ("", Arc2D), ("", Arc2DBy3Points),("!", Arc2DBy2PointsAngle), 
+        return [("Add Point...", Point2D),("", PointCenter), ("", PointOnEdge),
+                ("!", PointCircleCenter),
+                ("Add Line/Arc", Line2D), ("", Arc2D), ("", Arc2DBy3Points),
+                ("!", Arc2DBy2PointsAngle),
                 ("Add Rect", Rect2D), ("!", Rect2DByCorners),
                 ("Add Circle...", Circle2D), ("", CircleBy3Points),
-                ("", Circle2DCenterOnePoint),("!", Circle2DByDiameter),
+                ("", Circle2DCenterOnePoint), ("!", Circle2DByDiameter),
                 ("", Spline2D),
                 ("Create...", CreateLine), ("!", CreateSurface),
                 ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
                 ("", Flip2D), ("", Scale2D), ("", Array2D), ("!", ProjectOnWP),
                 ("Boolean...", Union2D),
-                ("", Intersection), ("", Difference), ("!", Fragments),
-                ]
+                ("", Intersection), ("", Difference), ("!", Fragments),]
+
     def add_geom_sequence_wp_start(self, geom):
         gui_name = self.fullname()
         self.vt.preprocess_params(self)
         gui_param = self.vt.make_value_or_expression(self)
         geom_name = self.__class__.__name__+"Start"
         geom.add_sequence(gui_name, gui_param, geom_name)
-        
+
     def add_geom_sequence_wp_end(self, geom):
         gui_name = self.fullname()
         self.vt.preprocess_params(self)
@@ -1499,7 +1527,6 @@ class WPBase(GeomPB):
         geom.add_sequence(gui_name, gui_param, geom_name)
 
 class WorkPlane(WPBase):
-    isWP=True    
     vt = Vtable(data0)
 
     @classmethod
@@ -1529,15 +1556,14 @@ data0 = (('center', VtableElement('pts1', type='string',
          ('flip2', VtableElement('flip2', type='bool',
                                  guilabel='flip 2nd axis',
                                  default=False,
-                                 tip="flip 2nd axis")), 
+                                 tip="flip 2nd axis")),
          ('offset', VtableElement('offset', type='float',
-                                 guilabel='offset',
-                                 default=0.0,
-                                 tip="offset in normal direction")), )
+                                  guilabel='offset',
+                                  default=0.0,
+                                  tip="offset in normal direction")), )
 
 
 class WorkPlaneByPoints(WPBase):
-    isWP=True
     vt = Vtable(data0)
 
     @classmethod

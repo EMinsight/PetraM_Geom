@@ -163,7 +163,7 @@ class VtableElement_Rotation(VtableElement):
         v['use_edgep'] = False
         v['use_xyz'] = False
         v['xyz_txt1'] = '0, 0, 1'
-        v['xyz_txt2'] = '0, 0, 0'        
+        v['xyz_txt2'] = '0, 0, 0'
         v['fromto_points_txt1'] = ''
         v['fromto_points_txt2'] = ''
         v['normalp_face'] = ''
@@ -179,9 +179,9 @@ class VtableElement_Rotation(VtableElement):
 
         elp2 = [["Axis", [0, 0, 0], 0, ret[-1]],
                 ["Point on axis", [0, 0, 0], 0, ret[-1]],]
-        
+
         ret = [None, None, 34, [{'text':'Rotation', 'choices':[]},],]
-        
+
         ret[3][0]['choices'].append('By xyz')
         ret[3][0]['choices'].append('By two points')
         ret[3][0]['choices'].append('Edge and point')
@@ -215,7 +215,7 @@ class VtableElement_Rotation(VtableElement):
             ret[0] = 'Face normal and point'
         else:
             pass
-        
+
         ret.append([obj.xyz_txt1,
                     obj.xyz_txt2, ])
         ret.append([obj.fromto_points_txt1,
@@ -232,7 +232,7 @@ class VtableElement_Rotation(VtableElement):
         obj.use_normalp = False
         obj.use_edgep = False
         obj.use_xyz = False
-        
+
         if v[0] == 'By xyz':
             obj.use_xyz = True
             obj.xyz_txt1 = v[1][0]
@@ -290,6 +290,9 @@ class VtableElement_Plane(VtableElement):
         v['by_3_points_txt1'] = ''
         v['by_3_points_txt2'] = ''
         v['by_3_points_txt3'] = ''
+        v['use_face_normal'] = False
+        v['face_normal_txt1'] = ''
+        v['face_normal_txt2'] = ''
 
         return v
 
@@ -298,13 +301,18 @@ class VtableElement_Plane(VtableElement):
         ret[3] = list(ret[3])
         ret[3][0]['choices'].append('By 3 points')
         ret[3][0]['choices'].append('Face parallel and point')
-        elp3 = [["Point 1",  None, 0,  {}],
-                ["Point 2",    None, 0,  {}],
-                ["Point 3",    None, 0,  {}], ]
-        elp4 = [["Face",  None, 0,  {}],
-                ["Point",  None, 0,  {}], ]
+        ret[3][0]['choices'].append('Face normal and two points')
+        elp3 = [["Point 1", None, 0, {}],
+                ["Point 2", None, 0, {}],
+                ["Point 3", None, 0, {}], ]
+        elp4 = [["Face", None, 0, {}],
+                ["Point", None, 0, {}], ]
+        elp5 = [["Face", None, 0, {}],
+                ["Points", None, 0, {}], ]
+
         ret[3].append({'elp': elp3})
         ret[3].append({'elp': elp4})
+        ret[3].append({'elp': elp5})
 
         return ret
 
@@ -314,6 +322,8 @@ class VtableElement_Plane(VtableElement):
             ret[0] = 'Face parallel and point'
         elif obj.use_3_points:
             ret[0] = 'By 3 points'
+        elif obj.use_face_normal:
+            ret[0] = 'Face normal and two points'
         else:
             pass
 
@@ -322,17 +332,25 @@ class VtableElement_Plane(VtableElement):
                     obj.by_3_points_txt3, ])
         ret.append([obj.face_parallel_txt1,
                     obj.face_parallel_txt2, ])
+        ret.append([obj.face_normal_txt1,
+                    obj.face_normal_txt2, ])
 
         return ret
 
     def import_panel_value(self, obj, v):
         obj.use_3_points = False
         obj.use_face_parallel = False
+        obj.use_face_normal = False        
         if v[0] == 'Face parallel and point':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_face_parallel = True
             obj.face_parallel_txt1 = v[4][0]
             obj.face_parallel_txt2 = v[4][1]
+        elif v[0] == 'Face normal and two points':
+            setattr(obj, 'use_m_'+self.name, False)
+            obj.use_face_normal = True
+            obj.face_normal_txt1 = v[5][0]
+            obj.face_normal_txt2 = v[5][1]
         elif v[0] == 'By 3 points':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_3_points = True
@@ -348,6 +366,10 @@ class VtableElement_Plane(VtableElement):
             ret = ['face_parallel',
                    obj.face_parallel_txt1,
                    obj.face_parallel_txt2]
+        elif obj.use_face_normal:
+            ret = ['face_normal',
+                   obj.face_normal_txt1,
+                   obj.face_normal_txt2]
         elif obj.use_3_points:
             ret = ['3_points',
                    obj.by_3_points_txt1,

@@ -220,7 +220,8 @@ class topo_list():
         return self.next_id
 
     def new_group(self):
-        group = max(self.gg.keys())+1
+        print(list(self.gg.keys()))
+        group = max(list(self.gg.keys()))+1
         self.set_group(group)
         return group
     
@@ -502,7 +503,8 @@ class Geometry():
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2)
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
-        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-8)
+        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-10)
+        #self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 0)
         self.occ_geom_tolerance = kwargs.pop('OCCGeomTol', 1e-6)        
         self.maxthreads = kwargs.pop('Maxthreads', 1)
         self.skip_final_frag = kwargs.pop('SkipFrag', False)
@@ -512,6 +514,12 @@ class Geometry():
         self.small_edge_thr = kwargs.pop('SmallEdgeThr', 0.001)
         self.small_edge_seg = kwargs.pop('SmallEdgeSeg', 3)
         self.max_seg = kwargs.pop('MaxSeg', 30)
+        self.occ_angle_deflection = kwargs.pop('AngleDeflection', 0.05)
+        self.occ_linear_deflection = kwargs.pop('LinearDeflection', 0.01)
+
+        self.occ_angle_deflection = self.long_edge_thr
+        self.occ_linear_deflection = self.small_edge_thr
+
 
     def prep_topo_list(self):
         self.vertices = topo_list_vertex()
@@ -766,6 +774,28 @@ class Geometry():
         ptx = (ptx.X(), ptx.Y(), ptx.Z())
 
         return np.array(n1), np.array(ptx)
+    
+    def get_circle_center(self, gid):
+
+        from OCC.Core.GeomLProp import GeomLProp_CLProps
+
+        shape = self.edges[gid]
+
+        curve, first, last = self.bt.Curve(shape)
+        pnt1 = gp_Pnt()
+
+        uarr = np.linspace(0, 1, 10)
+
+        pt = np.zeros(3)
+        for uu in uarr:
+            uuu = first*(1-uu) + last*uu
+            prop = GeomLProp_CLProps(curve, uuu, 2, self.occ_geom_tolerance)
+            prop.CentreOfCurvature(pnt1)
+            x = np.array((pnt1.X(), pnt1.Y(), pnt1.Z()))
+            pt = pt + x
+
+        pt = pt/len(uarr)
+        return pt
 
     def write_brep(self, filename):
 
@@ -888,7 +918,8 @@ class Geometry():
         return 0
 
     def add_point(self, p):
-        p = BRepBuilderAPI_MakeVertex(gp_Pnt(p[0], p[1], p[2])).Shape()
+        x, y, z = float(p[0]), float(p[1]), float(p[2])
+        p = BRepBuilderAPI_MakeVertex(gp_Pnt(x, y, z)).Shape()
         return self.vertices.add(p)
 
     def add_point_on_face(self, gid, uarr, varr):
@@ -993,6 +1024,20 @@ class Geometry():
         else:
             l = self.factory.addEllipseArc(endTag, centerTag, startTag)
         return LineID(l)
+
+    def add_polygon(self, gids):
+        L = len(gids)
+        gids = list(gids) + [gids[0]]
+
+        lines = []
+        for i in range(L):
+            l1 = self.add_line(gids[i], gids[i+1])
+            lines.append(l1)
+
+        ll1 = self.add_curve_loop(lines)
+        s1 = self.add_plane_surface(ll1)
+
+        return s1
 
     def add_spline(self, pos, tolerance=1e-5, periodic=False):
         from OCC.Core.TColgp import TColgp_HArray1OfPnt
@@ -1990,6 +2035,21 @@ class Geometry():
 
         return list(objs), _newobjs
 
+    def PointCircleCenter_build_geom(self, objs, *args):
+        targets = args[0]
+        targets = [x.strip() for x in targets.split(',')]
+        gids = self.get_target1(objs, targets, 'l')
+
+        ptx = np.vstack([self.get_circle_center(gid) for gid in gids])
+        ptx = np.mean(ptx, 0)
+
+        p = self.add_point(ptx)
+        shape = self.vertices[p]
+        self.builder.Add(self.shape, shape)
+
+        newobjs = [objs.addobj(p, 'pt')]
+        return list(objs), newobjs
+
     def PointByUV_build_geom(self, objs, *args):
         targets, uarr, varr = args
         targets = [x.strip() for x in targets.split(',')]
@@ -2063,8 +2123,20 @@ class Geometry():
 
         return list(objs), _newobjs
 
-    def Polygon_build_geom(self, objs, *args):
-        assert False, "polygon is not available in OCC geometry wrapper"
+    def OCCPolygon_build_geom(self, objs, *args):
+        pts = args
+        pts = [x.strip() for x in pts[0].split(',')]
+        gids = self.get_target1(objs, pts, 'p')
+
+        if len(gids) < 3:
+            assert False, "Polygon requires more than 2 guide points"
+
+        polygon = self.add_polygon(gids)
+        shape = self.faces[polygon]
+        self.builder.Add(self.shape, shape)
+
+        newobj = objs.addobj(polygon, 'plg')
+        return list(objs), [newobj]
 
     def Spline_build_geom(self, objs, *args):
         pts = args
@@ -2090,6 +2162,9 @@ class Geometry():
 
         newobj = objs.addobj(spline, 'sp')
         return list(objs), [newobj]
+
+    def Spline2D_build_geom(self, objs, *args):
+        return self.Spline_build_geom(objs, *args)
 
     def CreateLine_build_geom(self, objs, *args):
         pts = args
@@ -2172,19 +2247,26 @@ class Geometry():
         self.synchronize_topo_list(action='both')
 
         return list(objs), newkey
-    
+
     def CircleByAxisPoint_build_geom(self, objs, *args):
-        ax1, pt_on_ax, pts, make_face = args
+        pts, pt_on_cl, make_face = args
 
         pts = [x.strip() for x in pts.split(',')]
-        gids_vertex = self.get_target1(objs, pts, 'p')
-        
-        ptx1 = self.get_point_coord(gids_vertex[0])
-        d = ptx1 - np.array(pt_on_ax)
-        dirct = np.array(ax1)
+        gids_vert = self.get_target1(objs, pts, 'p')
+
+        pt_on_cl = [x.strip() for x in pt_on_cl.split(',')]
+        gid = self.get_target1(objs, pt_on_cl, 'p')[0]
+
+        ptx1 = self.get_point_coord(gids_vert[0])
+        ptx2 = self.get_point_coord(gids_vert[1])
+        ptx3 = self.get_point_coord(gid)
+
+        dirct = ptx2 - ptx1
         dirct = dirct/np.sqrt(np.sum(dirct**2))
 
-        center = np.array(pt_on_ax) + np.sum(d*dirct)*dirct
+        d = ptx3 - ptx1
+
+        center = np.array(ptx1) + np.sum(d*dirct)*dirct
         radius = np.sqrt(np.sum(d**2) - np.sum(d*dirct)**2)
 
         edge = self.add_circle_by_axis_radius(center, dirct, radius)
@@ -2208,7 +2290,7 @@ class Geometry():
         pts = [x.strip() for x in pts.split(',')]
         gids_vertex = self.get_target1(objs, pts, 'p')
 
-        assert len(gids_vertex)==3, "Need 3 points to define circle"
+        assert len(gids_vertex) == 3, "Need 3 points to define circle"
         edge = self.add_circle_by_3points(*gids_vertex)
 
         if make_face:
@@ -2694,7 +2776,7 @@ class Geometry():
         return list(objs), newkeys
 
     def RotateCenterPoints_build_geom(self, objs, *args):
-        targets, center, points, keep = args
+        targets, center, points, use_sup, keep = args
 
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
@@ -2725,7 +2807,8 @@ class Geometry():
 
         angle = np.arctan2(yy, xx)
 
-        print("angle", angle)
+        if use_sup: angle = angle - np.pi
+
         newkeys = []
         for gid in gids:
             new_gid = self.rotate(gid, c1, dirct, angle, copy=keep)
@@ -2879,7 +2962,6 @@ class Geometry():
                 angle = get_angle(self.get_point_coord(gids_ref[0]),
                                   self.get_point_coord(gids_ref[i+1]))
                 angle_arr.append(angle)
-            print("angle arr", angle_arr)
         else:
             angle = get_angle(self.get_point_coord(gids_ref[0]),
                               self.get_point_coord(gids_ref[1]))
@@ -3524,18 +3606,20 @@ class Geometry():
             # projected point
             p = [project_ptx_2_plain(normal, cptx, pp) for pp in corners]
 
-            # distance from plain
+            # distance from plane
             d = [np.sum((pp - cptx) * normal) for pp in corners]
             dist1 = np.max(d)
 
-            # distance on the plain
+            print("distance from plane", dist1)
+            # distance on the plane
             d = [np.sqrt(np.sum((pp - cptx)**2)) for pp in p]
             idx = np.argmax(d)
             dist2 = np.max(d)
 
             size = np.max((dist1, dist2)) * 1.2
-
+            
             n1 = (p[idx] - cptx)
+            n1 = n1/np.sqrt(np.sum(n1**2))
             n2 = np.cross(normal, n1)
 
             c1 = cptx - n1 * size - n2 * size
@@ -3583,13 +3667,32 @@ class Geometry():
             cptx = self.get_point_coord(gid_ptx)
             normal, _void = self.get_face_normal(gid_face, check_flat=True)
 
+        elif args[1][0] == 'face_normal':
+            print(args[1])
+            gid_face = self.get_target1(objs, [args[1][1], ], 'f')[0]
+            tmp = [x.strip() for x in args[1][2].split(',')]
+            gid_ptx = self.get_target1(objs, tmp, 'p')
+            ptx1 = self.get_point_coord(gid_ptx[0])
+            ptx2 = self.get_point_coord(gid_ptx[1])
+
+            cptx = ptx1
+
+            n1, _void = self.get_face_normal(gid_face, check_flat=True)
+            n2 = ptx2 - ptx1
+            n2 = n2/np.sqrt(np.sum(n2**2))
+
+
+            print(n1, n2)
+            normal = np.cross(n1, n2)
+            print(normal)
+
         else:
             assert False, "unknown option:" + args
 
         offset = args[-1]
         if offset != 0:
-               cptx = cptx + normal*offset
-               
+            cptx = cptx + normal*offset
+
         points = containing_bbox(
             normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
         v = self.add_box(points)
@@ -3599,13 +3702,13 @@ class Geometry():
         ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=True,
                                keep_highest=True)
 
-        v = self.add_box(points)    
+        v = self.add_box(points)
         ret2 = self.intersection(gids, (v,), remove_obj=True, remove_tool=True,
                                  keep_highest=True)
 
         self.synchronize_topo_list()
 
-        newkeys = []        
+        newkeys = []
         for rr in ret1 + ret2:
             newkeys.append(objs.addobj(rr, 'splt'))
 
@@ -4034,7 +4137,7 @@ class Geometry():
         else:
             return os.path.join(trash, filename + ext)
 
-    def generate_preview_mesh0(self, mesh_quality=1):
+    def generate_preview_mesh0(self):
         if self.queue is not None:
             self.queue.put((False, "Generating preview"))
 
@@ -4046,9 +4149,11 @@ class Geometry():
         if adeviation == 0:
             return None
         else:
-            fac = 1./self.geom_prev_res
-            BRepMesh_IncrementalMesh(self.shape, 0.05 * adeviation * mesh_quality,
-                                 False, 0.5, self.occ_parallel)
+            ad = self.occ_angle_deflection
+            ld = self.occ_linear_deflection
+
+            BRepMesh_IncrementalMesh(self.shape, ld * adeviation,
+                                 False, ad, self.occ_parallel)
 
         bt = BRep_Tool()
 
