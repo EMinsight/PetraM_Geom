@@ -220,7 +220,6 @@ class topo_list():
         return self.next_id
 
     def new_group(self):
-        print(list(self.gg.keys()))
         group = max(list(self.gg.keys()))+1
         self.set_group(group)
         return group
@@ -990,7 +989,6 @@ class Geometry():
         vec = gp_Dir(dx, dy, dz)
         axis = gp_Ax1(pnt, vec)
 
-        print("radius", radius, type(radius))
         cl = GC_MakeCircle(axis, radius)
         edgeMaker = BRepBuilderAPI_MakeEdge(cl.Value())
         edgeMaker.Build()
@@ -1945,8 +1943,6 @@ class Geometry():
             assert False, "Failed to perform projection"
         result = proj.Projection()
 
-        print(result)
-
         ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, d1, d2)
         if np.sum(c1**2) != 0.0:
             result = do_translate(result, -c1)
@@ -2343,21 +2339,19 @@ class Geometry():
         loop1, loop2, makeSolid, makeRuled = args
         loop1 = [x.strip() for x in loop1.split(',')]
         loop2 = [x.strip() for x in loop2.split(',')]
-        
+
         gids_loop1 = self.get_target1(objs, loop1, 'l')
         gids_loop2 = self.get_target1(objs, loop2, 'l')
 
         gid_wire1 = self.add_line_loop(gids_loop1)
         gid_wire2 = self.add_line_loop(gids_loop2)
-        
-        print(gid_wire1, gid_wire2)
 
         gid_new, shape_new = self.add_thrusection(gid_wire1, gid_wire2,
                                        makeSolid = makeSolid,
                                        makeRuled = makeRuled)
-        
+
         self.builder.Add(self.shape, shape_new)
-        
+
         self.synchronize_topo_list(action='both')
 
         if makeSolid:
@@ -2365,14 +2359,14 @@ class Geometry():
             newkeys = [newobj2]
         else:
             newkeys = []
-            
+
         return list(objs), newkeys
 
 
     def SurfaceLoop_build_geom(self, objs, *args):
         assert False, "We don't support this"
 
-    ## 3D solids
+    # 3D solids
     def CreateVolume_build_geom(self, objs, *args):
 
         pts = args
@@ -2595,7 +2589,6 @@ class Geometry():
         newkeys = []
 
         if offset != 0:
-            print(trans)
             tt0 = trans[0]
 
             new_gids = []
@@ -2785,16 +2778,15 @@ class Geometry():
         points = [x.strip() for x in points.split(',')]
         gids_1 = self.get_target1(objs, center, 'p')
         gids_2 = self.get_target1(objs, points, 'p')
-        print(gids_1, gids_2)
+
         c1 = self.get_point_coord(gids_1[0])
 
         p1 = self.get_point_coord(gids_2[0])
         p2 = self.get_point_coord(gids_2[1])
-        print(c1, p1, p2)
-        
+
         d1 = p1 - c1
         d2 = p2 - c1
-        
+
         arm1 = d1/np.sqrt(np.sum(d1**2))
         arm2 = d2/np.sqrt(np.sum(d2**2))
 
@@ -2803,7 +2795,6 @@ class Geometry():
         d2 = d2/np.sqrt(np.sum(d2**2))
         yy = np.sum(arm2*d2)
         xx = np.sum(arm2*arm1)
-        print(xx, yy)
 
         angle = np.arctan2(yy, xx)
 
@@ -3423,16 +3414,13 @@ class Geometry():
         targets = [x.strip() for x in pts.split(',')]
         gids = self.get_target1(objs, targets, 'p')
 
-
-        print(gids)
         p1 = self.get_point_coord(gids[0])
         p2 = self.get_point_coord(gids[1])
 
-        print(p1, p2)
         c1, d1, d2 = self._last_wp_param
 
-        x1, y1  = p1[:2]
-        x2, y2  = p2[:2]
+        x1, y1 = p1[:2]
+        x2, y2 = p2[:2]
 
         p1 = gids[0]
         p2 = self.add_point([x1, y2, 0])
@@ -3450,9 +3438,7 @@ class Geometry():
 
         newkey = objs.addobj(rec1, 'rec')
         return list(objs), [newkey]
-        
 
-        
     def Polygon2D_build_geom(self, objs, *args):
         del objs
         del args
@@ -3668,7 +3654,6 @@ class Geometry():
             normal, _void = self.get_face_normal(gid_face, check_flat=True)
 
         elif args[1][0] == 'face_normal':
-            print(args[1])
             gid_face = self.get_target1(objs, [args[1][1], ], 'f')[0]
             tmp = [x.strip() for x in args[1][2].split(',')]
             gid_ptx = self.get_target1(objs, tmp, 'p')
@@ -3681,10 +3666,7 @@ class Geometry():
             n2 = ptx2 - ptx1
             n2 = n2/np.sqrt(np.sum(n2**2))
 
-
-            print(n1, n2)
             normal = np.cross(n1, n2)
-            print(normal)
 
         else:
             assert False, "unknown option:" + args
@@ -3696,8 +3678,6 @@ class Geometry():
         points = containing_bbox(
             normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
         v = self.add_box(points)
-
-        print(xmin, ymin, zmin, xmax, ymax, zmax)
 
         ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=True,
                                keep_highest=True)
@@ -4371,7 +4351,7 @@ class Geometry():
 
         return ptx
     
-    def generate_preview_mesh(self):
+    def generate_preview_mesh(self, finalize = True):
         def merge_preview_data(data1, data2):
             for k in data2[1]:  # merge l
                data1[1][k] = data2[1][k]
@@ -4445,6 +4425,21 @@ class Geometry():
         self.write_brep(geom_brep)
 
         return geom_brep
+    
+    def load_finalized_brep(self, brep_file):
+        from OCC.Core.BRepTools import breptools_Read
+
+        shape = TopoDS_Shape()
+        success = breptools_Read(shape, brep_file, self.builder)
+
+        if not success:
+            assert False, "Failed to read brep" + str(brep_file)
+
+        self.shape = self.new_compound()
+        self.prep_topo_list()
+        
+        shape = self.select_highest_dim(shape)
+        new_objs = self.register_shaps_balk(shape)
 
     '''
     sequence/preview/brep generator
@@ -4570,6 +4565,8 @@ class OCCGeometryGenerator(mp.Process):
             q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
 
         else:
+            if finalize:
+                self.mw.load_finalized_brep(brep_file)
             data = self.mw.generate_preview_mesh()
             # data =  geom_msh, l, s, v,  vcl, esize
 
