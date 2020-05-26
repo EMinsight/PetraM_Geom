@@ -73,10 +73,6 @@ from OCC.Core.GC import (GC_MakeArcOfCircle,
                          GC_MakeCircle)                         
 from OCC.Core.BOPTools import BOPTools_AlgoTools3D
 
-from petram.geom.gmsh_geom_model import get_geom_key
-from petram.phys.vtable import VtableElement, Vtable
-import gmsh
-
 import os
 import numpy as np
 import time
@@ -487,7 +483,6 @@ class Geometry():
         self.bt = BRep_Tool()
 
         self.geom_sequence = []
-        gmsh.option.setNumber("Mesh.MshFileVersion", 2.2)
 
         write_log = kwargs.pop('write_log', False)
         if write_log:
@@ -502,7 +497,7 @@ class Geometry():
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2)
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
-        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-10)
+        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-8)
         #self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 0)
         self.occ_geom_tolerance = kwargs.pop('OCCGeomTol', 1e-6)        
         self.maxthreads = kwargs.pop('Maxthreads', 1)
@@ -1552,24 +1547,27 @@ class Geometry():
 
         return v1
 
-    def update_topo_list_from_history(self, operator, list_of_shapes):
+    def update_topo_list_from_history(self, operator, list_of_shapes,
+                                      verbose=False):
         iterator = TopTools_ListIteratorOfListOfShape(list_of_shapes)
         while iterator.More():
-            shape = iterator.Value()            
+            shape = iterator.Value()
             iterator.Next()
             # Do I need to do something with modified?
             # operator.Modified(shape)
 
             shape_gone = operator.IsDeleted(shape)
             if shape_gone:
-                print("shape gone", shape_gone)
+                if verbose:
+                    print("shape gone", shape_gone)
 
             shapes_new = operator.Generated(shape)
-            iterator2 = TopTools_ListIteratorOfListOfShape(shapes_new)            
+            iterator2 = TopTools_ListIteratorOfListOfShape(shapes_new)
             while iterator2.More():
                 shape_new = iterator2.Value()
                 iterator2.Next()
-                print("shape new", shape_new)
+                if verbose:
+                    print("shape new", shape_new)
 
     def do_boolean(self, operation, gid_objs, gid_tools,
                    remove_tool=True, remove_obj=True,
@@ -1633,7 +1631,7 @@ class Geometry():
         if upgrade:
             from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
             unifier = ShapeUpgrade_UnifySameDomain(result)
-            unifier.Build();
+            unifier.Build()
             result = unifier.Shape()
 
         
@@ -2872,7 +2870,6 @@ class Geometry():
         gids = self.get_target2(objs, targets)
         gids_ref = self.get_target1(objs, ref_ptx, 'p')
 
-
         delta_arr = []
         if count == 1:
             count = len(gids_ref) - 1
@@ -2886,7 +2883,7 @@ class Geometry():
             i = 1
             while i < count:
                 delta_arr.append(delta*i)
-                i = i + 1 
+                i = i + 1
 
         for delta in delta_arr:
             for gid in gids:
@@ -2897,7 +2894,7 @@ class Geometry():
         self.synchronize_topo_list(action='add')
 
         return list(objs), newkeys
-    
+
     def ArrayRot_build_geom(self, objs, *args):
         targets, count, point_on_axis, axis_dir, angle = args
 
@@ -3191,38 +3188,6 @@ class Geometry():
         self.synchronize_topo_list()
         return list(objs), newkeys
 
-
-        '''    
-        input_entity = get_target2(objs, tp)
-        tool_entity = get_target2(objs, tm)
-        ret = self.boolean_fragments(
-            input_entity,
-            tool_entity,
-            removeObject=delete_input,
-            removeTool=delete_tool)
-
-        newkeys = []
-        newkeys = []
-        for rr in ret:
-            if rr.dim == input_entity[0].dim:
-                newkeys.append(objs.addobj(rr, 'frag'))
-            else:
-                if keep_highest:
-                    self.remove([rr], recursive=True)
-                else:
-                    newkeys.append(objs.addobj(rr, get_geom_key(rr)))
-
-        if delete_input:
-            for x in tp:
-                if x in objs:
-                    del objs[x]
-        if delete_tool:
-            for x in tm:
-                if x in objs:
-                    del objs[x]
-
-        return list(objs), newkeys
-        '''
     '''
     2D elements
     '''
@@ -3344,7 +3309,6 @@ class Geometry():
         
     def Arc2D_build_geom(self, objs, *args):
         center, ax1, ax2, radius, an1, an2, do_fill = args
-        lcar = 0.0
         a1 = np.array(ax1 + [0])
         a2 = np.array(ax2 + [0])
         a2 = np.cross(np.cross(a1, a2), a1)
@@ -3355,8 +3319,8 @@ class Geometry():
             an2 = an1
             an1 = tmp
 
-        if an2 - an1 >= 360:
-            assert False, "angle must be less than 360"
+        assert an2 - an1 < 360, "angle must be less than 360"
+        assert radius > 0, "radius must be positive"
 
         an3 = (an1 + an2) / 2.0
         pt1 = a1 * np.cos(an1 * np.pi / 180.) + a2 * np.sin(an1 * np.pi / 180.)
@@ -3364,23 +3328,85 @@ class Geometry():
         pt3 = a1 * np.cos(an3 * np.pi / 180.) + a2 * np.sin(an3 * np.pi / 180.)
 
         c = np.array(center + [0])
-        p1 = self.add_point(c + pt1, lcar)
-        p2 = self.add_point(c + pt2, lcar)
-        p3 = self.add_point(c + pt3, lcar)
-        pc = self.add_point(c, lcar)
-        ca1 = self.add_circle_arc(p1, pc, p3)
-        ca2 = self.add_circle_arc(p3, pc, p2)
+        p1 = self.add_point(c + pt1)
+        p2 = self.add_point(c + pt2)
+        p3 = self.add_point(c + pt3)
+        ca1 = self.add_circle_arc(p1, p3, p2)
 
         if not do_fill:
             newkey1 = objs.addobj(ca1, 'ln')
-            newkey2 = objs.addobj(ca2, 'ln')
-            newkeys = [newkey1, newkey2]
+            shape1 = self.edges[ca1]
+            self.builder.Add(self.shape, shape1)
+            newkeys = [newkey1,]
 
         else:
-            l1 = self.add_line(pc, p1)
-            l2 = self.add_line(p2, pc)
-            ll1 = self.add_line_loop([l1, ca1, ca2, l2])
+            l1 = self.add_line(p2, p1)
+            ll1 = self.add_line_loop([l1, ca1])
             ps1 = self.add_plane_surface(ll1)
+            shape1 = self.faces[ps1]            
+            self.builder.Add(self.shape, shape1)
+            newkeys = [objs.addobj(ps1, 'ps')]
+
+        return list(objs), newkeys
+
+    def Arc2DBy3Points_build_geom(self, objs, *args):
+        pts, do_fill = args
+        targets = [x.strip() for x in pts.split(',')]
+        gids = self.get_target1(objs, targets, 'p')
+
+        ca1 = self.add_circle_arc(gids[0], gids[1], gids[2])
+
+        if not do_fill:
+            newkey1 = objs.addobj(ca1, 'ln')
+            shape1 = self.edges[ca1]
+            self.builder.Add(self.shape, shape1)
+            newkeys = [newkey1, ]
+
+        else:
+            l1 = self.add_line(gids[2], gids[0])
+            ll1 = self.add_line_loop([l1, ca1])
+            ps1 = self.add_plane_surface(ll1)
+            shape1 = self.faces[ps1]
+            self.builder.Add(self.shape, shape1)
+            newkeys = [objs.addobj(ps1, 'ps')]
+
+        return list(objs), newkeys
+
+    def Arc2DBy2PointsAngle_build_geom(self, objs, *args):
+        pts, angle, do_fill = args
+        targets = [x.strip() for x in pts.split(',')]
+        gids = self.get_target1(objs, targets, 'p')
+
+        p1 = self.get_point_coord(gids[0])
+        p2 = self.get_point_coord(gids[1])
+
+        d1 = p2 - p1
+        d1[2] = 0.0
+        L = np.sqrt(np.sum(d1**2))
+
+        d1 = d1/L
+        d2 = np.cross(d1, [0, 0, 1])
+
+        pm = (p1 + p2)/2.0
+        c1 = pm - L/2*d2/np.tan(angle*np.pi/180/2)
+        r = L/2./np.sin(angle*np.pi/180/2)
+        p3 = c1 + d2*r
+        p3 = self.add_point(p3)
+
+        ca1 = self.add_circle_arc(gids[0], p3, gids[1])
+
+        if not do_fill:
+            newkey1 = objs.addobj(ca1, 'ln')
+            shape1 = self.edges[ca1]
+            self.builder.Add(self.shape, shape1)
+            newkeys = [newkey1, ]
+
+        else:
+            l1 = self.add_line(gids[1], gids[0])
+            ll1 = self.add_line_loop([l1, ca1])
+            ps1 = self.add_plane_surface(ll1)
+            shape1 = self.faces[ps1]
+            self.builder.Add(self.shape, shape1)
             newkeys = [objs.addobj(ps1, 'ps')]
 
         return list(objs), newkeys
@@ -3464,11 +3490,11 @@ class Geometry():
 
     def Rotate2D_build_geom(self, objs, *args):
         targets, cc, angle, keep = args
-        
+
         point_on_axis = cc[0], cc[1], 0.0
         axis_dir = 0.0, 0.0, 1.0
-        
-        newkeys = []        
+
+        newkeys = []
         targets = [x.strip() for x in targets.split(',')]
 
         gids = self.get_target2(objs, targets)
@@ -4118,8 +4144,6 @@ class Geometry():
             return os.path.join(trash, filename + ext)
 
     def generate_preview_mesh0(self):
-        if self.queue is not None:
-            self.queue.put((False, "Generating preview"))
 
         values = self.bounding_box()
         adeviation = max((values[3] - values[0],
@@ -4386,6 +4410,9 @@ class Geometry():
 
             return (data1[0], data1[1], data1[2], data1[3],
                     data1[4], data1[5], ptx, shape, idx)
+        
+        if self.queue is not None:
+            self.queue.put((False, "Generating preview"))
 
         if self.isWP == 0:
             return self.generate_preview_mesh0()

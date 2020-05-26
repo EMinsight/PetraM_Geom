@@ -428,7 +428,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         elif self.mesher_data is None:
             viewer.del_figure_data('mesh', self.name())
         else:
-            print("mesh done face/line",  self._mesh_fface, self._mesh_fline)
+            print("number of meshed face/line",  len(self._mesh_fface), len(self._mesh_fline))
             viewer.set_figure_data('mesh', self.name(), self.mesher_data)
 
         if 'geom' in viewer._s_v_loop:
@@ -537,11 +537,17 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if not geom_root.is_finalized:
             geom_root.build_geom4(no_mesh=True, finalize=True)
 
-        # else:
-        #    geom = geom_root._gmsh4_data[-1]
-
+        if gui_parent is not None:
+            import wx
+            trash = wx.GetApp().GetTopWindow().proj.get_trash()
+        else:
+            cwd = os.getcwd()
+            trash = os.path.join(cwd, '.trash')
+            if not os.path.exists(trash):
+                os.mkdir(trash)
+        
         from petram.mesh.gmsh_mesh_wrapper import GMSHMeshWrapper as GmshMesher
-        mesher = GmshMesher(format=2.2,
+        mesher = GmshMesher(meshformat=2.2,
                             CharacteristicLengthMax=clmax,
                             CharacteristicLengthMin=clmin,
                             EdgeResolution=3,
@@ -549,7 +555,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                             MeshAlgorithm3D=self.algorithm3d,
                             use_profiler=self.use_profiler,
                             use_expert_mode=self.use_expert_mode,
-                            gen_all_phys_entity=self.gen_all_phys_entity)
+                            gen_all_phys_entity=self.gen_all_phys_entity,
+                            trash=trash)
 
         # mesher.load_brep(geom_root._geom_brep)
 

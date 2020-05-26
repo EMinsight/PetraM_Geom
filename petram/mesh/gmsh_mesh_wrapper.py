@@ -182,11 +182,11 @@ def get_nodes_elements(ents, normalize=False):
     return mdata
 
 
-class GMSHMeshWrapper(object):
+class GMSHMeshWrapper():
     workspace_base = 1
     gmsh_init = False
 
-    def __init__(self, format=2.2,
+    def __init__(self, meshformat=2.2,
                  CharacteristicLengthMax=1e20,
                  CharacteristicLengthMin=0,
                  EdgeResolution=3,
@@ -199,10 +199,11 @@ class GMSHMeshWrapper(object):
         self.use_profiler = kwargs.pop("use_profiler", True)
         self.use_expert_mode = kwargs.pop("use_expert_mode", False)
         self.gen_all_phys_entity = kwargs.pop("gen_all_phys_entity", False)
+        self.trash = kwargs.pop("trash", '')
 
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
-        gmsh.option.setNumber("Mesh.MshFileVersion", format)
+        gmsh.option.setNumber("Mesh.MshFileVersion", meshformat)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
         gmsh.option.setNumber("Mesh.IgnorePeriodicity", 1)
 
@@ -290,7 +291,9 @@ class GMSHMeshWrapper(object):
         self.target_entities = gmsh.model.getEntities()
         #
         self.vertex_geom_size = get_vertex_geom_zie()
+        
         # set default vertex mesh size
+        sizes = []
         for tag in self.vertex_geom_size.keys():
             size = self.vertex_geom_size[tag]/self.res
             if size > self.clmax:
@@ -298,7 +301,9 @@ class GMSHMeshWrapper(object):
             if size <= self.clmin:
                 size = self.clmin
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("Default Point Size", (0, tag), size)
+            sizes.append(size)
+            #print("Default Point Size", (0, tag), size)
+        print("Default Point Size Max/Min", max(sizes), min(sizes))
 
         done = [[], [], [], []]
         params = [None]*len(self.mesh_sequence)
@@ -342,14 +347,14 @@ class GMSHMeshWrapper(object):
                 gmsh.write(msh_file)
             else:
                 print("creating temporary mesh file")
-                tmp0 = os.path.join(path, 'tmp0.msh')
+                tmp0 = os.path.join(self.trash, 'tmp0.msh')
                 gmsh.write(tmp0)
 
                 print("generating final mesh file")
                 self.edit_msh_to_add_sequential_physicals(tmp0, msh_file)
         else:
             print("creating temporary mesh file")
-            tmp0 = os.path.join(path, 'tmp0.msh')
+            tmp0 = os.path.join(self.trash, 'tmp0.msh')
             gmsh.write(tmp0)
             msh_file = tmp0
 
@@ -841,7 +846,7 @@ class GMSHMeshWrapper(object):
             if size < minsize:
                 size = minsize
             gmsh.model.mesh.setSize(((0, tag),), size)
-            print("Volume Set Point Size", (0, tag), size)
+            #print("Volume Set Point Size", (0, tag), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
         return done, params
@@ -1882,7 +1887,8 @@ class GMSHMeshWrapper(object):
                   'MaxThreads': self.maxthreads,
                   'use_profiler': self.use_profiler,
                   'use_expert_mode': self.use_expert_mode,
-                  'gen_all_phys_entity': self.gen_all_phys_entity}
+                  'gen_all_phys_entity': self.gen_all_phys_entity,
+                  'trash': self.trash}
 
         q = mp.Queue()
         p = mp.Process(target=generator,

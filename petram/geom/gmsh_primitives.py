@@ -1218,13 +1218,17 @@ class Arc2D(GeomPB):
         return 'Arc'
 
 cdata = (('point_on_cirlce', VtableElement('point_on_circle', type='string',
-                                           guilabel='Points (3) on arc',
+                                           guilabel='Points(3) on arc',
                                            default="",
-                                           tip="Points on arc")),)
+                                           tip="Points on arc")),
+         ('fillarc', VtableElement('fillarc', type='bool',
+                                   guilabel='fill',
+                                   default=True,
+                                   tip="fill arc")), )
 
 class Arc2DBy3Points(GeomPB):
     vt = Vtable(cdata)
-    
+
     @classmethod
     def fancy_menu_name(self):
         return 'Arc by 3 points'
@@ -1234,25 +1238,29 @@ class Arc2DBy3Points(GeomPB):
         return 'Arc'
 
 cdata = (('point_on_cirlce', VtableElement('point_on_circle', type='string',
-                                           guilabel='Points (3) on arc',
+                                           guilabel='Points(2) on arc',
                                            default="",
                                            tip="Points on arc")),
          ('angle2', VtableElement('angle2', type='float',
                                   guilabel='Angle',
                                   default=90.0,
-                                  tip="Angle of arc")),)
-    
+                                  tip="Angle of arc")),
+         ('fillarc', VtableElement('fillarc', type='bool',
+                                   guilabel='fill',
+                                   default=True,
+                                   tip="fill arc")), )
+
 class Arc2DBy2PointsAngle(GeomPB):
     vt = Vtable(cdata)
-    
+
     @classmethod
     def fancy_menu_name(self):
         return 'Arc by 2 points and angle'
+
     @classmethod
     def fancy_tree_name(self):
         return 'Arc'
 
-    
 rdata = (('corner', VtableElement('corner', type='float',
                                   guilabel='Corner',
                                   suffix=('x', 'y'),
@@ -1494,7 +1502,7 @@ class WPBase(GeomPB):
                 Polygon2D, Spline2D,
                 Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
                 Union2D, Intersection, Difference, Fragments, Copy, Remove,
-                CreateLine, CreateSurface, ProjectOnWP]
+                CreateLine, CreateSurface, ProjectOnWP, OCCPolygon]
 
     def get_possible_child_menu(self):
         return [("Add Point...", Point2D),("", PointCenter), ("", PointOnEdge),
@@ -1505,7 +1513,7 @@ class WPBase(GeomPB):
                 ("Add Circle...", Circle2D), ("", CircleBy3Points),
                 ("", Circle2DCenterOnePoint), ("!", Circle2DByDiameter),
                 ("", Spline2D),
-                ("Create...", CreateLine), ("!", CreateSurface),
+                ("Create...", CreateLine), ("", CreateSurface), ("!", OCCPolygon),
                 ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
                 ("", Flip2D), ("", Scale2D), ("", Array2D), ("!", ProjectOnWP),
