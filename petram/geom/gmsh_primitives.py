@@ -1587,15 +1587,34 @@ cad_fix_cb = [None, None, 36, {"col": 4,
                                "labels": ["Degenerated",
                                           "SmallEdges",
                                           "SmallFaces",
-                                          "sewFaces"]}]
+                                          "sewFaces",
+                                          "makeSolidb"]}]
 cad_fix_tol = ["Tolerance", 1e-8, 300, None]
-cad_fix_elp0 = [cad_fix_cb, cad_fix_tol]
+cad_fix_rescale = ["Rescale", 1.0, 300, None]
+cad_fix_elp0 = [cad_fix_cb, cad_fix_tol, cad_fix_rescale]
 
 cad_fix_elp = [None, None, 27, [
     {"text": "import fixer"}, {"elp": cad_fix_elp0}]]
 
 
-class healCAD(GeomPB):
+class ImportBase(GeomPB):
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        v["use_fix_param"] = [False] * 5
+        v["use_fix_tol"] = 1e-8
+        v["use_fix_rescale"] = 1.0
+        return v
+
+    def get_importfix_value(self):
+        value = [self.use_fix_param, self.use_fix_tol, self.use_fix_rescale]
+        return value
+
+    def import_importfix_value(self, v):
+        self.use_fix_param = [x[1] for x in v[0]]
+        self.use_fix_tol = float(v[1])
+        self.use_fix_rescale = float(v[2])
+        
+class healCAD(ImportBase):
     vt = Vtable(tuple())
 
     def panel1_param(self):
@@ -1616,30 +1635,27 @@ class healCAD(GeomPB):
         return ll
 
     def attribute_set(self, v):
-        v = super(GeomPB, self).attribute_set(v)
+        v = super(healCAD, self).attribute_set(v)
         v["fix_entity"] = ""
-        v["use_fix"] = False
-        v["use_fix_param"] = [True] * 4
-        v["use_fix_tol"] = 1e-8
         return v
 
     def get_panel1_value(self):
-        return [None, self.fix_entity, self.use_fix_param, self.use_fix_tol]
+        value = self.get_importfix_value()
+        return [None, self.fix_entity] + value
 
     def preprocess_params(self, engine):
         return
 
     def import_panel1_value(self, v):
         self.fix_entity = str(v[1])
-        self.use_fix_param = [x[1] for x in v[2]]
-        self.use_fix_tol = float(v[3])
+        self.import_importfix_value(v[2:])
 
     def panel1_tip(self):
         return [None, None, None, None]
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.fix_entity, self.use_fix_param, self.use_fix_tol)
+        gui_param = (self.fix_entity, self.use_fix_param, self.use_fix_tol, self.use_fix_rescale)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
@@ -1651,7 +1667,7 @@ class healCAD(GeomPB):
 # interface later....
 
 
-class CADImport(GeomPB):
+class CADImport(ImportBase):
     vt = Vtable(tuple())
 
     def panel1_param(self):
@@ -1675,17 +1691,16 @@ class CADImport(GeomPB):
         return ll
 
     def attribute_set(self, v):
-        v = super(GeomPB, self).attribute_set(v)
+        v = super(CADImport, self).attribute_set(v)
         v["cad_file"] = ""
-        v["use_fix"] = False
-        v["use_fix_param"] = [True] * 4
-        v["use_fix_tol"] = 1e-8
+        v["use_fix"] = False        
         v["highestdimonly"] = True
         v["import_unit"] = ""
         return v
 
     def get_panel1_value(self):
-        value = [self.use_fix, [self.use_fix_param, self.use_fix_tol]]
+        value0 = self.get_importfix_value()
+        value = [self.use_fix, value0]
         return [None, self.cad_file, value,
                 self.highestdimonly, self.import_unit, None]
 
@@ -1695,8 +1710,7 @@ class CADImport(GeomPB):
     def import_panel1_value(self, v):
         self.cad_file = str(v[1])
         self.use_fix = v[2][0]
-        self.use_fix_param = [x[1] for x in v[2][1][0]]
-        self.use_fix_tol = float(v[2][1][1])
+        self.import_importfix_value(v[2][1])
         self.highestdimonly = bool(v[3])
         self.import_unit = v[4]
 
@@ -1705,7 +1719,8 @@ class CADImport(GeomPB):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (self.cad_file, self.use_fix, self.use_fix_param, self.use_fix_tol,
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param,
+                     self.use_fix_tol, self.use_fix_rescale, 
                      self.highestdimonly, self.import_unit)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
@@ -1718,7 +1733,7 @@ class CADImport(GeomPB):
 # interface later....
 
 
-class BrepImport(GeomPB):
+class BrepImport(ImportBase):
     vt = Vtable(tuple())
 
     def panel1_param(self):
@@ -1738,16 +1753,15 @@ class BrepImport(GeomPB):
         return ll
 
     def attribute_set(self, v):
-        v = super(GeomPB, self).attribute_set(v)
+        v = super(BrepImport, self).attribute_set(v)
         v["cad_file"] = ""
         v["use_fix"] = False
-        v["use_fix_param"] = [True] * 4
-        v["use_fix_tol"] = 1e-8
         v["highestdimonly"] = True
         return v
 
     def get_panel1_value(self):
-        value = [self.use_fix, [self.use_fix_param, self.use_fix_tol]]
+        value0 = self.get_importfix_value()
+        value = [self.use_fix, value0]
         return [None, self.cad_file, value, self.highestdimonly]
 
     def preprocess_params(self, engine):
@@ -1756,8 +1770,7 @@ class BrepImport(GeomPB):
     def import_panel1_value(self, v):
         self.cad_file = str(v[1])
         self.use_fix = v[2][0]
-        self.use_fix_param = [x[1] for x in v[2][1][0]]
-        self.use_fix_tol = float(v[2][1][1])
+        self.import_importfix_value(v[2][1])
         self.highestdimonly = bool(v[3])
 
     def panel1_tip(self):
@@ -1765,13 +1778,9 @@ class BrepImport(GeomPB):
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
-        gui_param = (
-            self.cad_file,
-            self.use_fix,
-            self.use_fix_param,
-            self.use_fix_tol,
-            self.highestdimonly,
-        )
+        gui_param = (self.cad_file, self.use_fix, self.use_fix_param,
+                     self.use_fix_tol, self.use_fix_rescale,
+                     self.highestdimonly,)
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 

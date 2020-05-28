@@ -108,6 +108,6 @@ class OCCGeom(GmshGeom):
                 ("Boolean...", Union), ("", Union2), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
-                ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
+                ("Import...", BrepImport), ("!", CADImport)
                 ]
         
