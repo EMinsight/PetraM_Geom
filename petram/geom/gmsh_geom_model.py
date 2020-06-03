@@ -299,11 +299,11 @@ class GmshGeom(GeomTopBase):
     @classmethod        
     def fancy_menu_name(self):
         return 'Gmsh Geometry'
+    
     @classmethod
     def fancy_tree_name(self):
         return 'GmshSequence'
 
-    
     def __init__(self, *args, **kwargs):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
@@ -318,6 +318,7 @@ class GmshGeom(GeomTopBase):
             self._p[1].cancel_join_thread()
             self._p[2].cancel_join_thread()
             self._p[0].terminate()
+            del self._p
 
     @property
     def is_finalized(self):

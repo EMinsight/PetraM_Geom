@@ -62,7 +62,7 @@ class OCCGeom(GmshGeom):
                                                  WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                                                 ThruSection, RotateCenterPoints, MoveByPoints)
+                                                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
         return [Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
                 Rect, Polygon,  OCCPolygon, Spline, Box,
@@ -73,7 +73,7 @@ class OCCGeom(GmshGeom):
                 Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ThruSection, RotateCenterPoints, MoveByPoints]
+                ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine]
 
     def get_possible_child_menu(self):
         from petram.geom.gmsh_primitives import (Point, PointCenter, PointCircleCenter,
@@ -88,11 +88,11 @@ class OCCGeom(GmshGeom):
                                                  WorkPlane, WorkPlaneByPoints, healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                                                 ThruSection, RotateCenterPoints, MoveByPoints)
-        return [("Add Points...", Point), ("", PointCenter), ("", PointOnEdge),
+                                                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
+        return [("Points...", Point), ("", PointCenter), ("", PointOnEdge),
                 ("", PointCircleCenter), ("!", PointByUV),
-                ("", Line),
-                ("Add Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
+                ("Lines", Line), ("!", ExtendedLine),
+                ("Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
                 ("", Rect),
                 ("", Spline), ("", Fillet), ("", Chamfer),
                 ("3D shape...", Box),

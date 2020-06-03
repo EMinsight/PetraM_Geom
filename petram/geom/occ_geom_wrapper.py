@@ -406,10 +406,10 @@ class Geometry():
         if not verbose:
             return all_maps
 
-        usolids = topo_seen(mapping=solidMap)
-        ufaces = topo_seen(mapping=faceMap)
-        uedges = topo_seen(mapping=edgeMap)
-        uvertices = topo_seen(mapping=vertMap)
+        usolids = topo_seen(mapping=maps['solid'])
+        ufaces = topo_seen(mapping=maps['face'])
+        uedges = topo_seen(mapping=maps['edge'])
+        uvertices = topo_seen(mapping=maps['vertex'])
 
         ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
         while ex1.More():
@@ -511,6 +511,42 @@ class Geometry():
         edge = edgeMaker.Edge()
         return self.edges.add(edge)
 
+    def add_extended_line(self, gid, ratio, resample):
+        shape = self.edges[gid]
+        curve, first, last = self.bt.Curve(shape)
+
+        if first < last:
+            first1 = first - ratio[0]*(last-first)
+            last1 = last + ratio[1]*(last-first)
+        else:
+            first1 = first + ratio[0]*(first-last)
+            last1 = last - ratio[1]*(first-last)
+            
+        pts = []
+        for x in np.linspace(first1, last1):
+            pnt1 = gp_Pnt()        
+            curve.D0(x, pnt1)
+            pts.append(pnt1)
+
+        array = TColgp_HArray1OfPnt(1, len(pts))
+        for i, p in enumerate(pts):
+            array.SetValue(i + 1, p)
+
+        itp = GeomAPI_Interpolate(array, False, self.occ_geom_tolerance)
+        itp.Perform()
+        if not itp.IsDone():
+            assert False, "Can not interpolate points (add_extend)"
+
+        start = pts[0]
+        end = pts[-1]
+
+        edgeMaker = BRepBuilderAPI_MakeEdge(itp.Curve(), start, end)
+        edgeMaker.Build()
+        if not edgeMaker.IsDone():
+            assert False, "Can not make line"
+        edge = edgeMaker.Edge()
+        return self.edges.add(edge)
+
     def add_circle_arc(self, p1, p3, p2):
         bt = self.bt
         pnt1 = bt.Pnt(self.vertices[p1])
@@ -582,8 +618,6 @@ class Geometry():
         return s1
 
     def add_spline(self, pos, tolerance=1e-5, periodic=False):
-        from OCC.Core.TColgp import TColgp_HArray1OfPnt
-
         bt = self.bt
 
         pts = [BRepBuilderAPI_MakeVertex(gp_Pnt(p[0], p[1], p[2])).Shape()
@@ -1208,7 +1242,7 @@ class Geometry():
                                keep_highest=keep_highest)
                                
     def difference(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
-                   keep_highest=False):        
+                   keep_highest=False):
         
         return self.do_boolean('cut', gid_objs, gid_tools,
                                remove_tool=remove_tool,
@@ -1665,6 +1699,22 @@ class Geometry():
             _newobjs = [newobj]
 
         return list(objs), _newobjs
+    
+    def ExtendedLine_build_geom(self, objs, *args):
+        lines, ratio, resample = args
+        lines = [x.strip() for x in lines.split(',')]
+        gids = self.get_target1(objs, lines, 'p')
+
+        lines = [self.add_extended_line(gid, ratio, resample)
+                    for gid in gids]
+
+        newobjs = []
+        for l in lines:
+            shape = self.edges[l]
+            self.builder.Add(self.shape, shape)
+            newobj = objs.addobj(l, 'sp')
+            newobjs.append(newobj)
+        return list(objs), newobjs
 
     def OCCPolygon_build_geom(self, objs, *args):
         pts = args
@@ -3636,10 +3686,10 @@ class Geometry():
             reader.PrintCheckLoad(failsonly, IFSelect_ItemsByEntity)
             reader.PrintCheckTransfer(failsonly, IFSelect_ItemsByEntity)
             reader.NbRootsForTransfer()
-            reader.TransferRoot(1)
-            shape = reader.Shape(1)
+            reader.TransferRoots()
+            shape = reader.OneShape()
         else:
-            assert False, "Error: can't read STEP file."
+            assert False, "Error: can't read STEP/IGES file."
 
         breptools_Clean(shape)
         return self.importShape_common(shape, highestDimOnly, fix_param, objs)

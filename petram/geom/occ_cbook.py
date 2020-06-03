@@ -90,6 +90,8 @@ try:
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import (brepgprop_LinearProperties,
                                     brepgprop_SurfaceProperties)
+    from OCC.Core.TColgp import TColgp_HArray1OfPnt
+    
 
     __ex1 = TopExp_Explorer()
     __ex2 = TopExp_Explorer()
