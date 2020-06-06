@@ -9,23 +9,6 @@ import time
 
 from petram.geom.occ_cbook import *
 
-from OCC.Core.ShapeBuild import ShapeBuild_ReShape
-from OCC.Core.ShapeExtend import (ShapeExtend_OK,
-                                  ShapeExtend_DONE1,
-                                  ShapeExtend_DONE2,
-                                  ShapeExtend_DONE3,
-                                  ShapeExtend_DONE4,
-                                  ShapeExtend_DONE5,
-                                  ShapeExtend_DONE6,
-                                  ShapeExtend_DONE7,
-                                  ShapeExtend_DONE8,
-                                  ShapeExtend_FAIL1,
-                                  ShapeExtend_FAIL2,
-                                  ShapeExtend_FAIL3)
-
-from OCC.Core.BRepCheck import BRepCheck_Analyzer
-from OCC.Core.BRepLib import breplib_OrientClosedSolid
-
 
 def _fix_Degenerated(shape, verbose=False):
     if verbose:
@@ -41,7 +24,6 @@ def _fix_Degenerated(shape, verbose=False):
     topexp_MapShapes(shape, TopAbs_FACE, mapper)
 
     rebuild = ShapeBuild_ReShape()
-    sff = ShapeFix_Face()
     for face in iter_shape(shape, 'face'):
         sff = ShapeFix_Face(face)
         sff.SetFixAddNaturalBoundMode(True)

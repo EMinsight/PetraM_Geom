@@ -91,14 +91,32 @@ try:
     from OCC.Core.BRepGProp import (brepgprop_LinearProperties,
                                     brepgprop_SurfaceProperties)
     from OCC.Core.TColgp import TColgp_HArray1OfPnt
-    
+
+    from OCC.Core.ShapeBuild import ShapeBuild_ReShape
+    from OCC.Core.ShapeExtend import (ShapeExtend_OK,
+                                  ShapeExtend_DONE1,
+                                  ShapeExtend_DONE2,
+                                  ShapeExtend_DONE3,
+                                  ShapeExtend_DONE4,
+                                  ShapeExtend_DONE5,
+                                  ShapeExtend_DONE6,
+                                  ShapeExtend_DONE7,
+                                  ShapeExtend_DONE8,
+                                  ShapeExtend_FAIL1,
+                                  ShapeExtend_FAIL2,
+                                  ShapeExtend_FAIL3)
+
+    from OCC.Core.BRepCheck import BRepCheck_Analyzer
+    from OCC.Core.BRepLib import breplib_OrientClosedSolid
+
+    from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain    
 
     __ex1 = TopExp_Explorer()
     __ex2 = TopExp_Explorer()
     
     __expparam = {'compound': (TopAbs_COMPOUND, topods_Compound, ''),
                   'compsolid': (TopAbs_COMPSOLID, topods_CompSolid, ''),
-                  'compsolid': (TopAbs_SOLID, topods_Solid, ''),                  
+                  'solid': (TopAbs_SOLID, topods_Solid, ''),                  
                   'shell': (TopAbs_SHELL, topods_Shell, 'solid'),
                   'face': (TopAbs_FACE, topods_Face, 'shell'),
                   'wire': (TopAbs_WIRE, topods_Wire, 'face'),
@@ -132,7 +150,12 @@ def iter_shape(shape, shape_type='shell', exclude_parent=False):
         yield sub_shape
         __ex1.Next()
 
-
+def get_mapper(shape, shape_type):
+    mapper = TopTools_IndexedMapOfShape()
+    topo_abs = __expparam[shape_type][0]
+    topexp_MapShapes(shape, topo_abs, mapper)
+    return mapper
+        
 def iterdouble_shape(shape_in, inner_type='shell'):
     outer_type = __expparam[inner_type][2]
 
@@ -226,41 +249,13 @@ def calc_wp_projection(c1, a1, a2):
 
     return ax1, an1, ax2, an2, cxyz
 
-'''
-def prep_maps(shape, return_all=True):
-    solidMap = TopTools_IndexedMapOfShape()
-    faceMap = TopTools_IndexedMapOfShape()
-    edgeMap = TopTools_IndexedMapOfShape()
-    vertMap = TopTools_IndexedMapOfShape()
-
-    topexp_MapShapes(shape, TopAbs_SOLID, solidMap)
-    topexp_MapShapes(shape, TopAbs_FACE, faceMap)
-    topexp_MapShapes(shape, TopAbs_EDGE, edgeMap)
-    topexp_MapShapes(shape, TopAbs_VERTEX, vertMap)
-
-    if not return_all:
-        return (solidMap, faceMap, edgeMap, vertMap)
-
-    shellMap = TopTools_IndexedMapOfShape()
-    wireMap = TopTools_IndexedMapOfShape()
-    topexp_MapShapes(shape, TopAbs_SHELL, shellMap)
-    topexp_MapShapes(shape, TopAbs_WIRE, wireMap)
-
-    return (solidMap, shellMap, faceMap, wireMap,
-            edgeMap, vertMap)
-'''
 
 def prep_maps(shape, return_all=True, return_compound=False):
 
-    solidMap = TopTools_IndexedMapOfShape()
-    faceMap = TopTools_IndexedMapOfShape()
-    edgeMap = TopTools_IndexedMapOfShape()
-    vertMap = TopTools_IndexedMapOfShape()
-
-    topexp_MapShapes(shape, TopAbs_SOLID, solidMap)
-    topexp_MapShapes(shape, TopAbs_FACE, faceMap)
-    topexp_MapShapes(shape, TopAbs_EDGE, edgeMap)
-    topexp_MapShapes(shape, TopAbs_VERTEX, vertMap)
+    solidMap = get_mapper(shape, 'solid')
+    faceMap = get_mapper(shape, 'face')
+    edgeMap = get_mapper(shape, 'edge')
+    vertMap = get_mapper(shape, 'vertex')
 
     maps = {'solid': solidMap, 'face': faceMap, 'edge': edgeMap,
             'vertex': vertMap}
@@ -268,22 +263,18 @@ def prep_maps(shape, return_all=True, return_compound=False):
     if not return_all:
         return maps
 
-    shellMap = TopTools_IndexedMapOfShape()
-    wireMap = TopTools_IndexedMapOfShape()
-    topexp_MapShapes(shape, TopAbs_SHELL, shellMap)
-    topexp_MapShapes(shape, TopAbs_WIRE, wireMap)
-
+    shellMap = get_mapper(shape, 'shell')
+    wireMap = get_mapper(shape, 'wire')
+    
     maps['shell'] = shellMap
     maps['wire'] = wireMap
     
     if not return_compound:
         return maps
 
-    compoundMap = TopTools_IndexedMapOfShape()
-    compsolidMap = TopTools_IndexedMapOfShape()
-    topexp_MapShapes(shape, TopAbs_COMPOUND, compoundMap)
-    topexp_MapShapes(shape, TopAbs_COMPSOLID, compsolidMap)
-
+    compoundMap = get_mapper(shape, 'compound')
+    compsolidMap = get_mapper(shape, 'compsolid')
+    
     maps['compound'] = compoundMap
     maps['compsolid'] = compsolidMap
 
@@ -360,7 +351,76 @@ def register_shape(shape, topolists):
     register_topo(shape, uvertices, TopAbs_VERTEX, TopAbs_EDGE,
                   topods_Vertex, topods_Edge,self.vertices, dim=0)
     '''
+def project_ptx_2_plain(normal, cptx, p):
+    dp = p - cptx
+    dp = dp - np.sum(dp * normal) * normal
+    return dp + cptx
 
+def rect_by_bbox_projection(normal, cptx, xmin, ymin, zmin,
+                            xmax, ymax, zmax, scale=1.01):
+    corners = (np.array([xmin, ymin, zmin]),
+               np.array([xmin, ymin, zmax]),
+               np.array([xmin, ymax, zmin]),
+               np.array([xmax, ymin, zmin]),
+               np.array([xmax, ymax, zmin]),
+               np.array([xmin, ymax, zmax]),
+               np.array([xmax, ymin, zmax]),
+               np.array([xmax, ymax, zmax]),)
+    # projected point
+    p = [project_ptx_2_plain(normal, cptx, pp) for pp in corners]
+    
+    # distance on the plane
+    d = [np.sqrt(np.sum((pp - cptx)**2)) for pp in p]
+    idx = np.argmax(d)
+    dist2 = np.max(d)
+
+    n1 = (p[idx] - cptx)
+    n1 = n1/np.sqrt(np.sum(n1**2))
+    n2 = np.cross(normal, n1)
+
+    c1 = (cptx + p[idx])/2.0
+    e1 = n1 * dist2*scale/2.0
+    e2 = n2 * dist2*scale/2.0
+
+    return [c1+e1, c1+e2, c1-e1, c1-e2]
+    
+def box_containing_bbox(normal, cptx, xmin, ymin, zmin,
+                        xmax, ymax, zmax, scale=1.2):
+    corners = (np.array([xmin, ymin, zmin]),
+               np.array([xmin, ymin, zmax]),
+               np.array([xmin, ymax, zmin]),
+               np.array([xmax, ymin, zmin]),
+               np.array([xmax, ymax, zmin]),
+               np.array([xmin, ymax, zmax]),
+               np.array([xmax, ymin, zmax]),
+               np.array([xmax, ymax, zmax]),)
+    # projected point
+    p = [project_ptx_2_plain(normal, cptx, pp) for pp in corners]
+
+    # distance from plane
+    d = [np.sum((pp - cptx) * normal) for pp in corners]
+    dist1 = np.max(d)
+
+    print("distance from plane", dist1)
+    # distance on the plane
+    d = [np.sqrt(np.sum((pp - cptx)**2)) for pp in p]
+    idx = np.argmax(d)
+    dist2 = np.max(d)
+
+    size = np.max((dist1, dist2)) * scale
+
+    n1 = (p[idx] - cptx)
+    n1 = n1/np.sqrt(np.sum(n1**2))
+    n2 = np.cross(normal, n1)
+
+    c1 = cptx - n1 * size - n2 * size
+    e1 = 2 * n1 * size
+    e2 = 2 * n2 * size
+    e3 = normal * size
+    box = (c1, c1 + e1, c1 + e2, c1 + e3, c1 + e1 + e2,
+           c1 + e2 + e3, c1 + e3 + e1, c1 + e3 + e2 + e1)
+
+    return box
 
 class topo_seen(list):
     def __init__(self, mapping):
@@ -421,6 +481,9 @@ class topo_list():
     def __getitem__(self, val):
         return self.d[int(val)]
 
+    def __setitem__(self, val, value):
+        self.d[int(val)] = value
+
     def __contains__(self, val):
         return val in self.d
 
@@ -465,6 +528,9 @@ class topo_list():
             if verbose:
                 print("added gid", new_gids)
 
+    def get_ancestors(self, val, kind):
+        shape = self[val]
+        return iter_shape(shape, kind)
 
 class topo_list_vertex(topo_list):
     name = 'vertex'
@@ -549,13 +615,6 @@ class topo_list_wire(topo_list):
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'edge')
-        '''
-        ex1 = TopExp_Explorer(shape, TopAbs_EDGE)
-        while ex1.More():
-            edge = topods_Edge(ex1.Current())
-            yield edge
-            ex1.Next()
-        '''
 
     def get_mapper(self, shape):
         mapper = TopTools_IndexedMapOfShape()
@@ -582,11 +641,6 @@ class topo_list_face(topo_list):
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'wire')
-        #ex1 = TopExp_Explorer(shape, TopAbs_WIRE)
-        # while ex1.More():
-        #    wire = topods_Wire(ex1.Current())
-        #    yield wire
-        #    ex1.Next()
 
     def is_toplevel(self, val, compound):
         mapper = TopTools_IndexedDataMapOfShapeListOfShape()
@@ -622,13 +676,6 @@ class topo_list_shell(topo_list):
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'face')
-        '''
-        ex1 = TopExp_Explorer(shape, TopAbs_FACE)
-        while ex1.More():
-            face = topods_Face(ex1.Current())
-            yield face
-            ex1.Next()
-        '''
 
     def get_mapper(self, shape):
         mapper = TopTools_IndexedMapOfShape()
@@ -655,13 +702,6 @@ class topo_list_solid(topo_list):
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'shell')
-        '''
-        ex1 = TopExp_Explorer(shape, TopAbs_SHELL)
-        while ex1.More():
-            shell = topods_Shell(ex1.Current())
-            yield shell
-            ex1.Next()
-        '''
 
     def get_mapper(self, shape):
         mapper = TopTools_IndexedMapOfShape()

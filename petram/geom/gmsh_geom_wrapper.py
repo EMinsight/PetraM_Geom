@@ -1685,7 +1685,7 @@ class Geometry(object):
         return list(objs), newkeys
 
     def Union_build_geom(self, objs, *args):
-        tp, tm, delete_input, delete_tool, keep_highest = args
+        tp, tm, delete_input, delete_tool, keep_highest = args[:5]
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]
 

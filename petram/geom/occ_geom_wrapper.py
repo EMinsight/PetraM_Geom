@@ -64,7 +64,7 @@ class Geometry():
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2)
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
-        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-8)
+        self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-5)
         #self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 0)
         self.occ_geom_tolerance = kwargs.pop('OCCGeomTol', 1e-6)        
         self.maxthreads = kwargs.pop('Maxthreads', 1)
@@ -177,11 +177,14 @@ class Geometry():
         return d[int(gid)]
 
     def print_number_of_topo_objects(self):
-        maps = prep_maps(self.shape, return_all=False)
+        maps = prep_maps(self.shape, return_all=True)
 
         dprint1("Entity counts: solid/face/edge/vert : ",
                 maps['solid'].Size(), maps['face'].Size(),
-                maps['edge'].Size(), maps['vertex'].Size())
+                maps['edge'].Size(), maps['vertex'].Size(),
+                "  shell/wire:",
+                maps['shell'].Size(), maps['wire'].Size(),)
+
         
     def count_topos(self):
         maps = prep_maps(self.shape, return_all=False)
@@ -399,9 +402,8 @@ class Geometry():
         all_maps = [maps[x] for x in names] 
         if verbose:
             dprint1("--------- Shape inspection ---------")
-        dprint1("Entity counts: solid/face/edge/vert : ",
-                maps['solid'].Size(), maps['face'].Size(),
-                maps['edge'].Size(), maps['vertex'].Size())
+
+        self.print_number_of_topo_objects()
 
         if not verbose:
             return all_maps
@@ -1180,7 +1182,6 @@ class Geometry():
             shape = topolist[gid]
             objs.Append(shape)
 
-
         operator.SetRunParallel(self.occ_parallel)
         operator.SetArguments(objs)
 
@@ -1212,11 +1213,9 @@ class Geometry():
         self.synchronize_topo_list()
 
         if upgrade:
-            from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
             unifier = ShapeUpgrade_UnifySameDomain(result)
             unifier.Build()
             result = unifier.Shape()
-
         
         if keep_highest:
             result = self.select_highest_dim(result)
@@ -1258,9 +1257,127 @@ class Geometry():
                                remove_obj=remove_obj,
                                keep_highest=keep_highest)    
 
+    def merge_face(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
+                        keep_highest=False):
+        '''
+        merge faces on the same plane by operationg two cut
+
+        1) works only for the planer surface
+
+        '''
+        gid_all = gid_objs + gid_tools
+        
+        n1, p1 = self.get_face_normal(gid_objs[0], check_flat=True)
+        for gid in gid_all:
+            self.get_face_normal(gid, check_flat=True)
+            
+        comp = self.new_compound(gid_all)
+        xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
+
+        rect = rect_by_bbox_projection(n1, p1, xmin, ymin, zmin,
+                                       xmax, ymax, zmax, scale=1.3)
+
+        verts = [BRepBuilderAPI_MakeVertex(gp_Pnt(pt[0], pt[1], pt[2])).Shape()
+                 for pt in rect]
+        idx = [0, 1, 2, 3, 0]
+        edges = []
+        for i in range(4):
+            edgeMaker = BRepBuilderAPI_MakeEdge(verts[idx[i]], verts[idx[i+1]])
+            edgeMaker.Build()
+            if not edgeMaker.IsDone():
+                assert False, "Can not make line"
+            edges.append(edgeMaker.Edge())
+
+        wireMaker = BRepBuilderAPI_MakeWire()
+        for edge in edges:
+            wireMaker.Add(edge)
+        wireMaker.Build()
+        if not wireMaker.IsDone():
+            assert False, "Failed to make wire"
+        wire = wireMaker.Wire()
+
+        faceMaker = BRepBuilderAPI_MakeFace(wire)
+        faceMaker.Build()
+
+        if not faceMaker.IsDone():
+            assert False, "can not create face"
+
+        face = faceMaker.Face()
+        fixer = ShapeFix_Face(face)
+        fixer.Perform()
+        face = fixer.Face()
+
+        #face_id = self.faces.add(face)
+        #self.builder.Add(self.shape, face)        
+        #return [face_id,]
+    
+        operator = BRepAlgoAPI_Cut()
+        
+        objs = TopTools_ListOfShape()
+        tools = TopTools_ListOfShape()
+
+        for gid in gid_all:
+            topolist = self.get_topo_list_for_gid(gid)
+            shape = topolist[gid]
+            tools.Append(shape)
+
+        objs.Append(face)
+
+        operator.SetRunParallel(self.occ_parallel)
+        operator.SetArguments(objs)
+        operator.SetTools(tools)
+
+        if self.occ_boolean_tolerance > 0:
+            operator.SetFuzzyValue(self.occ_boolean_tolerance)
+
+        operator.Build()
+        if not operator.IsDone():
+            assert False, "boolean operation failed:" + operation
+
+        result = operator.Shape()
+
+        operator = BRepAlgoAPI_Cut()
+        
+        objs = TopTools_ListOfShape()
+        tools = TopTools_ListOfShape()
+
+        tools.Append(result)
+        objs.Append(face)
+
+        operator.SetRunParallel(self.occ_parallel)
+        operator.SetArguments(objs)
+        operator.SetTools(tools)
+
+        if self.occ_boolean_tolerance > 0:
+            operator.SetFuzzyValue(self.occ_boolean_tolerance)
+
+        operator.Build()
+        if not operator.IsDone():
+            assert False, "boolean operation failed:" + operation
+
+        result = operator.Shape()
+        
+        unifier = ShapeUpgrade_UnifySameDomain(result)
+        unifier.Build()
+        result = unifier.Shape()
+
+        if remove_tool:
+            for gid in gid_tools:
+                self.remove(gid)
+        if remove_obj:
+            for gid in gid_objs:
+                self.remove(gid)
+                
+        self.synchronize_topo_list()
+        
+        if keep_highest:
+            result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result)
+        
+        return new_objs
+        
     def union2d(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
                         keep_highest=False):
-
         return self.do_boolean('fuse', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
@@ -1295,15 +1412,46 @@ class Geometry():
 
         shape = topolist[gid]
 
+        self.print_number_of_topo_objects()        
         self.builder.Remove(self.shape, shape)
 
+
+        self.print_number_of_topo_objects()        
+
+        akind = {VolumeID: 'face',
+                 SurfaceLoopID: 'face',
+                 SurfaceID: 'edge',
+                 LineLoopID: 'edge',
+                 LineID: 'vertex'}
+        anc = list(topolist.get_ancestors(gid, akind[gid.__class__]))
+        mapper = get_mapper(self.shape, akind[gid.__class__])
+
+        # note we dont put back shell/wire. 
         if not recursive and not isinstance(gid, VertexID):
-            children = list(topolist.get_children(gid))            
-            child_mapper = topolist.get_chilld_mapper(self.shape)
-            for child in children:
-                flag = child_mapper.Contains(shape)
-                if not flag:  # need to put it back
-                    self.builder.Add(self.shape, child)
+            shape_added = []
+            for s in anc:
+                flag = mapper.Contains(s)
+                if not flag:
+                    shape_added.append(s)
+
+            for s in shape_added:
+                self.builder.Add(self.shape, s)
+                
+        elif recursive:
+            '''
+            When face is deleted. Sometime edge remains. 
+            Why? 
+            Do I need to do it really recursively??
+            '''
+            shape_removed = []
+            for s in anc:
+                flag = mapper.Contains(s)
+                if flag:
+                    shape_removed.append(s)
+            
+            for s in shape_removed:
+                self.builder.Remove(self.shape, s)
+                
 
     def inverse_remove(self, gids):
         comp = TopoDS_Compound()
@@ -1535,6 +1683,55 @@ class Geometry():
         gids_new = self.register_shaps_balk(result)
         return gids_new
 
+    def apply_fixshpae_shell(self, gids):
+        for gid in gids:
+            print(self.get_face_normal(gid))
+
+
+        rebuild = ShapeBuild_ReShape()
+        for t in gids:
+            face = self.faces[t]
+            sff = ShapeFix_Face(face)
+            sff.SetFixAddNaturalBoundMode(True)
+            sff.SetFixSmallAreaWireMode(True)
+            
+            sff.Perform()            
+            if sff.Status(ShapeExtend_DONE1):
+                print(" . Some wires are fixed")
+            elif sff.Status(ShapeExtend_DONE2):
+                print(" . Orientation of wires fixed")
+            elif sff.Status(ShapeExtend_DONE3):
+                print(" . Missing seam added")
+            elif sff.Status(ShapeExtend_DONE4):
+                print(" . Small area wire removed")
+            elif sff.Status(ShapeExtend_DONE5):
+                print(" . Natural bounds added")
+                
+            self.builder.Remove(self.shape, face)
+            newface = sff.Face()
+            self.faces[t] = newface
+            
+        for gid in gids:
+            print(self.get_face_normal(gid))
+
+        '''        
+        try:
+            shellMaker = BRepBuilderAPI_MakeShell()
+            shellMaker.Perform()
+            result = shellMaker.SewedShape()
+        except BaseException:
+            assert False, "Failed to make shells"
+
+        ex1 = TopExp_Explorer(result, TopAbs_SHELL)
+        while ex1.More():
+            print("fixing shell")
+            shell = topods_Shell(ex1.Current())
+            fixer = ShapeFix_Shell(shell)
+            fixer.Perform()
+            shell = fixer.Shell()
+            break
+            ex.Next()
+        '''            
     def add_sequence(self, gui_name, gui_param, geom_name):
         self.geom_sequence.append((gui_name, gui_param, geom_name))
 
@@ -2682,8 +2879,8 @@ class Geometry():
         return list(objs), newkeys
 
     def _Union_build_geom(self, objs, *args, **kwargs):
-        tp, tm, delete_input, delete_tool, keep_highest = args
-        do_upgrade = kwargs.pop("upgrade", False)
+        print("args here", args)
+        tp, tm, delete_input, delete_tool, keep_highest, do_upgrade = args
         
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]
@@ -2691,6 +2888,12 @@ class Geometry():
         gid_objs = self.get_target2(objs, tp)
         gid_tools = self.get_target2(objs, tm)
 
+        if (all([isinstance(x, SurfaceID) for x in gid_objs]) and
+            all([isinstance(x, SurfaceID) for x in gid_tools]) and
+            do_upgrade):
+            print("atttempting face orientation fix")
+            self.apply_fixshpae_shell(gid_objs+gid_tools)
+        
         gids_new = self.union(gid_objs, gid_tools,
                               remove_obj=delete_input,
                               remove_tool=delete_tool,
@@ -3187,7 +3390,7 @@ class Geometry():
             newkeys.append(objs.addobj(gid, 'uni'))
 
         self.synchronize_topo_list()
-
+    
         if delete_input:
             for x in tp:
                 if x in objs:
@@ -3196,52 +3399,34 @@ class Geometry():
             for x in tm:
                 if x in objs:
                     del objs[x]
+        return list(objs), newkeys
+    
+    def MergeFace_build_geom(self, objs, *args):
+        tp = args[0]
+        tp = [x.strip() for x in tp.split(',')]
+        gid_all = self.get_target1(objs, tp, 'f')
+        
+        gid_objs = gid_all[:1]
+        gid_tools = gid_all[1:]
+
+        gids_new = self.merge_face(gid_objs, gid_tools,
+                                    remove_obj=True,
+                                    remove_tool=True,
+                                    keep_highest=True,)
+
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'uni'))
+        return list(objs), newkeys
+        self.synchronize_topo_list()
+    
+        for x in tp:
+            if x in objs:
+                 del objs[x]
 
         return list(objs), newkeys
-
+        
     def SplitByPlane_build_geom(self, objs, *args):
-        def project_ptx_2_plain(normal, cptx, p):
-            dp = p - cptx
-            dp = dp - np.sum(dp * normal) * normal
-            return dp + cptx
-
-        def containing_bbox(normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax):
-            corners = (np.array([xmin, ymin, zmin]),
-                       np.array([xmin, ymin, zmax]),
-                       np.array([xmin, ymax, zmin]),
-                       np.array([xmax, ymin, zmin]),
-                       np.array([xmax, ymax, zmin]),
-                       np.array([xmin, ymax, zmax]),
-                       np.array([xmax, ymin, zmax]),
-                       np.array([xmax, ymax, zmax]),)
-            # projected point
-            p = [project_ptx_2_plain(normal, cptx, pp) for pp in corners]
-
-            # distance from plane
-            d = [np.sum((pp - cptx) * normal) for pp in corners]
-            dist1 = np.max(d)
-
-            print("distance from plane", dist1)
-            # distance on the plane
-            d = [np.sqrt(np.sum((pp - cptx)**2)) for pp in p]
-            idx = np.argmax(d)
-            dist2 = np.max(d)
-
-            size = np.max((dist1, dist2)) * 1.2
-            
-            n1 = (p[idx] - cptx)
-            n1 = n1/np.sqrt(np.sum(n1**2))
-            n2 = np.cross(normal, n1)
-
-            c1 = cptx - n1 * size - n2 * size
-            e1 = 2 * n1 * size
-            e2 = 2 * n2 * size
-            e3 = normal * size
-            box = (c1, c1 + e1, c1 + e2, c1 + e3, c1 + e1 + e2, c1 + e2 + e3, c1 + e3 + e1,
-                   c1 + e3 + e2 + e1)
-
-            return box
-
         targets = [x.strip() for x in args[0].split(',')]
         gids = self.get_target2(objs, targets)
 
@@ -3300,8 +3485,8 @@ class Geometry():
         if offset != 0:
             cptx = cptx + normal*offset
 
-        points = containing_bbox(
-            normal, cptx, xmin, ymin, zmin, xmax, ymax, zmax)
+        points = box_containing_bbox(normal, cptx, xmin, ymin, zmin,
+                                     xmax, ymax, zmax)
         v = self.add_box(points)
 
         ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=True,

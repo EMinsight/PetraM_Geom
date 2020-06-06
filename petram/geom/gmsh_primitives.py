@@ -1087,6 +1087,22 @@ class Remove2(GeomPB):
     def fancy_menu_name(self):
         return 'DeleteRest'
 
+data0 = (('target_object', VtableElement('target_object', type='string',
+                                         guilabel='Surfaces',
+                                         default="",
+                                         tip="surfaces")),)
+
+class MergeFace(GeomPB):
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Merge faces'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return "MergeFace"
+    
 
 class GeomPB_Bool(GeomPB):
     def attribute_set(self, v):
@@ -1105,30 +1121,28 @@ class GeomPB_Bool(GeomPB):
                    self.delete_tool, 3, {"text": ""}])
         ll.append(["Keep highest dim only",
                    self.keep_highest, 3, {"text": ""}])
-        ll.append(
-            [None, "Note: Use prefix v(volume), f(face), l(line), p(point)", 2, None])
         return ll
 
     def get_panel1_value(self):
         v = GeomPB.get_panel1_value(self)
         return v + [self.delete_input,
-                    self.delete_tool, self.keep_highest, None]
+                    self.delete_tool, self.keep_highest]
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
         return
 
     def import_panel1_value(self, v):
-        GeomPB.import_panel1_value(self, v[:-4])
-        self.delete_input = v[-4]
-        self.delete_tool = v[-3]
-        self.keep_highest = v[-2]
+        GeomPB.import_panel1_value(self, v[:-3])
+        self.delete_input = v[-3]
+        self.delete_tool = v[-2]
+        self.keep_highest = v[-1]
 
     def panel1_tip(self):
         tip = GeomPB.panel1_tip(self)
         return tip + ['delete input objects'] + \
             ['delete tool objects'] + ['keep highest dim. objects']
-
+    
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
         gui_param = (list(self.vt.make_value_or_expression(self)) +
@@ -1139,11 +1153,11 @@ class GeomPB_Bool(GeomPB):
 
 
 ddata = (('objplus', VtableElement('objplus', type='string',
-                                   guilabel='+',
+                                   guilabel='+ (v/f/l/p)',
                                    default="",
                                    tip="added objects")),
          ('objminus', VtableElement('objminus', type='string',
-                                    guilabel='-',
+                                    guilabel='- (v/f/l/p)',
                                     default="",
                                     tip="objects to be subtracted")),)
 
@@ -1153,11 +1167,11 @@ class Difference(GeomPB_Bool):
 
 
 udata = (('objplus', VtableElement('obj1', type='string',
-                                   guilabel='Input',
+                                   guilabel='Input (v/f/l/p)',
                                    default="",
                                    tip="objects")),
          ('tool_object', VtableElement('tool_object', type='string',
-                                       guilabel='Tool Obj.',
+                                       guilabel='Tool Obj. (v/f/l/p)',
                                        default="",
                                        tip="object to move")),)
 
@@ -1165,18 +1179,69 @@ udata = (('objplus', VtableElement('obj1', type='string',
 class Union(GeomPB_Bool):
     vt = Vtable(udata)
 
-
-class Union2(GeomPB_Bool):
-    vt = Vtable(udata)
-
     @classmethod
     def fancy_menu_name(self):
-        return 'Union(merge face)'
+        return 'Union'
 
     @classmethod
     def fancy_tree_name(self):
         return "Union"
 
+    def attribute_set(self, v):
+        v = super(Union, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["use_upgrade"] = False
+        return v
+    
+    def panel1_param(self):
+        ll = GeomPB.panel1_param(self)
+        ll.append(["Delete Input",
+                   self.delete_input, 3, {"text": ""}])
+        ll.append(["Delete Tool",
+                   self.delete_tool, 3, {"text": ""}])
+        ll.append(["Keep highest dim only",
+                   self.keep_highest, 3, {"text": ""}])
+        ll.append(["Use domain unifier",
+                   self.use_upgrade, 3, {"text": ""}])
+        return ll
+
+    def get_panel1_value(self):
+        v = GeomPB.get_panel1_value(self)
+        return v + [self.delete_input, self.delete_tool,
+                    self.keep_highest, self.use_upgrade]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        GeomPB.import_panel1_value(self, v[:-4])
+        self.delete_input = v[-4]
+        self.delete_tool = v[-3]
+        self.keep_highest = v[-2]
+        self.use_upgrade = v[-1]
+
+    def panel1_tip(self):
+        tip = GeomPB.panel1_tip(self)
+        return tip + ['delete input objects', 'delete tool objects',
+                      'keep highest dim. objects', 'unify the same domains']
+
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = (list(self.vt.make_value_or_expression(self)) +
+                     [self.delete_input, self.delete_tool,
+                      self.keep_highest, self.use_upgrade])
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
+
+class Union2(Union):
+    vt = Vtable(udata)
+
+    def attribute_set(self, v):
+        v = super(Union, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["use_upgrade"] = False
+        return v
 
 class Union2D(GeomPB_Bool):
     vt = Vtable(udata)
@@ -1184,7 +1249,6 @@ class Union2D(GeomPB_Bool):
     @classmethod
     def fancy_menu_name(self):
         return 'Union'
-
 
 class Intersection(GeomPB_Bool):
     vt = Vtable(udata)
