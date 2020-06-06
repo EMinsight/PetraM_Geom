@@ -351,13 +351,23 @@ def register_shape(shape, topolists):
     register_topo(shape, uvertices, TopAbs_VERTEX, TopAbs_EDGE,
                   topods_Vertex, topods_Edge,self.vertices, dim=0)
     '''
+
+def display_shape(shape):
+    ### show shape on python-occ display for debug.
+    from OCC.Display.SimpleGui import init_display
+    
+    display, start_display, add_menu, add_function_to_menu = init_display()
+    display.DisplayShape(shape)
+    display.FitAll()
+    start_display()
+    
 def project_ptx_2_plain(normal, cptx, p):
     dp = p - cptx
     dp = dp - np.sum(dp * normal) * normal
     return dp + cptx
 
 def rect_by_bbox_projection(normal, cptx, xmin, ymin, zmin,
-                            xmax, ymax, zmax, scale=1.01):
+                            xmax, ymax, zmax, scale=1.5):
     corners = (np.array([xmin, ymin, zmin]),
                np.array([xmin, ymin, zmax]),
                np.array([xmin, ymax, zmin]),
@@ -368,19 +378,20 @@ def rect_by_bbox_projection(normal, cptx, xmin, ymin, zmin,
                np.array([xmax, ymax, zmax]),)
     # projected point
     p = [project_ptx_2_plain(normal, cptx, pp) for pp in corners]
-    
+
+    c1 = np.mean(np.vstack(p), 0)
     # distance on the plane
-    d = [np.sqrt(np.sum((pp - cptx)**2)) for pp in p]
+    d = [np.sqrt(np.sum((pp - c1)**2)) for pp in p]
     idx = np.argmax(d)
     dist2 = np.max(d)
 
-    n1 = (p[idx] - cptx)
+    n1 = (p[idx] - c1)
     n1 = n1/np.sqrt(np.sum(n1**2))
     n2 = np.cross(normal, n1)
 
-    c1 = (cptx + p[idx])/2.0
-    e1 = n1 * dist2*scale/2.0
-    e2 = n2 * dist2*scale/2.0
+    #c1 = (cptx + p[idx])/2.0
+    e1 = n1 * dist2*scale
+    e2 = n2 * dist2*scale
 
     return [c1+e1, c1+e2, c1-e1, c1-e2]
     
@@ -487,6 +498,14 @@ class topo_list():
     def __contains__(self, val):
         return val in self.d
 
+    def find_gid(self, shape1):
+        mapper = self.get_mapper(shape1)
+        for k in self.d:
+            if mapper.Contains(self.d[k]):
+                return k
+        else:
+            assert False, "Can not find a shape number to replace"
+            
     def get_item_from_group(self, val, group=0):
         return self.gg[group][val]
 

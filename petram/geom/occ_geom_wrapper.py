@@ -151,10 +151,40 @@ class Geometry():
         if idx < 0:
             return None
         return ll[idx]
-    
+
+    def get_topolist_for_shape(self, shape):
+        if isinstance(shape, TopoDS_Solid):
+            return self.solids
+        elif isinstance(shape, TopoDS_Shell):
+            return self.shells
+        elif isinstance(shape, TopoDS_Face):
+            return self.faces
+        elif isinstance(shape, TopoDS_Wire):
+            return self.wires
+        elif isinstance(shape, TopoDS_Edge):
+            return self.edges
+        elif isinstance(shape, TopoDS_Vertex):
+            return self.vertices
+        else:
+            assert False, "Unkown shape type: " + type(shape)
+        return None
+        
+    def get_gid_for_shape(self, shape):
+        '''
+        add shpae those kind is not known
+        '''
+        topolist = self.get_topolist_for_shape(shape)
+        gid = topolist.find_gid(shape)        
+        return gid
+        
     def add_to_topo_list(self, shape):
         '''
         add shpae those kind is not known
+        '''
+        topolist = self.get_topolist_for_shape(shape)
+        gid = topolist.add(shape)        
+        return gid
+
         '''
         if isinstance(shape, TopoDS_Solid):
             gid = self.solids.add(shape)
@@ -171,13 +201,16 @@ class Geometry():
         else:
             assert False, "Unkown shape type: " + type(shape)
         return gid
+        '''
         
     def gid2shape(self, gid):
         d = self.get_topo_list_for_gid(gid)
         return d[int(gid)]
 
-    def print_number_of_topo_objects(self):
-        maps = prep_maps(self.shape, return_all=True)
+    def print_number_of_topo_objects(self, shape=None):
+        if shape is None:
+            shape = self.shape
+        maps = prep_maps(shape, return_all=True)
 
         dprint1("Entity counts: solid/face/edge/vert : ",
                 maps['solid'].Size(), maps['face'].Size(),
@@ -325,9 +358,9 @@ class Geometry():
             tool.GetNormalToSurface(surface, uMax, vMin, dirc)
             n3 = (dirc.X(), dirc.Y(), dirc.Z())
 
-            if n1 != n2:
+            if (np.abs(np.sum(np.array(n1)*np.array(n2)))-1) > self.occ_geom_tolerance:
                 assert False, "surface is not flat"
-            if n1 != n3:
+            if (np.abs(np.sum(np.array(n1)*np.array(n3)))-1) > self.occ_geom_tolerance:                
                 assert False, "surface is not flat"
         else:
             tool.GetNormalToSurface(surface, 0., 0., dirc)
@@ -1275,7 +1308,7 @@ class Geometry():
         xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
 
         rect = rect_by_bbox_projection(n1, p1, xmin, ymin, zmin,
-                                       xmax, ymax, zmax, scale=1.3)
+                                       xmax, ymax, zmax, scale=1.5)
 
         verts = [BRepBuilderAPI_MakeVertex(gp_Pnt(pt[0], pt[1], pt[2])).Shape()
                  for pt in rect]
@@ -1368,7 +1401,7 @@ class Geometry():
         if remove_obj:
             for gid in gid_objs:
                 self.remove(gid)
-                
+            
         self.synchronize_topo_list()
         
         if keep_highest:
@@ -1408,52 +1441,89 @@ class Geometry():
                          remove_obj=True, remove_tool=True)
 
     def remove(self, gid, recursive=True):
-        topolist = self.get_topo_list_for_gid(gid)
-        #topo_list_child = self.get_topo_list_for_gid(gid, child=1)
-
-        shape = topolist[gid]
-
-        self.print_number_of_topo_objects()        
-        self.builder.Remove(self.shape, shape)
-
-
-        self.print_number_of_topo_objects()        
-
         akind = {VolumeID: 'face',
                  SurfaceLoopID: 'face',
                  SurfaceID: 'edge',
                  LineLoopID: 'edge',
                  LineID: 'vertex'}
-        anc = list(topolist.get_ancestors(gid, akind[gid.__class__]))
-        mapper = get_mapper(self.shape, akind[gid.__class__])
 
+        topolist = self.get_topo_list_for_gid(gid)
+        shape = topolist[gid]
+
+        self.print_number_of_topo_objects()
+
+        if not recursive:
+            anc = list(topolist.get_ancestors(gid, akind[gid.__class__]))
+            anc_id = [self.get_gid_for_shape(i) for i in anc]
+            print("find", anc_id)
+            copier = BRepBuilderAPI_Copy()
+            sub_shapes = []
+            for s in anc:
+                 copier.Perform(s)
+                 assert copier.IsDone(), "Can not copy sub-shape"
+                 sub_shapes.append(copier.Shape())
+            org_subshapes = anc
+
+        mapper = get_mapper(self.shape, akind[gid.__class__])
+        # this may work, too?
+        # self.builder.Remove(self.shape, shape)         
+        rebuild = ShapeBuild_ReShape()
+        rebuild.Remove(shape)        
+        new_shape = rebuild.Apply(self.shape)
+        
+        mapper2 = get_mapper(new_shape, akind[gid.__class__])
+        
+        self.print_number_of_topo_objects(new_shape)        
+ 
         # note we dont put back shell/wire. 
         if not recursive and not isinstance(gid, VertexID):
-            shape_added = []
+            shape_added = []            
+            for s, s_org, gid_org in zip(sub_shapes, org_subshapes, anc_id):
+                if mapper.Contains(s_org) and not mapper2.Contains(s_org):
+                    shape_added.append((s, s_org, gid_org))                    
+            for s, s_org, gid_org in shape_added:
+                print("adding this", s)
+                self.builder.Add(new_shape, s)
+                topolist = self.get_topolist_for_shape(s)
+                topolist[gid_org] = s
+                
+
+            '''
+
             for s in anc:
                 flag = mapper.Contains(s)
-                if not flag:
-                    shape_added.append(s)
-
+                #print("status",  mapper.Contains(s), mapper2.Contains(s))
+                if mapper.Contains(s) and not mapper2.Contains(s):
+                    shape_added.append(s)                    
+            print("putting back", shape_added)
             for s in shape_added:
-                self.builder.Add(self.shape, s)
+                location = s.Location()
+                if not location.IsIdentity():
+                    location = TopLoc_Location()
+                ss = s.Located(location)
+                print('putting back', ss)
+                self.builder.Add(new_shape, ss)
+            '''
                 
+        self.shape = new_shape
+
+        '''
         elif recursive:
-            '''
-            When face is deleted. Sometime edge remains. 
-            Why? 
-            Do I need to do it really recursively??
-            '''
+
+        #    When face is deleted. Sometime edge remains. 
+        #    Why? 
+        #    Do I need to do it really recursively??
+
             shape_removed = []
             for s in anc:
-                flag = mapper.Contains(s)
+                flag = mapper2.Contains(s)
                 if flag:
                     shape_removed.append(s)
             
             for s in shape_removed:
-                self.builder.Remove(self.shape, s)
-                
-
+                self.builder.Remove(new_shape, s)
+        '''
+        
     def inverse_remove(self, gids):
         comp = TopoDS_Compound()
         b = self.builder
@@ -3911,7 +3981,7 @@ class Geometry():
                                 False, ad, self.occ_parallel)
             
         dprint1("Done (IncrementalMesh)")
-        
+
         bt = BRep_Tool()
 
         L = 1 if len(self.faces) == 0 else max(list(self.faces)) + 1
@@ -3948,7 +4018,8 @@ class Geometry():
         def value2coord(value, location):
             if not location.IsIdentity():
                 trans = location.Transformation()
-                xyz = [v.XYZ() for v in value]
+                xyz = [v.Coord() for v in value]                
+                xyz = [gp_XYZ(x[0], x[1], x[2]) for x in xyz]
                 void = [trans.Transforms(x) for x in xyz]
                 ptx = [x.Coord() for x in xyz]
             else:
@@ -4021,7 +4092,6 @@ class Geometry():
                 nodes = poly.Nodes()
                 values = [nodes.Value(i) for i in range(1, poly.NbNodes() + 1)]
                 ptx = value2coord(values, location)
-
                 idx = np.arange(poly.NbNodes())
 
                 all_ptx.append(np.vstack(ptx))
