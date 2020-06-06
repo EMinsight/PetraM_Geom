@@ -1258,7 +1258,7 @@ class Geometry():
                                keep_highest=keep_highest)    
 
     def merge_face(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
-                        keep_highest=False):
+                        keep_highest=False, use_upgrade=True):
         '''
         merge faces on the same plane by operationg two cut
 
@@ -1356,10 +1356,11 @@ class Geometry():
             assert False, "boolean operation failed:" + operation
 
         result = operator.Shape()
-        
-        unifier = ShapeUpgrade_UnifySameDomain(result)
-        unifier.Build()
-        result = unifier.Shape()
+
+        if use_upgrade:
+            unifier = ShapeUpgrade_UnifySameDomain(result)
+            unifier.Build()
+            result = unifier.Shape()
 
         if remove_tool:
             for gid in gid_tools:
@@ -3402,7 +3403,7 @@ class Geometry():
         return list(objs), newkeys
     
     def MergeFace_build_geom(self, objs, *args):
-        tp = args[0]
+        tp, use_upgrade = args
         tp = [x.strip() for x in tp.split(',')]
         gid_all = self.get_target1(objs, tp, 'f')
         
@@ -3412,7 +3413,8 @@ class Geometry():
         gids_new = self.merge_face(gid_objs, gid_tools,
                                     remove_obj=True,
                                     remove_tool=True,
-                                    keep_highest=True,)
+                                    keep_highest=True,
+                                    use_upgrade=use_upgrade)
 
         newkeys = []
         for gid in gids_new:

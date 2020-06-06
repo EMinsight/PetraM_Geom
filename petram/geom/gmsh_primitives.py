@@ -1090,7 +1090,11 @@ class Remove2(GeomPB):
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Surfaces',
                                          default="",
-                                         tip="surfaces")),)
+                                         tip="surfaces")),
+         ('use_unifier', VtableElement('use_unifier', type='bool',
+                                     guilabel='Merge edge',
+                                     default=True,
+                                     tip="Use unifier to merge edges if possible")), )
 
 class MergeFace(GeomPB):
     vt = Vtable(data0)
