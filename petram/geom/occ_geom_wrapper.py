@@ -1455,7 +1455,6 @@ class Geometry():
         if not recursive:
             anc = list(topolist.get_ancestors(gid, akind[gid.__class__]))
             anc_id = [self.get_gid_for_shape(i) for i in anc]
-            print("find", anc_id)
             copier = BRepBuilderAPI_Copy()
             sub_shapes = []
             for s in anc:
@@ -1566,14 +1565,16 @@ class Geometry():
         isNew = not new_shape.IsSame(shape)
 
         if isNew:
+            if not copy:
+                self.remove(gid)
             self.builder.Add(self.shape, new_shape)
-            new_gid = topolist.add(new_shape)
+            
+            if not copy:
+                topolist[gid] = new_shape
+            else:
+                new_gid = topolist.add(new_shape)
         else:
             new_gid = None
-
-        if not copy and isNew:
-            #  I am not sure why OCC always copy object
-            self.remove(gid)
 
         return new_gid
 
