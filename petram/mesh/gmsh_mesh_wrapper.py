@@ -2025,7 +2025,8 @@ class GMSHMeshGenerator(GMSHMeshGeneratorBase, mp.Process):
 
         GMSHMeshGeneratorBase.__init__(self, q, task_q)
         mp.Process.__init__(self)
-
+        dprint1("starting a process for meshing")
+        
     def ready_for_next_task(self):
         pass
 
@@ -2043,6 +2044,7 @@ class GMSHMeshGeneratorTH(GMSHMeshGeneratorBase, Thread):
 
         GMSHMeshGeneratorBase.__init__(self, q, task_q)
         Thread.__init__(self)
+        dprint1("starting a thread for mesh")        
 
     def ready_for_next_task(self):
         self.task_q.task_done()
