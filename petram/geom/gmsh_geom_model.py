@@ -22,7 +22,6 @@ import warnings
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshGeomModel')
 
-
 try:
     from Queue import Queue, Empty
 except ImportError:
@@ -53,7 +52,6 @@ def get_gmsh_exe():
             return macos_gmsh_location
     return 'gmsh'
 
-
 def get_gmsh_major_version():
     gmsh_exe = get_gmsh_exe()
     try:
@@ -66,13 +64,12 @@ def get_gmsh_major_version():
     ex = out.split('.')
     return int(ex[0])
 
-
 use_gmsh_api = True
 gmsh_Major = get_gmsh_major_version()
 if gmsh_Major <= 3:
     use_gmsh_api = False
 
-
+'''
 def enqueue_output(p, queue):
     while True:
         line = p.stdout.readline()
@@ -111,7 +108,7 @@ def collect_std_out(p, verbose=True):
             break  # on unix, this means process killed by a signal
         lines.append(line)
     return lines, p.poll()
-
+'''
 
 def get_geom_key(obj):
     if obj.__class__.__name__ in geom_key_dict:
@@ -136,14 +133,13 @@ def get_geom_key(obj):
 def get_twoletter_keys(t):
     if t == 'p':
         return 'pt'
-    elif t == 'l':
+    if t == 'l':
         return 'ln'
-    elif t == 'f':
+    if t == 'f':
         return 'fs'
-    elif t == 'v':
+    if t == 'v':
         return 'vl'
-    else:
-        return t
+    return t
 
 
 class GeomObjs(dict):
@@ -336,6 +332,10 @@ class GmshGeom(GeomTopBase):
     def geom_finalized(self, value):
         self._geom_finalized = value
 
+    @property
+    def geom_data(self):
+        return self._gmsh4_data
+    
     @property
     def build_stop(self):
         if not hasattr(self, "_build_stop"):
@@ -626,6 +626,7 @@ class GmshGeom(GeomTopBase):
 
         self._objs = objs
 
+    '''
     def check_create_new_child(self, gs):
         if not hasattr(self, '_prev_sequence'):
             return True
@@ -654,7 +655,7 @@ class GmshGeom(GeomTopBase):
             else:
                 dprint1("check passed", s[0])
         return False
-
+    '''
     def build_geom4(self, stop1=None, stop2=None, filename=None,
                     finalize=False, no_mesh=False, gui_parent=None):
         '''
@@ -668,8 +669,6 @@ class GmshGeom(GeomTopBase):
         #    self._gmsh4_data[-1].finalize()
 
         from petram.geom.geom_sequence import GeomSequenceOperator
-        from petram.geom.gmsh_geom_wrapper import GMSHGeometryGenerator
-        from petram.geom.occ_geom_wrapper import OCCGeometryGenerator
         '''
         geom = Geometry(PreviewResolution = self.geom_prev_res,
                         PreviewAlgorithm = self.geom_prev_algorithm,
@@ -705,6 +704,7 @@ class GmshGeom(GeomTopBase):
             if not os.path.exists(trash):
                 os.mkdir(trash)
 
+        '''
         if (hasattr(self, "_p") and self._p[0].is_alive()):
             new_process = self.check_create_new_child(gs)
         else:
@@ -726,23 +726,22 @@ class GmshGeom(GeomTopBase):
             ll = len(self._prev_sequence)
             self._prev_sequence = gs.geom_sequence
             start_idx = ll
-
+        '''
         success, dataset = gs.run_generator(self, no_mesh=no_mesh, finalize=finalize,
                                             filename=stopname, progressbar=pgb,
-                                            create_process=new_process,
-                                            process_param=self._p,
-                                            start_idx=start_idx, trash=trash)
+                                            trash=trash)
 
         if pgb is not None:
             pgb.Destroy()
 
+        '''
         if not success:
             print(dataset)  # this is an error message
             # self._p[0].terminate()
             self._prev_sequence = []
             del self._p
             return
-
+        '''
         gui_data, objs, brep_file, data, vcl, esize = dataset
 
         self._geom_brep = brep_file
@@ -770,7 +769,10 @@ class GmshGeom(GeomTopBase):
     def generate_final_geometry(self):
         cwd = os.getcwd()
         dprint1("Generating Geometry in " + cwd)
-        self.build_geom4(finalize=True, gui_parent=None, no_mesh=True)
+        bk = self.use_1d_preview
+        self.use_1d_preview = True
+        self.build_geom4(finalize=True, gui_parent=None)
+        self.use_1d_preview = bk        
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
         self.terminate_child()

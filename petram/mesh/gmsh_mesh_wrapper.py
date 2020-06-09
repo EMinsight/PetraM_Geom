@@ -200,6 +200,7 @@ class GMSHMeshWrapper():
         self.use_expert_mode = kwargs.pop("use_expert_mode", False)
         self.gen_all_phys_entity = kwargs.pop("gen_all_phys_entity", False)
         self.trash = kwargs.pop("trash", '')
+        self.edge_tss = kwargs.pop("edge_tss", None)
 
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -372,14 +373,14 @@ class GMSHMeshWrapper():
         return self.current
 
     def read_geom_info(self, dimtags=None):
-        from petram.geom.read_gmsh import read_loops2
+        from petram.geom.read_gmsh import read_loops3
 
         self.hide_all()
         gmsh.model.mesh.generate(1)
         # gmsh.model.mesh.removeDuplicateNodes()
 
         #ptx, p, l, s, v = read_loops2(gmsh)
-        return read_loops2(gmsh, dimtags)
+        return read_loops3(gmsh, dimtags)
 
     def add_model(self, name):
         gmsh.model.add(name)
@@ -1202,11 +1203,13 @@ class GMSHMeshWrapper():
         from petram.geom.geom_utils import find_rotation_between_surface
         from petram.geom.geom_utils import find_rotation_between_surface2
 
-        ptx, p, l, s, v = self.geom_info
+        ptx, p, l, s, v, mid_points = self.geom_info
+        geom_size = np.sqrt(np.sum((np.max(ptx[:,0], 0) -  np.min(ptx[:,0], 0))**2))
+        
         axan = kwargs.pop('axan', None)
         revolve = kwargs.pop('revolve', False)
         volume_hint = kwargs.pop('volume_hint', None)
-        geom_data = (ptx, l, s, v)
+        #geom_data = (ptx, l, s, v, mid_points)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
 
@@ -1225,23 +1228,23 @@ class GMSHMeshWrapper():
 
             if volume_hint is None:
                 ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface(
-                    tag1, tag2,
-                    geom_data=geom_data,
-                    axan=axan)
+                    tag1, tag2, self.edge_tss,
+                    geom_data=self.geom_info,
+                    axan=axan, mind_eps=geom_size*1e-7)
             else:
                 # copy(revolve) face is perfomed in the preparation of revolve mesh
                 # in this case we use the volume being meshed as a hint
                 #print("using volume hint", volume_hint)
                 vtags = [int(x) for x in volume_hint.split(',')]
                 ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
-                    tag1, tag2, vtags,
-                    geom_data=geom_data,
-                    axan=axan)
+                    tag1, tag2, vtags, self.edge_tss,
+                    geom_data=self.geom_info,
+                    axan=axan, mind_eps=geom_size*1e-7)
         else:
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
-                tag1, tag2,
-                geom_data=geom_data,
-                axan=axan)
+                tag1, tag2, self.edge_tss,
+                geom_data=self.geom_info,
+                axan=axan, mind_eps=geom_size*1e-7)
 
         params = (ax, an, px, d, affine, p_pairs, l_pairs, s_pairs)
         #print("transformation param", params)
@@ -1254,6 +1257,8 @@ class GMSHMeshWrapper():
         # gmsh.model.occ.synchronize()
         gmsh.model.mesh.rebuildNodeCache()
         ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
+
+        print("Entering CopyFace1D", l_pairs)
 
         ents = list(set(gmsh.model.getBoundary(
             dimtags, combined=False, oriented=False)))
@@ -1418,12 +1423,13 @@ class GMSHMeshWrapper():
         return done, params
 
     def _extract_info_for_volume(self, vtags):
-        ptx, p, l, s, v = self.geom_info
+        ptx, p, l, s, v, m = self.geom_info
         vv = {k: v[k] for k in vtags}
         ss = {k: s[k] for k in set(sum(vv.values(), []))}
         ll = {k: l[k] for k in set(sum(ss.values(), []))}
         pp = {k: p[k] for k in set(sum(ll.values(), []))}
-        return ptx, pp, ll, ss, vv
+        mm = {k: m[k] for k in ll}
+        return ptx, pp, ll, ss, vv, mm
 
     # extrudeface
     @process_text_tags_vsd(dim=3)
@@ -1439,8 +1445,10 @@ class GMSHMeshWrapper():
         nlayers = kwargs.get('nlayers', 5)
         axan = kwargs.pop('axan', None)
 
-        ptx, p, l, s, v = self.geom_info
-        geom_data = (ptx, l, s, v)
+        ptx, p, l, s, v, mid_points = self.geom_info
+        geom_size = np.sqrt(np.sum((np.max(ptx[:,0], 0) -  np.min(ptx[:,0], 0))**2))
+
+        #geom_data = (ptx, l, s, v, mid_points)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
         vtags = [x for dim, x in vdimtags]
@@ -1449,14 +1457,14 @@ class GMSHMeshWrapper():
 
         if revolve:
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
-                tag1, tag2, vtags,
-                geom_data=geom_data,
-                axan=axan)
+                tag1, tag2, vtags, self.edge_tss,
+                geom_data=self.geom_info,
+                axan=axan, mind_eps=geom_size*1e-7)
         else:
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
-                tag1, tag2,
-                geom_data=geom_data,
-                axan=axan)
+                tag1, tag2, self.edge_tss,
+                geom_data=self.geom_info,
+                axan=axan, mind_eps=geom_size*1e-7)
         ws = self.prep_workspace()
 
         # ??? Apparently I need to delete a destinaion volume to make space for
@@ -1490,12 +1498,13 @@ class GMSHMeshWrapper():
         #info1 = self.geom_info
         info2 = self.read_geom_info(ret)
 
-        pmap, pmap_r = map_points_in_geom_info(info1, info2)
-        lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r)
+        pmap, pmap_r = map_points_in_geom_info(info1, info2, th = geom_size*1e-7)
+        lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r, th = geom_size*1e-6)
         smap, smap_r = map_surfaces_in_geom_info(info1, info2, lmap_r)
         vmap, vmap_r = map_volumes_in_geom_info(info1, info2, smap_r)
 
         maps = (pmap, pmap_r, lmap, lmap_r, smap, smap_r, vmap, vmap_r)
+
         self.show_all()
         gmsh.model.mesh.generate(0)
 
@@ -1545,7 +1554,6 @@ class GMSHMeshWrapper():
             dim, tag, ndata, edata = d
             if dim == 2:
                 break
-
             tag = abs(lmap[tag])
             ntag, pos, ppos = ndata
             ntag2 = range(noffset, noffset+len(ntag))
@@ -1556,12 +1564,12 @@ class GMSHMeshWrapper():
             vtags = [x for xx, x in gmsh.model.getBoundary(((1, tag),))]
 
             etypes, etags, nodes = edata
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+
+            etags2 = [list(range(eoffset, eoffset+len(etags[0]))),]
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map1[x] for x in item] for item in nodes]
 
             # do I need to pay attetion the direction on parametricCoords here???
-
             gmsh.model.mesh.addNodes(dim, tag, ntag2, ndata[1], ndata[2])
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
             copied_line.append(tag)
@@ -1595,16 +1603,15 @@ class GMSHMeshWrapper():
                 continue
 
             tag = abs(lmap_r[tag0])
+            #print("processing :", dim, tag0, " --> ", tag)
             if tag in done[1]:
                 continue
-            #print("copy from ", dim, tag0, "to", tag)
 
             ntag, pos, ppos = ndata
             etypes, etags, nodes = edata
 
             ntag2 = range(noffset, noffset+len(ntag)-2)
             noffset = noffset+len(ntag)-2
-
             etags2 = [range(eoffset, eoffset+len(etags[0]))]
             eoffset = eoffset+len(etags[0])
 
@@ -1876,7 +1883,7 @@ class GMSHMeshWrapper():
         kwargs['revolve'] = True
         return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
 
-    def run_generater(self, brep_input, msh_file, finalize=False, dim=3,
+    def run_generater(self, brep_input, edge_tss, msh_file, finalize=False, dim=3,
                       progressbar=None):
 
         kwargs = {'CharacteristicLengthMax': self.clmax,
@@ -1888,7 +1895,8 @@ class GMSHMeshWrapper():
                   'use_profiler': self.use_profiler,
                   'use_expert_mode': self.use_expert_mode,
                   'gen_all_phys_entity': self.gen_all_phys_entity,
-                  'trash': self.trash}
+                  'trash': self.trash,
+                  'edge_tss': edge_tss}
 
         q = mp.Queue()
         p = mp.Process(target=generator,

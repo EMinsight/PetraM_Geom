@@ -64,6 +64,7 @@ class Geometry():
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2)
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
+        self.occ_parallel = False
         self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-5)
         #self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 0)
         self.occ_geom_tolerance = kwargs.pop('OCCGeomTol', 1e-6)        
@@ -1481,14 +1482,11 @@ class Geometry():
                 if mapper.Contains(s_org) and not mapper2.Contains(s_org):
                     shape_added.append((s, s_org, gid_org))                    
             for s, s_org, gid_org in shape_added:
-                print("adding this", s)
                 self.builder.Add(new_shape, s)
                 topolist = self.get_topolist_for_shape(s)
                 topolist[gid_org] = s
                 
-
             '''
-
             for s in anc:
                 flag = mapper.Contains(s)
                 #print("status",  mapper.Contains(s), mapper2.Contains(s))
@@ -1571,6 +1569,7 @@ class Geometry():
             
             if not copy:
                 topolist[gid] = new_shape
+                new_gid = None
             else:
                 new_gid = topolist.add(new_shape)
         else:
@@ -2489,8 +2488,8 @@ class Geometry():
         targets, params, angles = args
 
         if params[0] == 'xyz':
-            rax = params[1]
-            pax = params[2]
+            rax = [float(x) for x in params[1]]
+            pax = [float(x) for x in params[2]]
         elif params[0] == 'fromto_points':
             param1 = [x.strip() for x in params[1].split(',')]
             param2 = [x.strip() for x in params[2].split(',')]
@@ -4351,12 +4350,11 @@ class Geometry():
         return gui_data, objs
 
 
-class OCCGeometryGenerator(mp.Process):
+class OCCGeometryGeneratorBase():
     def __init__(self, q, task_q):
         self.q = q
         self.task_q = task_q
         self.mw = None
-        mp.Process.__init__(self)
         assert hasOCC, "OCC modules are not imported properly"
 
     def run(self):
@@ -4425,3 +4423,26 @@ class OCCGeometryGenerator(mp.Process):
             # data =  geom_msh, l, s, v,  vcl, esize
 
             q.put((True, (self.gui_data, self.objs, brep_file, data, None)))
+
+class OCCGeometryGenerator(OCCGeometryGeneratorBase, mp.Process):
+    def __init__(self):
+        assert hasOCC, "OCC modules are notim ported properly"
+        
+        task_q = mp.Queue()  # data to child
+        q = mp.Queue()       # data from child
+        OCCGeometryGeneratorBase.__init__(self, q, task_q)        
+        mp.Process.__init__(self)
+
+from threading import Thread
+from queue import Queue
+class OCCGeometryGeneratorTH(OCCGeometryGeneratorBase, Thread):
+    def __init__(self):
+        assert hasOCC, "OCC modules are notim ported properly"
+        
+        task_q = Queue()  # data to child
+        q = Queue()       # data from child
+        OCCGeometryGeneratorBase.__init__(self, q, task_q)        
+        Thread.__init__(self)
+        
+
+            

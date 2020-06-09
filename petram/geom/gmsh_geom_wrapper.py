@@ -1,4 +1,5 @@
 from __future__ import print_function
+
 from petram.geom.geom_id import (GeomIDBase, VertexID, LineID, SurfaceID, VolumeID,
                                  LineLoopID, SurfaceLoopID)
 from petram.geom.gmsh_geom_model import get_geom_key
@@ -11,6 +12,7 @@ import os
 import numpy as np
 import time
 import tempfile
+import traceback
 import multiprocessing as mp
 from six.moves.queue import Empty as QueueEmpty
 
@@ -1125,7 +1127,7 @@ class Geometry(object):
         return list(objs), [newkey]
 
     def Circle_build_geom(self, objs, *args):
-        center, ax1, ax2, radius = args
+        center, ax1, ax2, radius, make_face = args        
         lcar = 0.0
         a1 = np.array(ax1)
         a2 = np.array(ax2)
@@ -1427,7 +1429,14 @@ class Geometry(object):
 
     def Revolve_build_geom(self, objs, *args):
 
-        targets, pax, rax, angles = args
+        targets, params, angles = args
+        
+        if params[0] == 'xyz':
+            rax = [float(x) for x in params[1]]
+            pax = [float(x) for x in params[2]]
+        else:
+            assert False, "Not supported in GMSH geometry"
+
         angle = angles[0]
         
         targets = [x.strip() for x in targets.split(',')]
@@ -2852,12 +2861,11 @@ class Geometry(object):
         return geom_brep, mappings
 
 
-class GMSHGeometryGenerator(mp.Process):
+class GMSHGeometryGeneratorBase():
     def __init__(self, q, task_q):
         self.q = q
         self.task_q = task_q
         self.mw = None
-        mp.Process.__init__(self)
 
     def run(self):
         while True:
@@ -2876,7 +2884,6 @@ class GMSHGeometryGenerator(mp.Process):
                 try:
                     self.generator(*task[1])
                 except BaseException:
-                    import traceback
                     txt = traceback.format_exc()
                     traceback.print_exc()
                     self.q.put((True, ('fail', txt)))
@@ -2905,7 +2912,6 @@ class GMSHGeometryGenerator(mp.Process):
         self.mw.run_sequence(self.objs, self.gui_data, start_idx)
 
         if finalize:
-            filename = filename
             brep_file, mappings = self.mw.generate_brep(
                 self.objs, filename=filename, finalize=True)
         else:
@@ -2922,3 +2928,21 @@ class GMSHGeometryGenerator(mp.Process):
             # data =  geom_msh, l, s, v,  vcl, esize
 
             q.put((True, (self.gui_data, self.objs, brep_file, data, mappings)))
+
+class GMSHGeometryGenerator(GMSHGeometryGeneratorBase, mp.Process):
+    def __init__(self):
+        task_q = mp.Queue()  # data to child
+        q = mp.Queue()       # data from child
+        GMSHGeometryGeneratorBase.__init__(self, q, task_q)        
+        mp.Process.__init__(self)
+
+from threading import Thread
+from queue import Queue
+        
+class GMSHGeometryGeneratorTH(GMSHGeometryGeneratorBase, Thread):
+    def __init__(self):
+        task_q = Queue()  # data to child
+        q = Queue()       # data from child
+        GMSHGeometryGeneratorBase.__init__(self, q, task_q)        
+        Thread.__init__(self)
+        

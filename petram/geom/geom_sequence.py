@@ -5,32 +5,96 @@ import numpy as np
 import time
 import tempfile
 
+import six
+if six.PY2:
+    import cPickle as pickle
+else:
+    import pickle
+
 from six.moves.queue import Empty as QueueEmpty
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GeomSequenceOperator')
 
-class GeomSequenceOperator(object):
+class GeomSequenceOperator():
     def __init__(self):
         self.geom_sequence = []
-        self.p = None
-
-    def clean_queue(self):
-        self.task_q.close()
-        self.q.close()
-        self.task_q.cancel_join_thread()
-        self.q.cancel_join_thread()
-        self.q  = None
-        self.task_q  = None        
+        self._prev_sequence = []
         
+    def clean_queue(self):
+        if self.use_mp:        
+            self._p.task_q.close()
+            self._p.q.close()
+            self._p.task_q.cancel_join_thread()
+            self._p.q.cancel_join_thread()
+
+    def terminate_child(self):
+        if (hasattr(self, "_p") and self._p.is_alive()):
+            if self.use_mp:
+                self._p.task_q.close()
+                self._p.q.close()
+                self._p.task_q.cancel_join_thread()
+                self._p.q.cancel_join_thread()
+                self._p.terminate()
+            del self._p
+
+    def create_new_child(self, use_occ, pgb):
+        from petram.geom.gmsh_geom_wrapper import (GMSHGeometryGenerator,
+                                                   GMSHGeometryGeneratorTH)
+        from petram.geom.occ_geom_wrapper import (OCCGeometryGenerator,
+                                                  OCCGeometryGeneratorTH)
+
+        self.terminate_child()
+        if pgb is None:
+            self.use_mp = False            
+            if use_occ:
+                p = OCCGeometryGeneratorTH()
+            else:
+                p = GMSHGeometryGeneratorTH()                
+        else:
+            self.use_mp = True            
+            if use_occ:
+                p = OCCGeometryGenerator()
+            else:
+                p = GMSHGeometryGenerator()
+
+        p.start()
+        self._p = p
+
+    def check_create_new_child(self, use_occ, pbg):
+        if not hasattr(self, '_prev_sequence'):
+            return True
+
+        if len(self.geom_sequence) < len(self._prev_sequence):
+            return True
+
+        if pgb is None:
+            if use_occ:
+                if self._p.__class__.__name__ != 'OCCGeometryGeneratorTH':
+                    return True
+                if self._p.__class__.__name__ != 'GMSHGeometryGeneratorTH':
+                   return True
+        else:
+            if use_occ:
+                if self._p.__class__.__name__ != 'OCCGeometryGenerator':
+                    return True
+                if self._p.__class__.__name__ != 'GMSHGeometryGenerator':
+                   return True
+
+        for k, s in enumerate(self._prev_sequence):
+            s_txt1 = pickle.dumps(s)
+            s_txt2 = pickle.dumps(self.geom_sequence[k])
+            if s_txt1 != s_txt2:
+                return True
+            dprint1("check passed", s[0])
+        return False
+
     def add_sequence(self, gui_name, gui_param, geom_name):
         self.geom_sequence.append((gui_name, gui_param, geom_name))
 
-
-    def run_generator(self, gui,
-                      no_mesh=False, finalize=False, filename = '',
-                      progressbar = None, create_process = True,
-                      process_param = None, start_idx = 0, trash=''):
+    def do_run_generator(self, gui, no_mesh=False, finalize=False,
+                         filename='', progressbar=None, start_idx=0,
+                         trash=''):
         
         kwargs = {'PreviewResolution': gui.geom_prev_res,
                   'PreviewAlgorithm': gui.geom_prev_algorithm,
@@ -45,58 +109,53 @@ class GeomSequenceOperator(object):
                   'SmallEdgeSeg': gui.small_edge_seg,
                   'MaxSeg': gui.max_seg}
 
-
-        p = process_param[0]
-        task_q = process_param[1]
-        q = process_param[2]
-        self.task_q = task_q
-        self.q = q
+        p = self._p
+        task_q = self._p.task_q
+        q = self._p.q
 
         args = (self.geom_sequence, no_mesh, finalize, filename, start_idx, trash, kwargs)
-        
+
         task_q.put((1, args))
-        '''
-        p = mp.Process(target = generator,
-                       args = (q, self.geom_sequence, no_mesh,
-                               finalize, filename, kwargs))
-        p.start()
-        '''
+
         logfile = q.get(True)
         dprint1("log file: ", logfile)
 
         istep = 0
-        
+
         while True:
             try:
                 ret = q.get(True, 1)
-                if ret[0]: break
-                else:
-                    dprint1(ret[1])
+
+                if ret[0]:
+                    break
+
+                dprint1(ret[1])
                 if progressbar is not None:
                     istep += 1
                     if istep < progressbar.GetRange():
                         progressbar.Update(istep, newmsg=ret[1])
                     else:
-                        print("Goemetry Generator : Step = " + str(istep) + ret[1])
-                        
+                        print("Goemetry Generator : Step = " +
+                              str(istep) + ret[1])
+
             except QueueEmpty:
                 if not p.is_alive():
                     self.clean_queue()
-                    if progressbar is not None:                    
-                       progressbar.Destroy()
+                    if progressbar is not None:
+                        progressbar.Destroy()
                     assert False, "Child Process Died"
                     break
-                time.sleep(1.)                    
+                time.sleep(1.)
                 if progressbar is not None:
                     import wx
-                    wx.Yield()
+                    wx.GetApp().Yield()
                     if progressbar.WasCancelled():
-                       if p.is_alive():
-                           p.terminate()
-                           self.clean_queue()                           
-                       progressbar.Destroy()
-                       assert False, "Geometry Generation Aborted"
-                    
+                        if p.is_alive():
+                            p.terminate()
+                            self.clean_queue()                          
+                        progressbar.Destroy()
+                        assert False, "Geometry Generation Aborted"
+
             time.sleep(0.03)
 
         if ret[1][0] == 'fail':
@@ -123,5 +182,41 @@ class GeomSequenceOperator(object):
                 data = ptx, cells, cell_data, l, s, v
 
                 ret = self.gui_data, self.objs, brep_file, data, vcl, esize
-            
+
             return True, ret
+
+
+    def run_generator(self, gui, no_mesh=False, finalize=False,
+                      filename='', progressbar=None, trash=''):
+
+        if (hasattr(self, "_p") and self._p.is_alive()):
+            new_process = self.check_create_new_child(gui.use_occ_preview, progressbar)
+        else:
+            new_process = True
+
+        if new_process:
+            self.terminate_child()
+            self.create_new_child(gui.use_occ_preview, progressbar)
+            start_idx = 0
+        else:
+            ll = len(self._prev_sequence)
+            start_idx = ll
+
+        self._prev_sequence = self.geom_sequence
+
+        success, dataset = self.do_run_generator(gui, no_mesh=no_mesh,
+                                                 finalize=finalize,
+                                                 filename=filename,
+                                                 progressbar=progressbar,
+                                                 start_idx=start_idx,
+                                                 trash=trash,)
+
+        if not success:
+            print(dataset)  # this is an error message
+            # self._p[0].terminate()
+            self._prev_sequence = []
+            del self._p
+
+        return success, dataset
+
+

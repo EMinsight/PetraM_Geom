@@ -190,6 +190,21 @@ def read_loops2(geom, dimtags=None):
 
     return ptx, p, l, s, v
 
+def read_loops3(geom, dimtags=None):
+    ptx, p, l, s, v = read_loops2(geom, dimtags=dimtags)
+
+    mid_points = {}
+    for k in l:
+        p1 = ptx[p[l[k][0]]]
+        p2 = ptx[p[l[k][1]]]
+        param1 = geom.model.getParametrization(1, k, p1)
+        param2 = geom.model.getParametrization(1, k, p2)       
+        value = geom.model.getValue(1, k, (param1 + param2)/2.0)
+        mid_points[k] = value
+        #print(param1, param2, value)
+
+    return ptx, p, l, s, v, mid_points
+
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
 

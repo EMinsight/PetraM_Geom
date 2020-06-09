@@ -72,32 +72,44 @@ def map_points_in_geom_info(info1, info2, th = 1e-10):
     # {point in info1 : point in info2}    
     pmap = {pmap_r[k]:k   for k in pmap_r}
     
-    print(pmap, pmap_r)    
+    #print(pmap, pmap_r)    
     #print("src", np.vstack([ptx1[info11[k],:] for k in pmap]))
     #print("det", np.vstack([ptx2[info2[1][k],:] for k in pmap_r]))
     
     return pmap, pmap_r
 
-def map_lines_in_geom_info(info1, info2, pmap_r, th = 1e-10):
+def dist(x, y, trans=None):
+    if trans is not None:
+        x = trans(x)
+    d = np.sqrt(np.sum((x - y)**2))
+    return d
+
+def map_lines_in_geom_info(info1, info2, pmap_r, th=1e-10, trans=None):
     lmap = {}
     lmap_r = {}
-    print("search for lines for ", info2[2])
+    #print("search for lines for ", info1[2], info2[2], pmap_r)
     for l in info2[2]:
         p1, p2 = pmap_r[info2[2][l][0]], pmap_r[info2[2][l][1]]
         for x in info1[2]:
+            #print("checking ", x, " for ", l)
             if (info1[2][x][0] == p1 and
                 info1[2][x][1] == p2):
+                if dist(info1[5][x], info2[5][l], trans) > th:
+                    continue
                 lmap[x] = l
                 lmap_r[l] = x
                 break
             elif (info1[2][x][0] == p2 and
                   info1[2][x][1] == p1):
+                if dist(info1[5][x], info2[5][l], trans) > th:
+                    continue
                 lmap[x] = -l
                 lmap_r[l] = -x
                 break
             else:
                 pass
         else:
+            print("current data", lmap_r)
             assert False, "could not find line mapping for "+str(l)
     return lmap, lmap_r
 
@@ -105,6 +117,7 @@ def map_surfaces_in_geom_info(info1, info2, lmap_r):
     smap = {}
     smap_r = {}
 
+    #print("search for surfaces for ", info1[3], info2[3], lmap_r)    
     for s in info2[3]:
         tmp = sorted([abs(lmap_r[x]) for x in info2[3][s]])
         for x in info1[3]:
@@ -146,14 +159,20 @@ def find_s_pairs(src, dst, s, l_pairs):
 
     return s_pairs
     
-        
-def find_translate_between_surface(src, dst, geom=None,
+def find_normal_from_edgedata(edge_tss, lines):
+    ii = np.in1d(edge_tss[2],lines)
+    ptx = edge_tss[0][np.unique(edge_tss[1][ii])]
+    n1 = normal2points(ptx)
+    #print("normal based on edge tss", n1)
+    return n1
+    
+def find_translate_between_surface(src, dst, edge_tss, geom=None,
                                    geom_data = None,
                                    min_angle = 0.1,
                                    mind_eps = 1e-10,
                                    axan = None):
     
-    ptx, l, s, v = geom_data
+    ptx, p, l, s, v, mid_points = geom_data
     s2l = s
     
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
@@ -166,8 +185,11 @@ def find_translate_between_surface(src, dst, geom=None,
     
     p1 = ptx[i1,:]
     p2 = ptx[i2,:]
-    n1 = normal2points(p1)
-    n2 = normal2points(p2)
+
+    n1 = find_normal_from_edgedata(edge_tss, l1)
+    n2 = find_normal_from_edgedata(edge_tss, l2)    
+    #n1 = normal2points(p1)
+    #n2 = normal2points(p2)
 
     if axan is None:
         ax = n1
@@ -245,7 +267,7 @@ def find_translate_between_surface(src, dst, geom=None,
     #print("px, d", px, d)
     return ax, an, px, d, affine, p_pairs, l_pairs, s_pairs
 
-def find_rotation_between_surface(src, dst, geom=None,
+def find_rotation_between_surface(src, dst, edge_tss, geom=None,
                                    geom_data = None,
                                    min_angle = 0.1,
                                    mind_eps = 1e-10,
@@ -255,7 +277,7 @@ def find_rotation_between_surface(src, dst, geom=None,
         ptx, cells, cell_data, l, s, v, geom = geom._gmsh4_data
     else:
         cell_data = None
-        ptx, l, s, v = geom_data
+        ptx, p, l, s, v, mid_points = geom_data
     s2l = s
     
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
@@ -271,8 +293,11 @@ def find_rotation_between_surface(src, dst, geom=None,
         i2 = np.array([np.where(cell_data['vertex']['geometrical'] == ii)[0] for ii in p2p]).flatten()
     p1 = ptx[i1,:]
     p2 = ptx[i2,:]
-    n1 = normal2points(p1)
-    n2 = normal2points(p2)
+    #n1 = normal2points(p1)
+    #n2 = normal2points(p2)
+    n1 = find_normal_from_edgedata(edge_tss, l1)
+    n2 = find_normal_from_edgedata(edge_tss, l2)    
+    
 
     #print(p1, p2, n1, n2, axan)
     if axan is None:
@@ -379,7 +404,7 @@ def find_rotation_between_surface(src, dst, geom=None,
     return ax, an, px, d, affine, p_pairs, l_pairs, s_pairs
 
 
-def find_rotation_between_surface2(src, dst, vol,
+def find_rotation_between_surface2(src, dst, vol, edge_tss,
                                   geom_data = None,
                                   min_angle = 0.1,
                                   mind_eps = 1e-10,
@@ -390,7 +415,7 @@ def find_rotation_between_surface2(src, dst, vol,
     based on finding a volume chain between src and dest
     volume is a hint to specify the volumes in the chains
     '''
-    ptx, l, s, v = geom_data
+    ptx, p, l, s, v, mid_points = geom_data
     s2l = s
 
     l1 = np.unique(np.hstack([s[k] for k in src]).flatten())
@@ -404,8 +429,11 @@ def find_rotation_between_surface2(src, dst, vol,
 
     p1 = ptx[i1,:]
     p2 = ptx[i2,:]
-    n1 = normal2points(p1)
-    n2 = normal2points(p2)
+
+    n1 = find_normal_from_edgedata(edge_tss, l1)
+    n2 = find_normal_from_edgedata(edge_tss, l2)    
+    #n1 = normal2points(p1)
+    #n2 = normal2points(p2)
 
     cos = np.sum(n1*n2)
     sin = np.sqrt(np.sum(np.cross(n1, n2)**2))
@@ -413,6 +441,11 @@ def find_rotation_between_surface2(src, dst, vol,
     ax = np.cross(n1, n2)
     ax = ax/np.sqrt(np.sum(ax**2))
 
+
+    all_s = sum([v[k] for k in vol], [])
+    all_l = sum([s[k] for k in all_s], [])
+    lateral_l = np.setdiff1d(all_l, np.hstack((l1, l2)))
+    
     # next find volume chain
     def search_volume_chain(start_volume, start_face):
         sf = start_face
@@ -500,8 +533,8 @@ def find_rotation_between_surface2(src, dst, vol,
             p1 = ptx[k-1,:]
             p2 = ptx[p_pairs[k]-1,:]
             ddd.append(np.sqrt(np.sum((p2 - np.dot(R, p1))**2)))
-        print("average distance (must be less than)", np.max(np.abs(ddd-np.mean(ddd))),
-              mind_eps)
+        #print("average distance (must be less than)", np.max(np.abs(ddd-np.mean(ddd))),
+        #      mind_eps)
         return np.max(np.abs(ddd-np.mean(ddd))) < mind_eps
     
     def rot_center(p1, p2, an, ax):
@@ -521,47 +554,75 @@ def find_rotation_between_surface2(src, dst, vol,
         
     #using angle and normal we can find the center...
 
-    R = rotation_mat(ax, an)
-    d = np.array([0, 0, 0])
-
-    if not check_distance(p_pairs, R, ptx):
-         # we assume angle is less than 90 deg.
-         if an > 0.0:
-             an = an - np.pi
-         else:
-             an = an + np.pi
-         R = rotation_mat(ax, an)
-         check_distance(p_pairs, R, ptx)
-         
-    good = [True, True]
-
-    for i, k in enumerate(p_pairs):
-        #print("checking points", k, p_pairs[k])
-        p1 = ptx[k-1,:]
-        p2 = ptx[p_pairs[k]-1,:]
-        d = d + (p2 - np.dot(R, p1))
+    def try_ax_an(ax, an):
+        R = rotation_mat(ax, an)
+        R_half = rotation_mat(ax, an/2.0)
+        if not check_distance(p_pairs, R, ptx):
+            return False, False, False, False
         
-        c1, c2 = rot_center(p1, p2, an, ax)
-        if i == 0:
-            px1 = c1
-            px2 = c2
+        good = [True, True]
+        d = np.array([0, 0, 0])
+        for i, k in enumerate(p_pairs):
+            #print("checking points", k, p_pairs[k])
+            p1 = ptx[k-1,:]
+            p2 = ptx[p_pairs[k]-1,:]
+            d = d + (p2 - np.dot(R, p1))
+
+            c1, c2 = rot_center(p1, p2, an, ax)
+            if i == 0:
+                px1 = c1
+                px2 = c2
+            else:
+                if not check_good(px1, c1, an) and not check_good(px1, c2, an):
+                    good[0] = False
+                if not check_good(px2, c1, an) and not check_good(px2, c2, an):
+                    good[1] = False
+        px = c1 if good[0] else c2
+        d = d / len(p_pairs)
+
+        # test mid-point of lateral edge is on the half angle location.
+        pt1, pt2 = l[lateral_l[0]]
+
+        if pt1 in p_pairs:
+            check = dist(mid_points[lateral_l[0]],
+                         R_half.dot(ptx[p[pt1]] - px)+px)
         else:
-            if not check_good(px1, c1, an) and not check_good(px1, c2, an):
-                good[0] = False
-            if not check_good(px2, c1, an) and not check_good(px2, c2, an):
-                good[1] = False
-                
-    if not any(good):
-        print("ax, an", ax, an, good)
-        assert False, "can not find center"
-        
-    px = c1 if good[0] else c2
-    d = d / len(p_pairs)
+            check = dist(mid_points[lateral_l[0]],
+                         R_half.dot(ptx[p[pt2]] - px)+px)
+
+        #print("mid point check", check)            
+        if check > mind_eps:
+            return False, False, False, False
+
+        return R, px, d, check
+
+    R, px, d, check = try_ax_an(ax, an)
+    if not check:
+        if an > 0.0:
+            an = an - np.pi
+        else:
+            an = an + np.pi
+        R, px, d, check = try_ax_an(ax, an)
+        if not check:
+            assert False, "can not find center"
+
     print("ax, an, px, d", ax, an, px, d)
     
     l2dict = {tuple(sorted(l[ll])):ll for ll in l2}
+
     l_pairs = {ll:l2dict[tuple(sorted((p_pairs[l[ll][0]],p_pairs[l[ll][1]])))] for ll in l1}
-            
+
+    pmap_r = {p_pairs[x]:x for x in p_pairs}
+
+    def translation(x):
+        return d + np.dot(R, x)
+    info1 = list(geom_data)
+    info2 = list(geom_data)
+    info1[2] = {x:geom_data[2][x] for x in l1}
+    info2[2] = {x:geom_data[2][x] for x in l2}    
+    l_pairs, l_pairs_r = map_lines_in_geom_info(info1, info2, pmap_r, th=1e-10,
+                                                trans = translation)
+
     affine = np.zeros((4,4), dtype=float)
     affine[:3,:3] = R
     affine[:3,-1] = d

@@ -594,7 +594,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             else:
                 pgb = None
 
+            ### collect edge tesselation from geometry
+            ptx = self.geom_root.geom_data[0]                        
+            idx = self.geom_root.geom_data[1]['line']
+            a, b = np.unique(idx, return_inverse=True)            
+            idx2 = b.reshape(idx.shape)
+            ptx2 = ptx[a]
+            line_idx = self.geom_root.geom_data[2]['line']['geometrical']
+            edge_tss = (ptx2, idx2, line_idx)
             max_mdim, done, data, msh_output = mesher.run_generater(geom_root._geom_brep,
+                                                                    edge_tss,
                                                                     filename,
                                                                     finalize=finalize,
                                                                     progressbar=pgb)
