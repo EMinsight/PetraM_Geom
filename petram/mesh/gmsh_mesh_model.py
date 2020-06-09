@@ -545,7 +545,12 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             trash = os.path.join(cwd, '.trash')
             if not os.path.exists(trash):
                 os.mkdir(trash)
-        
+
+        from petram.mesh.mesh_sequence_operator import MeshSequenceOperator
+
+        mso = MeshSequenceOperator()
+
+        '''
         from petram.mesh.gmsh_mesh_wrapper import GMSHMeshWrapper as GmshMesher
         mesher = GmshMesher(meshformat=2.2,
                             CharacteristicLengthMax=clmax,
@@ -557,7 +562,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                             use_expert_mode=self.use_expert_mode,
                             gen_all_phys_entity=self.gen_all_phys_entity,
                             trash=trash)
-
+        '''
         # mesher.load_brep(geom_root._geom_brep)
 
         children = [x for x in self.walk()]
@@ -571,15 +576,15 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                     break            # for build before
                 child.vt.preprocess_params(child)
                 # child.check_master_slave(mesher)
-                child.add_meshcommand(mesher)
+                child.add_meshcommand(mso)
                 if child is stop2:
                     break            # for build after
 
-        if mesher.count_sequence() > 0:
+        if mso.count_sequence() > 0:
             # set None since mesher may die...
             self._mesher_data = None
 
-            L = mesher.count_sequence()*4 + 3
+            L = mso.count_sequence()*4 + 3
 
             if gui_parent is not None:
                 import wx
@@ -595,21 +600,32 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 pgb = None
 
             ### collect edge tesselation from geometry
-            ptx = self.geom_root.geom_data[0]                        
+            ptx = self.geom_root.geom_data[0]
             idx = self.geom_root.geom_data[1]['line']
-            a, b = np.unique(idx, return_inverse=True)            
+            a, b = np.unique(idx, return_inverse=True)
             idx2 = b.reshape(idx.shape)
             ptx2 = ptx[a]
             line_idx = self.geom_root.geom_data[2]['line']['geometrical']
             edge_tss = (ptx2, idx2, line_idx)
-            max_mdim, done, data, msh_output = mesher.run_generater(geom_root._geom_brep,
-                                                                    edge_tss,
-                                                                    filename,
-                                                                    finalize=finalize,
-                                                                    progressbar=pgb)
-            if pgb is not None:
-                pgb.Destroy()
 
+            kwargs = {'CharacteristicLengthMax': clmax,
+                      'CharacteristicLengthMin': clmin,
+                      'EdgeResolution': 3,
+                      'MeshAlgorithm': self.algorithm,
+                      'MeshAlgorithm3D': self.algorithm3d,
+                      'use_profiler': self.use_profiler,
+                      'use_expert_mode': self.use_expert_mode,
+                      'trash': trash,
+                      'gen_all_phys_entity': self.gen_all_phys_entity,
+                      'meshformat': 2.2,
+                      'MaxThreads': [1,1,1,1],
+                      'edge_tss': edge_tss}
+
+            max_mdim, done, data, msh_output = mso.run_generater(geom_root._geom_brep,
+                                                                 filename,
+                                                                 kwargs,
+                                                                 finalize=finalize,
+                                                                 progressbar=pgb)
             self._mesher_data = data
             self._max_mdim = max_mdim
             if finalize:
@@ -623,7 +639,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self._mesh_fface = done[2]  # finished surfaces
         self._mesh_fline = done[1]  # finished lines
 
-        return (mesher.count_sequence() > 0)
+        return (mso.count_sequence() > 0)
 
     def generate_mesh_file(self):
         cwd = os.getcwd()
@@ -638,15 +654,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             dprint1("Generating Mesh ... Done")
 
     def load_gui_figure_data(self, viewer):
-        #import meshio
         return 'mesh', self.name(), None
-
-        #filename = os.path.join(viewer.model.owndir(), self.name())+'_raw'
-        #msh_filename = filename + '.msh'
-        # if os.path.exists(msh_filename):
-        #    ret = meshio.read(msh_filename)
-        #    return 'mesh', self.name(), ret
-        # else:
 
     def is_viewmode_grouphead(self):
         return True

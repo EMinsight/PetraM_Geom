@@ -4362,6 +4362,8 @@ class OCCGeometryGeneratorBase():
             time.sleep(0.1)
             try:
                 task = self.task_q.get(True)
+                self.ready_for_next_task()
+                
             except EOFError:
                 self.result_queue.put((-1, None))
                 # self.task_queue.task_done()
@@ -4372,7 +4374,7 @@ class OCCGeometryGeneratorBase():
                 break
             if task[0] == 1:
                 try:
-                    self.generator(*task[1])
+                    self.generate_geom(*task[1])
                 except BaseException:
                     import traceback
                     txt = traceback.format_exc()
@@ -4382,7 +4384,7 @@ class OCCGeometryGeneratorBase():
                     break
         print("exiting prcesss")
 
-    def generator(self, sequence, no_mesh, finalize,
+    def generate_geom(self, sequence, no_mesh, finalize,
                   filename, start_idx, trash, kwargs):
 
         kwargs['write_log'] = True
@@ -4432,7 +4434,10 @@ class OCCGeometryGenerator(OCCGeometryGeneratorBase, mp.Process):
         q = mp.Queue()       # data from child
         OCCGeometryGeneratorBase.__init__(self, q, task_q)        
         mp.Process.__init__(self)
-
+        dprint1("starting a process for geometry")
+    def ready_for_next_task(self):
+        pass
+        
 from threading import Thread
 from queue import Queue
 class OCCGeometryGeneratorTH(OCCGeometryGeneratorBase, Thread):
@@ -4443,6 +4448,8 @@ class OCCGeometryGeneratorTH(OCCGeometryGeneratorBase, Thread):
         q = Queue()       # data from child
         OCCGeometryGeneratorBase.__init__(self, q, task_q)        
         Thread.__init__(self)
+        dprint1("starting a thread for geometry")
         
-
+    def ready_for_next_task(self):
+        self.task_q.task_done()
             

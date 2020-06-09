@@ -2872,6 +2872,8 @@ class GMSHGeometryGeneratorBase():
             time.sleep(0.1)
             try:
                 task = self.task_q.get(True)
+                self.ready_for_next_task()
+                
             except EOFError:
                 self.result_queue.put((-1, None))
                 # self.task_queue.task_done()
@@ -2933,9 +2935,13 @@ class GMSHGeometryGenerator(GMSHGeometryGeneratorBase, mp.Process):
     def __init__(self):
         task_q = mp.Queue()  # data to child
         q = mp.Queue()       # data from child
-        GMSHGeometryGeneratorBase.__init__(self, q, task_q)        
+        GMSHGeometryGeneratorBase.__init__(self, q, task_q)
         mp.Process.__init__(self)
-
+        dprint1("starting a process for geometry")
+        
+    def ready_for_next_task(self):
+        pass
+        
 from threading import Thread
 from queue import Queue
         
@@ -2945,4 +2951,7 @@ class GMSHGeometryGeneratorTH(GMSHGeometryGeneratorBase, Thread):
         q = Queue()       # data from child
         GMSHGeometryGeneratorBase.__init__(self, q, task_q)        
         Thread.__init__(self)
+        dprint1("starting a thread for geometry")
         
+    def ready_for_next_task(self):
+        self.task_q.task_done()

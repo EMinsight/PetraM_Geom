@@ -287,8 +287,6 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
-
-
 class GmshGeom(GeomTopBase):
     has_2nd_panel = False
     
@@ -304,9 +302,11 @@ class GmshGeom(GeomTopBase):
         super(GmshGeom, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
 
+    '''
     def __del__(self):
         self.terminate_child()
-
+    '''
+    '''
     def terminate_child(self):
         if (hasattr(self, "_p") and self._p[0].is_alive()):
             self._p[1].close()
@@ -315,7 +315,7 @@ class GmshGeom(GeomTopBase):
             self._p[2].cancel_join_thread()
             self._p[0].terminate()
             del self._p
-
+    '''
     @property
     def is_finalized(self):
         if not hasattr(self, "_geom_finalized"):
@@ -543,6 +543,8 @@ class GmshGeom(GeomTopBase):
             assert False, "GMSH 3 is not supported"
 
     def walk_over_geom_chidlren(self, geom, stop1=None, stop2=None):
+        geom.clear_sequence()
+        
         self._build_stop = (None, None)
 
         children = [x for x in self.walk()]
@@ -626,65 +628,19 @@ class GmshGeom(GeomTopBase):
 
         self._objs = objs
 
-    '''
-    def check_create_new_child(self, gs):
-        if not hasattr(self, '_prev_sequence'):
-            return True
-
-        if len(gs.geom_sequence) < len(self._prev_sequence):
-            return True
-
-        import six
-        if six.PY2:
-            import cPickle as pickle
-        else:
-            import pickle
-
-        if self.use_occ_preview:
-            if self._p[0].__class__.__name__ == 'GMSHGeometryGenerator':
-                return True
-        else:
-            if self._p[0].__class__.__name__ != 'GMSHGeometryGenerator':
-                return True
-
-        for k, s in enumerate(self._prev_sequence):
-            s_txt1 = pickle.dumps(s)
-            s_txt2 = pickle.dumps(gs.geom_sequence[k])
-            if s_txt1 != s_txt2:
-                return True
-            else:
-                dprint1("check passed", s[0])
-        return False
-    '''
     def build_geom4(self, stop1=None, stop2=None, filename=None,
                     finalize=False, no_mesh=False, gui_parent=None):
-        '''
-        filename : export geometry to a real file (for debug)
-        '''
-        import gmsh
 
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
-        # if self._gmsh4_data is not  None:
-        #    self._gmsh4_data[-1].finalize()
 
-        from petram.geom.geom_sequence import GeomSequenceOperator
-        '''
-        geom = Geometry(PreviewResolution = self.geom_prev_res,
-                        PreviewAlgorithm = self.geom_prev_algorithm,
-                        OCCParallel = int(self.occ_parallel),
-                        Maxthreads = self.maxthreads,
-                        SkipFrag = self.skip_final_frag,
-                        Use1DPreview = self.use_1d_preview,
-                        UseOCCPreview = self.use_occ_preview)
+        if not hasattr(self, 'gso'):
+            from petram.geom.geom_sequence_operator import GeomSequenceOperator
+            self.gso = GeomSequenceOperator()
 
-        geom.set_factory('OpenCASCADE')
-        '''
+        stopname = self.walk_over_geom_chidlren(self.gso, stop1=stop1, stop2=stop2)
 
-        gs = GeomSequenceOperator()
-        stopname = self.walk_over_geom_chidlren(gs, stop1=stop1, stop2=stop2)
-
-        L = len(gs.geom_sequence) + 3
+        L = len(self.gso.geom_sequence) + 3
 
         if gui_parent is not None:
             import wx
@@ -727,12 +683,13 @@ class GmshGeom(GeomTopBase):
             self._prev_sequence = gs.geom_sequence
             start_idx = ll
         '''
-        success, dataset = gs.run_generator(self, no_mesh=no_mesh, finalize=finalize,
-                                            filename=stopname, progressbar=pgb,
-                                            trash=trash)
+        success, dataset = self.gso.run_generator(self, no_mesh=no_mesh, finalize=finalize,
+                                                  filename=stopname, progressbar=pgb,
+                                                  trash=trash,)
 
-        if pgb is not None:
-            pgb.Destroy()
+        if not success:
+            assert False, dataset
+            return
 
         '''
         if not success:
@@ -748,13 +705,13 @@ class GmshGeom(GeomTopBase):
         self.update_GUI_after_geom(gui_data, objs)
 
         if data is None:  # if no_mesh = True
-            self.terminate_child()
+            self.gso.terminate_child()
             return
         if finalize:
-            self.terminate_child()
+            self.gso.terminate_child()
         # for the readablity I expend data here, do we need geom?
         ptx, cells, cell_data, l, s, v = data
-        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, gs)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, self.gso)
 
         values = vcl.values()
         if len(values) > 0:
@@ -772,10 +729,10 @@ class GmshGeom(GeomTopBase):
         bk = self.use_1d_preview
         self.use_1d_preview = True
         self.build_geom4(finalize=True, gui_parent=None)
-        self.use_1d_preview = bk        
+        self.use_1d_preview = bk
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
-        self.terminate_child()
+        self.gso.terminate_child()
         dprint1("Generating Geometry ... Done")
 
     def build_geom(self, stop1=None, stop2=None, filename=None,

@@ -1,4 +1,5 @@
 from __future__ import print_function
+
 from petram.debug import timeit, use_profiler
 import petram.geom.gmsh_config as gmsh_config
 import os
@@ -6,6 +7,7 @@ import numpy as np
 import gmsh
 import time
 import tempfile
+import traceback
 from collections import defaultdict
 
 from scipy.spatial import cKDTree
@@ -201,6 +203,7 @@ class GMSHMeshWrapper():
         self.gen_all_phys_entity = kwargs.pop("gen_all_phys_entity", False)
         self.trash = kwargs.pop("trash", '')
         self.edge_tss = kwargs.pop("edge_tss", None)
+        self.mesh_sequence = kwargs.pop("mesh_sequence", [])
 
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -211,7 +214,6 @@ class GMSHMeshWrapper():
         gmsh_init = True
         self.add_model('main1')
 
-        self.mesh_sequence = []
 
         # default clmax
         self.clmax = CharacteristicLengthMax
@@ -227,10 +229,11 @@ class GMSHMeshWrapper():
     def name(self):
         return self._name
 
+    '''
     def add(self, name, *gids, **kwargs):
-        '''
-        add mesh command
-        '''
+        #
+        #add mesh command
+        #
 
         if name == 'extrude_face':
             self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
@@ -247,11 +250,8 @@ class GMSHMeshWrapper():
         return len(self.mesh_sequence)
 
     def clear(self):
-        ''''
-        clear mesh sequence
-        '''
         self.mesh_sequence = []
-
+    '''
     @use_profiler
     def generate(self, brep_input, msh_file, dim=3, finalize=False):
         '''
@@ -1882,7 +1882,7 @@ class GMSHMeshWrapper():
     def revolve_face_3D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         kwargs['revolve'] = True
         return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
-
+'''
     def run_generater(self, brep_input, edge_tss, msh_file, finalize=False, dim=3,
                       progressbar=None):
 
@@ -1959,7 +1959,6 @@ class GMSHMeshWrapper():
 
         return max_dim, done, data, msh_output
 
-
 def generator(q, brep_input, msh_file, sequence, dim, finalize, kwargs):
 
     kwargs['queue'] = q
@@ -1970,3 +1969,82 @@ def generator(q, brep_input, msh_file, sequence, dim, finalize, kwargs):
         brep_input, msh_file, dim=dim, finalize=finalize)
 
     q.put((True, (max_dim, done, msh_output)))
+'''
+
+class GMSHMeshGeneratorBase():
+    def __init__(self, q, task_q):
+        self.q = q
+        self.task_q = task_q
+
+    def run(self):
+        while True:
+            time.sleep(0.1)
+            try:
+                task = self.task_q.get(True)
+                self.ready_for_next_task()
+            except EOFError:
+                self.result_queue.put((-1, None))
+                # self.task_queue.task_done()
+                continue
+
+            if task[0] == -1:
+                # self.task_queue.task_done()
+                break
+            if task[0] == 1:
+                try:
+                    self.generate_mesh(*task[1])
+                except BaseException:
+                    txt = traceback.format_exc()
+                    traceback.print_exc()
+                    self.q.put((True, ('fail', txt)))
+                    # self.task_queue.task_done()
+                    break
+        print("exiting prcesss")
+
+    def generate_mesh(self, brep_input, msh_file, sequence,
+                      dim, finalize, kwargs):
+
+        kwargs['queue'] = self.q
+        kwargs['mesh_sequence'] = sequence
+        mw = GMSHMeshWrapper(**kwargs)
+
+        max_dim, done, msh_output = mw.generate(brep_input, msh_file,
+                                                dim=dim, finalize=finalize)
+
+        self.q.put((True, (max_dim, done, msh_output)))
+
+
+class GMSHMeshGenerator(GMSHMeshGeneratorBase, mp.Process):
+    def __init__(self):
+
+        # data to child
+        task_q = mp.Queue()
+
+        # data from child
+        q = mp.Queue()
+
+        GMSHMeshGeneratorBase.__init__(self, q, task_q)
+        mp.Process.__init__(self)
+
+    def ready_for_next_task(self):
+        pass
+
+from threading import Thread
+from queue import Queue
+
+class GMSHMeshGeneratorTH(GMSHMeshGeneratorBase, Thread):
+    def __init__(self):
+
+        # data to child
+        task_q = Queue()
+
+        # data from child
+        q = Queue()
+
+        GMSHMeshGeneratorBase.__init__(self, q, task_q)
+        Thread.__init__(self)
+
+    def ready_for_next_task(self):
+        self.task_q.task_done()
+
+
