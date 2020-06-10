@@ -1233,7 +1233,9 @@ class Geometry():
         result = operator.Shape()
 
         self.update_topo_list_from_history(operator, objs)
-        self.update_topo_list_from_history(operator, tools)
+        
+        if operation != 'fragments':
+            self.update_topo_list_from_history(operator, tools)
 
         if remove_tool:
             for gid in gid_tools:
