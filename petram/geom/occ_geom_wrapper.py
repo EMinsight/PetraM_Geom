@@ -1204,13 +1204,6 @@ class Geometry():
             assert False, "Unknown boolean operation"
 
         objs = TopTools_ListOfShape()
-        tools = TopTools_ListOfShape()
-
-        for gid in gid_tools:
-            topolist = self.get_topo_list_for_gid(gid)
-            shape = topolist[gid]
-            tools.Append(shape)
-
         for gid in gid_objs:
             topolist = self.get_topo_list_for_gid(gid)
             shape = topolist[gid]
@@ -1220,8 +1213,14 @@ class Geometry():
         operator.SetArguments(objs)
 
         if operation == 'fragments':
-            tools.Clear()
+            pass
         else:
+            tools = TopTools_ListOfShape()            
+            for gid in gid_tools:
+                topolist = self.get_topo_list_for_gid(gid)
+                shape = topolist[gid]
+                tools.Append(shape)
+                
             operator.SetTools(tools)
 
         if self.occ_boolean_tolerance > 0:

@@ -23,10 +23,11 @@ Algorithm3D = OrderedDict((("Delaunay", 1), ("New Delaunay", 2),
                            ("Frontal Hex", 6), ("MMG3D", 7),
                            ("R-tree", 9), ("default", 1)))
 
-
 debug = True
 debug2 = False
 
+import petram.debug as debug
+dprint1, dprint2, dprint3 = debug.init_dprints('GMSHMeshWrapper')
 
 def dprint(*args):
     if debug:
