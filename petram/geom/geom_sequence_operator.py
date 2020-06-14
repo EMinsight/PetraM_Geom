@@ -71,46 +71,54 @@ class GeomSequenceOperator():
 
     def check_create_new_child(self, use_occ, pgb):
         if not hasattr(self, '_prev_sequence'):
-            return True
+            return True, 0
 
         if len(self.geom_sequence) < len(self._prev_sequence):
-            return True
-        
-        print(self._p.__class__.__name__)
+            return True, 0
+
         if pgb is None or globals()['test_thread']:
             if use_occ:
                 if self._p.__class__.__name__ != 'OCCGeometryGeneratorTH':
-                    return True
+                    return True, 0
             else:
                 if self._p.__class__.__name__ != 'GMSHGeometryGeneratorTH':
-                   return True
+                    return True, 0
         else:
             if use_occ:
                 if self._p.__class__.__name__ != 'OCCGeometryGenerator':
-                    return True
+                    return True, 0
             else:
                 if self._p.__class__.__name__ != 'GMSHGeometryGenerator':
-                   return True
+                    return True, 0
 
+        start_idx = 0
         for k, s in enumerate(self._prev_sequence):
+            if s[0] == 'WP_End' and use_occ:
+                if k == len(self._prev_sequence)-1:
+                    return False, start_idx
+                start_idx = start_idx + 1
+                continue
+
             s_txt1 = pickle.dumps(s)
             s_txt2 = pickle.dumps(self.geom_sequence[k])
             if s_txt1 != s_txt2:
-                dprint1("check not passed", s[0])                
-                return True
+                dprint1("check not passed", s[0])
+                return True, 0
             dprint1("check passed", s[0])
-        return False
+            start_idx = start_idx + 1
+
+        return False, start_idx
 
     def add_sequence(self, gui_name, gui_param, geom_name):
         self.geom_sequence.append((gui_name, gui_param, geom_name))
-        
+
     def clear_sequence(self):
-        self.geom_sequence = []        
+        self.geom_sequence = []
 
     def do_run_generator(self, gui, no_mesh=False, finalize=False,
                          filename='', progressbar=None, start_idx=0,
                          trash=''):
-        
+
         kwargs = {'PreviewResolution': gui.geom_prev_res,
                   'PreviewAlgorithm': gui.geom_prev_algorithm,
                   'OCCParallel': gui.occ_parallel,
@@ -177,45 +185,47 @@ class GeomSequenceOperator():
         if ret[1][0] == 'fail':
             self.terminate_child()
             return False, ret[1][1]
+
+        self.gui_data, self.objs, brep_file, data, mappings = ret[1]
+
+        if no_mesh or data is None:
+            ret = self.gui_data, self.objs, brep_file, None, None, None
+
         else:
-            self.gui_data, self.objs, brep_file, data, mappings = ret[1]
-
-            if no_mesh or data is None:
-                ret =  self.gui_data, self.objs, brep_file, None, None, None
-
+            geom_msh = data[0]
+            if geom_msh != '':
+                import gmsh
+                from petram.geom.read_gmsh import read_pts_groups
+                gmsh.open(geom_msh)
+                geom_msh, l, s, v, vcl, esize = data
+                ptx, cells, cell_data = read_pts_groups(gmsh)
             else:
-                geom_msh = data[0]
-                if geom_msh != '':
-                    import gmsh
-                    from petram.geom.read_gmsh import read_pts_groups
-                    gmsh.open(geom_msh)
-                    geom_msh, l, s, v, vcl, esize = data
-                    ptx, cells, cell_data = read_pts_groups(gmsh)
-                else:
-                    geom_msh, l, s, v, vcl, esize, ptx, cells, cell_data = data
+                geom_msh, l, s, v, vcl, esize, ptx, cells, cell_data = data
 
-                data = ptx, cells, cell_data, l, s, v
+            data = ptx, cells, cell_data, l, s, v
 
-                ret = self.gui_data, self.objs, brep_file, data, vcl, esize
+            ret = self.gui_data, self.objs, brep_file, data, vcl, esize
 
-            return True, ret
+        return True, ret
 
 
     def run_generator(self, gui, no_mesh=False, finalize=False,
                       filename='', progressbar=None, trash=''):
 
         if (hasattr(self, "_p") and self._p.is_alive()):
-            new_process = self.check_create_new_child(gui.use_occ_preview, progressbar)
+            new_process, start_idx = self.check_create_new_child(gui.use_occ_preview,
+                                                                 progressbar)
         else:
             new_process = True
-
+            start_idx = 0
+            
         if new_process:
             self.terminate_child()
             self.create_new_child(gui.use_occ_preview, progressbar)
-            start_idx = 0
-        else:
-            ll = len(self._prev_sequence)
-            start_idx = ll
+
+        #else:
+        #    ll = len(self._prev_sequence)
+        #    start_idx = ll
 
         self._prev_sequence = self.geom_sequence
 

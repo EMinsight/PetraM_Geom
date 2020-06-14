@@ -3644,39 +3644,6 @@ class Geometry():
             self.shape = do_rotate(self.shape, ax2, an2, txt='2nd')
         if np.sum(c1**2) != 0.0:
             self.shape = do_translate(self.shape, c1)
-        
-        '''
-        x1 = np.array([1., 0., 0.])
-
-        ax = np.cross(x1, a1)
-        an = np.arctan2(np.sqrt(np.sum(ax**2)), np.dot(a1, x1))
-
-        if np.sum(ax**2) == 0.0:
-            if an != 0.0:
-                ax = np.array([0, 1, 0])
-                an = np.pi
-            else:
-                ax = x1
-                an = 0.0
-        if np.sum(ax**2) != 0.0 and an != 0.0:
-            self.shape =do_rotate(self.shape, ax, an, txt='1st')
-
-        from petram.geom.geom_utils import rotation_mat
-        R = rotation_mat(ax, an)
-        y2 = np.dot(R, np.array([0, 1, 0]))
-        ax = a1
-        aaa = np.cross(a1, y2)
-        an = np.arctan2(np.dot(a2, aaa), np.dot(a2, y2))
-
-        if np.sum(ax**2) == 0.0 and an != 0.0:
-            ax = a1
-            an = np.pi
-        if np.sum(ax**2) != 0.0 and an != 0.0:
-            self.shape =do_rotate(self.shape, ax, an, txt='2nd')
-
-        if c1[0] != 0.0 or c1[1] != 0.0 or c1[2] != 0.0:
-            self.shape = do_translate(self.shape, c1)
-        '''
 
         shape = self.shape
         self.pop_shape_and_topolist()
@@ -4332,13 +4299,28 @@ class Geometry():
     sequence/preview/brep generator
     '''
     def run_sequence(self, objs, gui_data, start_idx):
-        self.isWP = 0
-
+        
+        def copy_objs(objs):
+            tmp = objs.duplicate()
+            org_keys = list(objs)
+            for x in org_keys:
+                del tmp[x]
+            return tmp
+        
         print("start idx", start_idx)
         if start_idx < 1:
             self.shape = self.new_compound()
             self.prep_topo_list()
+            self.isWP = 0
             
+        self.org_objs = objs
+        if self.isWP == 0:
+            self.objs = objs
+        else:
+            self.objs = copy_objs(objs)
+
+        self.objs = objs
+        
         for gui_name, gui_param, geom_name in self.geom_sequence[start_idx:]:
             if self.logfile is not None:
                 self.logfile.write("processing " + gui_name + "\n")
@@ -4353,14 +4335,11 @@ class Geometry():
             dprint1("processing " + gui_name, geom_name)
 
             if geom_name == "WP_Start":
-                tmp = objs.duplicate()
-                org_keys = list(objs)
-
-                for x in org_keys:
-                    del tmp[x]
-
-                org_objs = objs
-                objs = tmp
+                #tmp = objs.duplicate()
+                #org_keys = list(objs)
+                #for x in org_keys:
+                #    del tmp[x]
+                self.objs = copy_objs(objs)
                 self.isWP = self.store_shape_and_topolist()
                 
             elif geom_name == "WP_End_OCC":
@@ -4368,14 +4347,14 @@ class Geometry():
                 self.isWP = 0
                 
             elif geom_name == "WP_End":
-                for x in objs:
-                    org_objs[x] = objs[x]
-                objs = org_objs
+                for x in self.objs:
+                    self.org_objs[x] = self.objs[x]
+                self.objs = self.org_objs
 
             else:
                 try:
                     method = getattr(self, geom_name + '_build_geom')
-                    objkeys, newobjs = method(objs, *gui_param)
+                    objkeys, newobjs = method(self.objs, *gui_param)
                     gui_data[gui_name] = (objkeys, newobjs)
                 except BaseException:
                     import traceback
@@ -4385,7 +4364,7 @@ class Geometry():
 
         #capcheName = "" if isWP else gui_name
         self.synchronize_topo_list(action='both')        
-        return gui_data, objs
+        return gui_data, self.objs
 
 
 class OCCGeometryGeneratorBase():

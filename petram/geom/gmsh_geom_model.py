@@ -282,6 +282,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         if success:
             dlg = evt.GetEventObject().GetTopLevelParent()
             dlg.select_next_enabled()
+            
         evt.Skip()
 
     def add_geom_sequence(self, geom):
@@ -594,11 +595,8 @@ class GmshGeom(GeomTopBase):
                 else:
                     if self.use_occ_preview:
                          geom.add_sequence('WP_End_OCC', 'WP_End_OCC', 'WP_End_OCC')
+                    child.add_geom_sequence_wp_end(geom)
                     
-                # translate 2D objects in 3D space
-                #for x in org_keys: del objs2[x]
-                    
-                child.add_geom_sequence_wp_end(geom)
                 geom.add_sequence('WP_End', 'WP_End', 'WP_End')                    
 
                 if do_break:
