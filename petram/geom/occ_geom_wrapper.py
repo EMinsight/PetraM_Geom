@@ -102,7 +102,6 @@ class Geometry():
         if idx in self.edge_2_wire:
             return self.edge_2_wire[idx]
         return None
-
     
     def new_compound(self, gids=None):
         comp = TopoDS_Compound()
@@ -169,6 +168,10 @@ class Geometry():
         else:
             assert False, "Unkown shape type: " + type(shape)
         return None
+    
+    def get_shape_for_gid(self, gid, group=0):
+        topolist = self.get_topo_list_for_gid(gid)
+        return topolist.get_item_from_group(gid, group=group)
         
     def get_gid_for_shape(self, shape):
         '''
@@ -1717,12 +1720,10 @@ class Geometry():
 
         return new_objs
 
-    def project_shape_on_wp(self, gids, c1, d1, d2):
-        shapes = []
-        for gid in gids:
-            topolist = self.get_topo_list_for_gid(gid)
-            shapes.append(topolist.get_item_from_group(gid, group=0))
+    def project_shape_on_wp(self, gids, c1, d1, d2, ptol = -1):
 
+        shapes = [self.get_shape_for_gid(gid, group=0) for gid in gids]
+        
         n1 = np.cross(d1, d2)
         pnt = gp_Pnt(c1[0], c1[1], c1[2])
         dr = gp_Dir(n1[0], n1[1], n1[2])
@@ -1744,6 +1745,41 @@ class Geometry():
             assert False, "Failed to perform projection"
         result = proj.Projection()
 
+        ###
+        ###  somehow some points are not projected. we check if all points
+        ###  are projected if not we add it to results.
+        ###
+        ###
+        point_shapes = [p for p in iter_shape(result, 'vertex')]
+        pnts = [self.bt.Pnt(p) for p in point_shapes]
+        ptx = np.array([(pnt.X(), pnt.Y(), pnt.Z(),) for pnt in pnts])
+
+        xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(self._shape_bk)
+        size = np.sqrt((xmin-xmax)**2 + (ymax-ymin)**2 + (zmax-zmin)**2)
+        size = (size * self.occ_geom_tolerance if ptol == -1 else
+                size * ptol)
+                            
+        
+        for gid in gids:
+            if not isinstance(gid, VertexID): continue
+
+            shape = self.get_shape_for_gid(gid, group=0)
+
+            pnt = self.bt.Pnt(shape)
+            p = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            p2 = project_ptx_2_plain(n1, c1, p)
+            if len(ptx) != 0:
+                dist = np.min(np.sqrt(np.sum((ptx - p2)**2,-1)))
+                if dist < size:
+                    continue
+            #print("adding ",p2)
+            x, y, z = float(p2[0]), float(p2[1]), float(p2[2])
+            p = BRepBuilderAPI_MakeVertex(gp_Pnt(x, y, z)).Shape()
+            self.builder.Add(result, p)
+
+        #dprint1("projected objects")
+        #self.inspect_shape(result, verbose=True)
+             
         ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, d1, d2)
         if np.sum(c1**2) != 0.0:
             result = do_translate(result, -c1)
@@ -4314,6 +4350,7 @@ class Geometry():
                     "\n")
             if self.queue is not None:
                 self.queue.put((False, "processing " + gui_name))
+            dprint1("processing " + gui_name, geom_name)
 
             if geom_name == "WP_Start":
                 tmp = objs.duplicate()

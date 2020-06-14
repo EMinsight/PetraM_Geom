@@ -246,15 +246,18 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
             os.chdir(viewer.model.owndir())
             rootg.build_geom(**kwargs)
             os.chdir(od)
-
+            success = True
         except BaseException:
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to build geometry',
                                  title='Error',
                                  traceback=traceback.format_exc())
+            success = False
+            
         dlg.OnRefreshTree()
         rootg.onUpdateGeoView(evt)
+        return success
 
     def onBuildBefore(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -274,10 +277,11 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         if mm is None:
             return
 
-        self._onBuildThis(evt, stop2=mm)
+        success = self._onBuildThis(evt, stop2=mm)
 
-        dlg = evt.GetEventObject().GetTopLevelParent()
-        dlg.select_next_enabled()
+        if success:
+            dlg = evt.GetEventObject().GetTopLevelParent()
+            dlg.select_next_enabled()
         evt.Skip()
 
     def add_geom_sequence(self, geom):

@@ -144,7 +144,7 @@ class GeomSequenceOperator():
                 if ret[0]:
                     break
 
-                dprint1(ret[1])
+                #dprint1(ret[1])
                 if progressbar is not None:
                     istep += 1
                     if istep < progressbar.GetRange():
