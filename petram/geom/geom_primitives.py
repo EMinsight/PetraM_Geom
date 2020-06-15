@@ -592,11 +592,11 @@ class LineLoop(GeomPB):
 
 
 ldata = (('loop1', VtableElement('loop1', type='string',
-                                 guilabel='Edges(loop1)',
+                                 guilabel='Edges1',
                                  default="",
                                  tip="edges to define the 1st loop")),
          ('loop2', VtableElement('loop2', type='string',
-                                 guilabel='Edges(loop2)',
+                                 guilabel='Edges2',
                                  default="",
                                  tip="edges to define the 2nd loop")),
          ('solid', VtableElement('solid', type='bool',
@@ -606,7 +606,15 @@ ldata = (('loop1', VtableElement('loop1', type='string',
          ('ruled', VtableElement('ruled', type='bool',
                                  guilabel='Ruled surface',
                                  default=False,
-                                 tip="create ruled surface ")), )
+                                 tip="create ruled surface ")),
+         ('rev1', VtableElement('rev1', type='bool',
+                                 guilabel='Reverse edges1',
+                                 default=False,
+                                 tip="revesre edges 1 direction ")),
+         ('rev2', VtableElement('rev2', type='bool',
+                                 guilabel='Reverse edges2',
+                                 default=False,
+                                 tip="reverse edge 2 direction ")), )
 
 
 class ThruSection(GeomPB):

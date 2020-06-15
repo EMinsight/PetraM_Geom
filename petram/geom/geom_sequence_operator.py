@@ -237,10 +237,9 @@ class GeomSequenceOperator():
                                                  trash=trash,)
 
         if not success:
-            print(dataset)  # this is an error message
-            # self._p[0].terminate()
+            #print(dataset)  # this is an error message
             self._prev_sequence = []
-            del self._p
+            #del self._p
 
         return success, dataset
 

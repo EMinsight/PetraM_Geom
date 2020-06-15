@@ -365,7 +365,7 @@ class GmshGeom(GeomTopBase):
         return v
 
     def get_possible_child(self):
-        from petram.geom.gmsh_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
+        from petram.geom.geom_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
                                                  PointCircleCenter, Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
@@ -391,7 +391,7 @@ class GmshGeom(GeomTopBase):
                 ThruSection, RotateCenterPoints, MoveByPoints]
 
     def get_possible_child_menu(self):
-        from petram.geom.gmsh_primitives import (Point, PointCenter, PointCircleCenter,
+        from petram.geom.geom_primitives import (Point, PointCenter, PointCircleCenter,
                                                  PointOnEdge, PointByUV,  Line, Spline,  
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
@@ -636,13 +636,13 @@ class GmshGeom(GeomTopBase):
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
 
-        if not hasattr(self, 'gso'):
+        if not hasattr(self, '_gso'):
             from petram.geom.geom_sequence_operator import GeomSequenceOperator
-            self.gso = GeomSequenceOperator()
+            self._gso = GeomSequenceOperator()
 
-        stopname = self.walk_over_geom_chidlren(self.gso, stop1=stop1, stop2=stop2)
+        stopname = self.walk_over_geom_chidlren(self._gso, stop1=stop1, stop2=stop2)
 
-        L = len(self.gso.geom_sequence) + 3
+        L = len(self._gso.geom_sequence) + 3
 
         if gui_parent is not None:
             import wx
@@ -662,30 +662,7 @@ class GmshGeom(GeomTopBase):
             if not os.path.exists(trash):
                 os.mkdir(trash)
 
-        '''
-        if (hasattr(self, "_p") and self._p[0].is_alive()):
-            new_process = self.check_create_new_child(gs)
-        else:
-            new_process = True
-
-        if new_process:
-            self.terminate_child()
-            task_q = mp.Queue()  # data to child
-            q = mp.Queue()  # data from child
-            if self.use_occ_preview:
-                p = OCCGeometryGenerator(q, task_q)
-            else:
-                p = GMSHGeometryGenerator(q, task_q)
-            p.start()
-            self._p = (p, task_q, q)
-            self._prev_sequence = gs.geom_sequence
-            start_idx = 0
-        else:
-            ll = len(self._prev_sequence)
-            self._prev_sequence = gs.geom_sequence
-            start_idx = ll
-        '''
-        success, dataset = self.gso.run_generator(self, no_mesh=no_mesh, finalize=finalize,
+        success, dataset = self._gso.run_generator(self, no_mesh=no_mesh, finalize=finalize,
                                                   filename=stopname, progressbar=pgb,
                                                   trash=trash,)
 
@@ -693,27 +670,19 @@ class GmshGeom(GeomTopBase):
             assert False, dataset
             return
 
-        '''
-        if not success:
-            print(dataset)  # this is an error message
-            # self._p[0].terminate()
-            self._prev_sequence = []
-            del self._p
-            return
-        '''
         gui_data, objs, brep_file, data, vcl, esize = dataset
 
         self._geom_brep = brep_file
         self.update_GUI_after_geom(gui_data, objs)
 
         if data is None:  # if no_mesh = True
-            self.gso.terminate_child()
+            self._gso.terminate_child()
             return
         if finalize:
-            self.gso.terminate_child()
+            self._gso.terminate_child()
         # for the readablity I expend data here, do we need geom?
         ptx, cells, cell_data, l, s, v = data
-        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, self.gso)
+        self._gmsh4_data = (ptx, cells, cell_data, l, s, v, self._gso)
 
         values = vcl.values()
         if len(values) > 0:
@@ -734,7 +703,7 @@ class GmshGeom(GeomTopBase):
         self.use_1d_preview = bk
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
-        self.gso.terminate_child()
+        self._gso.terminate_child()
         dprint1("Generating Geometry ... Done")
 
     def build_geom(self, stop1=None, stop2=None, filename=None,

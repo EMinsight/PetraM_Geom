@@ -50,7 +50,7 @@ class OCCGeom(GmshGeom):
         self.use_occ_preview = True
 
     def get_possible_child(self):
-        from petram.geom.gmsh_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
+        from petram.geom.geom_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
                                                  PointCircleCenter, Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, OCCPolygon, Box, Ball,
@@ -76,7 +76,7 @@ class OCCGeom(GmshGeom):
                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine]
 
     def get_possible_child_menu(self):
-        from petram.geom.gmsh_primitives import (Point, PointCenter, PointCircleCenter,
+        from petram.geom.geom_primitives import (Point, PointCenter, PointCircleCenter,
                                                  PointOnEdge, PointByUV,  Line, Spline,  
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, OCCPolygon, Box, Ball,
