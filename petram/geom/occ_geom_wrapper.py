@@ -2646,7 +2646,7 @@ class Geometry():
         return list(objs), newkeys
 
     def MoveByPoints_build_geom(self, objs, *args):
-        targets, point1, point2, keep = args
+        targets, point1, point2, dist, scale_d, keep = args
 
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
