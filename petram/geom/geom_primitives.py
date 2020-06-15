@@ -763,18 +763,18 @@ data0 = (('target_object', VtableElement('target_object', type='string',
                                   guilabel='Point (to)',
                                   default="",
                                   tip="2nd point to define translation")),
-         ('distance', VtableElement('distance', type='string',
+         ('distance', VtableElement('distance', type='float',
                                   guilabel='Distance',
                                   default="1.0",
                                   tip="Distance")),
-         ('keep_org', VtableElement('kepp_org', type='bool',
-                                    guilabel='Copy',
-                                    default=True,
-                                    tip="Keep original")), 
          ('scale_d', VtableElement('scale_d', type='bool',
                                     guilabel='Use distance between pionts + scaler',
                                     default=True,
-                                    tip="Scale or give the distance for translation")), )
+                                    tip="Scale or give the distance for translation")), 
+         ('keep_org', VtableElement('kepp_org', type='bool',
+                                    guilabel='Copy',
+                                    default=False,
+                                    tip="Keep original")), )
 
 
 

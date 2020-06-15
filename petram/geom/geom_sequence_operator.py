@@ -46,6 +46,31 @@ class GeomSequenceOperator():
                 self._p.task_q.join()
             del self._p
 
+    def inspect_geom(self, command):
+        if (not hasattr(self, "_p") or
+                not self._p.is_alive()):
+            return None
+
+        p = self._p
+        task_q = self._p.task_q
+        q = self._p.q
+
+        task_q.put((2, command))
+
+        while True:
+            try:
+                ret = q.get(True, 1)
+                if ret[1][0] == 'fail':
+                    print(ret[1][1])
+                    break
+                else:
+                    return ret[1][1]
+
+            except QueueEmpty:
+                if not p.is_alive():
+                    self.clean_queue()
+        return None
+
     def create_new_child(self, use_occ, pgb):
         from petram.geom.gmsh_geom_wrapper import (GMSHGeometryGenerator,
                                                    GMSHGeometryGeneratorTH)

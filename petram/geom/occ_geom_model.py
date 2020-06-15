@@ -15,7 +15,16 @@ class OCCGeom(GmshGeom):
         v['long_edge_thr'] = 0.35
         v['small_edge_thr'] = 0.01
         return v
-        
+
+    def inspect_geom(self, inspect_type, params):
+        '''
+        command = (type_of_inspect, params)
+        '''
+        if not hasattr(self, '_gso'):
+            assert False, "Geometry Sequence Operator does not exist"
+        command = (inspect_type, params)
+        return self._gso.inspect_geom(command)
+    
     def panel1_param(self):
         import wx
         return [["", "Geometry model using OpenCascade", 2, None],

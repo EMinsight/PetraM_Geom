@@ -8,6 +8,7 @@ import os
 import numpy as np
 import time
 import tempfile
+import traceback
 from collections import defaultdict
 import multiprocessing as mp
 from six.moves.queue import Empty as QueueEmpty
@@ -15,6 +16,7 @@ from six.moves.queue import Empty as QueueEmpty
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('OCCGeomWrapper')
 
+import petram.geom.occ_inspect
 
 class Counter():
     def __init__(self):
@@ -69,7 +71,7 @@ class Geometry():
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
         self.geom_prev_algorithm = kwargs.pop('PreviewAlgorithm', 2)
         self.occ_parallel = kwargs.pop('OCCParallel', 0)
-        self.occ_parallel = False
+        #self.occ_parallel = False
         self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 1e-5)
         #self.occ_boolean_tolerance = kwargs.pop('OCCBooleanTol', 0)
         self.occ_geom_tolerance = kwargs.pop('OCCGeomTol', 1e-6)
@@ -1469,7 +1471,7 @@ class Geometry():
         topolist = self.get_topo_list_for_gid(gid)
         shape = topolist[gid]
 
-        self.print_number_of_topo_objects()
+        #self.print_number_of_topo_objects()
 
         if not recursive:
             anc = list(topolist.get_ancestors(gid, akind[gid.__class__]))
@@ -1491,7 +1493,7 @@ class Geometry():
 
         mapper2 = get_mapper(new_shape, akind[gid.__class__])
 
-        self.print_number_of_topo_objects(new_shape)
+        #self.print_number_of_topo_objects(new_shape)
 
         # note we dont put back shell/wire.
         if not recursive and not isinstance(gid, VertexID):
@@ -2659,7 +2661,12 @@ class Geometry():
         p1 = self.get_point_coord(gids_1)
         p2 = self.get_point_coord(gids_2)
 
-        dx, dy, dz = p2 - p1
+        d = p2 - p1
+        if scale_d:
+            d = d * dist
+        else:
+            d = d/np.sqrt(np.sum(d**2)) * dist            
+        dx, dy, dz = d
 
         newkeys = []
         for gid in gids:
@@ -3007,7 +3014,7 @@ class Geometry():
         return list(objs), newkeys
 
     def _Union_build_geom(self, objs, *args, **kwargs):
-        print("args here", args)
+        #print("args here", args)
         tp, tm, delete_input, delete_tool, keep_highest, do_upgrade = args
 
         tp = [x.strip() for x in tp.split(',')]
@@ -4389,6 +4396,18 @@ class Geometry():
         self.synchronize_topo_list(action='both')
         return gui_data, self.objs
 
+    def inspect_geom(self, inspect_type, args):
+
+        from importlib import reload
+        reload(petram.geom.occ_inspect)
+
+        shape_inspector = petram.geom.occ_inspect.shape_inspector
+
+        print("args, here", args)
+        gids = self.get_target2(self.objs, args)
+
+        shapes = [self.get_shape_for_gid(gid) for gid in gids]
+        return shape_inspector(self.shape, inspect_type, shapes)
 
 class OCCGeometryGeneratorBase():
     def __init__(self, q, task_q):
@@ -4412,11 +4431,19 @@ class OCCGeometryGeneratorBase():
             if task[0] == -1:
                 # self.task_queue.task_done()
                 break
+            
+            if task[0] == 2:
+                try:
+                    ret = self.mw.inspect_geom(*task[1])
+                    self.q.put((True, ('success', ret)))
+                except:       
+                    txt = traceback.format_exc()
+                    self.q.put((True, ('fail', txt)))
+
             if task[0] == 1:
                 try:
                     self.generate_geom(*task[1])
                 except BaseException:
-                    import traceback
                     txt = traceback.format_exc()
                     traceback.print_exc()
                     self.q.put((True, ('fail', txt)))
