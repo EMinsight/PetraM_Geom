@@ -120,13 +120,53 @@ def read_loops(geom, dimtags=None):
     dimtag1 = list(set(dimtag1))
     for dim, tag in dimtag1:
         l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
-                                                       oriented=False)]
+                                                       oriented=False, recursive=True)]
         if len(l[tag]) == 0:
              print('line :' + str(tag) + ' has no boundary (loop)')
+             node, coord, pc  = model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)
+             
+             l[tag].append(node[0])
+        
+    return l, s, v
+
+def read_loops_do_meshloop(geom, dimtags=None):
+    model = geom.model
+    model.occ.synchronize()
+    ent = model.getEntities()    
+    model.setVisibility(ent, False)
+    
+    v = {}
+    s = {}
+    l = {}
+
+    dimtag3 =  model.getEntities(3) if dimtags is None else [x for x in dimtags if x[0]==3]
+    for dim, tag in dimtag3:
+        v[tag] = [y for x, y in model.getBoundary([(dim, tag)],
+                                                       oriented=False)]
+    dimtag2 =  model.getEntities(2) if dimtags is None else [x for x in dimtags if x[0]==2] + model.getBoundary(dimtag3, combined=False, oriented=False)
+    dimtag2 = list(set(dimtag2))
+    
+    for dim, tag in dimtag2:
+        s[tag] = [y for x, y in model.getBoundary([(dim, tag)],
+                                                       oriented=False)]
+
+    dimtag1 =  model.getEntities(1) if dimtags is None else [x for x in dimtags if x[0]==1] + model.getBoundary(dimtag2, combined=False, oriented=False)
+    dimtag1 = list(set(dimtag1))
+    for dim, tag in dimtag1:
+        l[tag] = [y for x, y in model.getBoundary([(dim, tag)],
+                                                       oriented=False, recursive=True)]
+
+        if len(l[tag]) == 0:
+             print('line :' + str(tag) + ' has no boundary (loop)')
+             model.setVisibility(((dim,tag),), True, recursive = True)
+             model.mesh.setTransfinteCurve(tag, 3)
+             model.mesh.generate(1)
+        
              node, coord, pc  = model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)
              l[tag].append(node[0])
         
     return l, s, v
+
 
 def read_loops2(geom, dimtags=None):
     '''
@@ -150,6 +190,41 @@ def read_loops2(geom, dimtags=None):
         p = {t: int(nidx[k]-1)  for k, t in enumerate(tags)}        
 
     return ptx, p, l, s, v
+
+def read_loops3(geom, dimtags=None):
+    ptx, p, l, s, v = read_loops2(geom, dimtags=dimtags)
+
+    mid_points = {}
+
+    loop_lines = []
+    for k in l:
+        if len(l[k]) == 2:
+            p1 = ptx[p[l[k][0]]]
+            p2 = ptx[p[l[k][1]]]
+            param1 = geom.model.getParametrization(1, k, p1)
+            param2 = geom.model.getParametrization(1, k, p2)       
+            value = geom.model.getValue(1, k, (param1 + param2)/2.0)
+            mid_points[k] = value
+        else:
+            loop_lines.append(k)
+        #print(param1, param2, value)
+
+    ### To do...
+    ### mid-point of curve on a loop curve needs to be addressed
+    ### this is used when finding transformation in the  extrusion.
+    '''
+    for tag in loop_lines:
+        geom.model.setVisibility(((1,tag),), True, recursive = True)
+        geom.model.mesh.setTransfiniteCurve(tag, 4)
+        
+    geom.model.mesh.generate(1)
+    
+    for tag in loop_lines:
+        node, coord, pc  = geom.model.mesh.getNodes(dim=1, tag=tag, includeBoundary=True)     
+        print("coord, pc", coord, pc)
+    '''
+        
+    return ptx, p, l, s, v, mid_points
 
 def read_pts_groups(geom, finished_lines=None, 
                           finished_faces=None):
