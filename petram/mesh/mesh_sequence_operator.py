@@ -132,23 +132,29 @@ class MeshSequenceOperator():
 
         self.terminate_child(p)
 
-        max_dim, done, msh_output = ret[1]
+        try:
+            max_dim, done, msh_output = ret[1]
+            from petram.geom.read_gmsh import read_pts_groups, read_loops
 
-        from petram.geom.read_gmsh import read_pts_groups, read_loops
+            if progressbar is not None:
+                progressbar.Update(istep, newmsg="Reading mesh file for rendering")
+            else:
+                print("Reading mesh file for rendering")
 
-        if progressbar is not None:
-            progressbar.Update(istep, newmsg="Reading mesh file for rendering")
-        else:
-            print("Reading mesh file for rendering")
+            import gmsh            
+            gmsh.open(msh_output)
 
-        import gmsh            
-        gmsh.open(msh_output)
-        ptx, cells, cell_data = read_pts_groups(gmsh,
+            ptx, cells, cell_data = read_pts_groups(gmsh,
                                                 finished_lines=done[1],
                                                 finished_faces=done[2])
 
-        data = ptx, cells, {}, cell_data, {}
-        
+            data = ptx, cells, {}, cell_data, {}
+            
+        except:
+            if progressbar is not None:
+                progressbar.Destroy()
+            raise
+            
         if progressbar is not None:
             progressbar.Destroy()
 
