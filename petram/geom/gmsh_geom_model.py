@@ -224,7 +224,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         warnings.warn("Not implemented", Warning)
         return -1, -1
 
-    def get_special_menu(self):
+    def get_special_menu(self, evt):
         return [('Build this step', self.onBuildAfter, None)]
 
     def _onBuildThis(self, evt, **kwargs):
@@ -426,7 +426,7 @@ class GmshGeom(GeomTopBase):
                 ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
                 ]
 
-    def get_special_menu(self):
+    def get_special_menu(self, evt):
         if use_gmsh_api:
             return [('Build All', self.onBuildAll, None),
                     ('Export .brep', self.onExportBrep, None)]
