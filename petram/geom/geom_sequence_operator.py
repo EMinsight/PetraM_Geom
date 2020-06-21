@@ -49,7 +49,7 @@ class GeomSequenceOperator():
     def inspect_geom(self, command):
         if (not hasattr(self, "_p") or
                 not self._p.is_alive()):
-            return None
+            return '', None
 
         p = self._p
         task_q = self._p.task_q
@@ -68,7 +68,7 @@ class GeomSequenceOperator():
             except QueueEmpty:
                 if not p.is_alive():
                     self.clean_queue()
-        return None
+        return '', None
 
     def export_shapes(self, selection, path):
         if (not hasattr(self, "_p") or

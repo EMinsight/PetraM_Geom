@@ -134,7 +134,7 @@ except ImportError:
     traceback.print_exc()
 
 
-def iter_shape(shape, shape_type='shell', exclude_parent=False):
+def iter_shape(shape, shape_type='shell', exclude_parent=False, use_ex2=False):
     '''
     iterate over shape. this allows to write
 
@@ -147,11 +147,12 @@ def iter_shape(shape, shape_type='shell', exclude_parent=False):
     if exclude_parent:
         args.append(__expparam[shape_type][2])
 
-    __ex1.Init(shape, *args)
-    while __ex1.More():
-        sub_shape = cast(__ex1.Current())
+    ex = __ex2 if use_ex2 else __ex1
+    ex.Init(shape, *args)
+    while ex.More():
+        sub_shape = cast(ex.Current())
         yield sub_shape
-        __ex1.Next()
+        ex.Next()
 
 def get_mapper(shape, shape_type):
     mapper = TopTools_IndexedMapOfShape()
@@ -436,13 +437,22 @@ def box_containing_bbox(normal, cptx, xmin, ymin, zmin,
 
     return box
 
+def measure_edge_length(edge):
+    system = GProp_GProps()
+    brepgprop_LinearProperties(edge, system)
+    return system.Mass()
+
+def measure_face_area(face):
+    system = GProp_GProps()
+    brepgprop_SurfaceProperties(face, system)
+    return system.Mass()
+
 def check_shape_area(shape, thr, return_area=False):
     surfacecount = []
     faces = []
     for face in iter_shape(shape, 'face'):
-        system = GProp_GProps()
-        brepgprop_SurfaceProperties(face, system)
-        surfacecount.append(system.Mass())
+        a = measure_face_area(face)        
+        surfacecount.append(a)
         faces.append(face)
 
     smax = np.max(surfacecount)
@@ -453,6 +463,23 @@ def check_shape_area(shape, thr, return_area=False):
         areas = [surfacecount[i] for i in idx]
         return len(idx), smax, faces, areas
     return len(idx), smax, faces
+
+def check_shape_length(shape, thr, return_area=False):
+    lcount = []
+    edges = []
+    for edge in iter_shape(shape, 'edge'):
+        l = measure_edge_length(edge)
+        lcount.append(l)
+        edges.append(edge)
+
+    lmax = np.max(lcount)
+    idx = np.where(lcount < lmax*thr)[0]
+    edges = [edges[i] for i in idx]
+
+    if return_area:
+        ll = [lcount[i] for i in idx]
+        return len(idx), lmax, edges, ll
+    return len(idx), lmax, edges
 
 c_kinds = ('Geom_BezierCurve',
            'Geom_BSplineCurve',

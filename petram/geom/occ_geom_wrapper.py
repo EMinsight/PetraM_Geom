@@ -4027,6 +4027,10 @@ class Geometry():
             tol = fix_param[1]
             scaling = fix_param[2]
 
+            #if highestDimOnly:
+            #    shape = self.select_highest_dim(shape)
+            #new_objs = self.register_shaps_balk(shape)
+            
             shape = heal_shape(shape, scaling=scaling, fixDegenerated=fixD,
                                fixSmallEdges=fixE, fixSmallFaces=fixF,
                                sewFaces=sewF, makeSolids=mSol, tolerance=tol,
@@ -4609,10 +4613,11 @@ class OCCGeometryGeneratorBase():
                     self.q.put((True, ('success', ret)))
                 except:       
                     txt = traceback.format_exc()
-                    self.q.put((True, ('fail', txt)))
+                    self.q.put((True, ('fail', txt, None)))
                     
             if task[0] == 3:
                 try:
+                    print("exporting", task[1])
                     ret = self.mw.export_shapes(*task[1])
                     self.q.put((True, ('success', ret)))
                 except:       

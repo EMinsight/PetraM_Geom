@@ -1,14 +1,17 @@
-from petram.geom.gmsh_geom_model import GmshGeom
 import numpy as np
+from ifigure.widgets.dialog import write
+
+from petram.geom.gmsh_geom_model import GmshGeom
 
 class OCCGeom(GmshGeom):
     has_2nd_panel = False
-    
-    @classmethod        
-    def fancy_menu_name(self):
-        return 'OCC Geometry'
+
     @classmethod
-    def fancy_tree_name(self):
+    def fancy_menu_name(cls):
+        return 'OCC Geometry'
+
+    @classmethod
+    def fancy_tree_name(cls):
         return 'OCCSequence'
 
     def attribute_set(self, v):
@@ -28,24 +31,35 @@ class OCCGeom(GmshGeom):
 
     def onExportSelectedBrep(self, evt):
         if not hasattr(self, '_gso'):
-            return
+            return None
 
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
 
         selection = viewer.dom_bdr_sel
+        kind = viewer.get_sel_mode()
+        if kind == 'volume':
+            selection = selection[0], [], [], []
+        elif kind == 'face':
+            selection = [], selection[1], [], []
+        elif kind == 'edge':
+            selection = [], [], selection[2], []
+        elif kind == 'point':
+            selection = [], [], [], selection[3]
+        else:
+            return None
 
-        from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         path = write(parent,
                      message='Enter .brep file name',
                      wildcard='*.brep')
-        
+
         if path != '':
             return self._gso.export_shapes(selection, path)
-        
+
         evt.Skip()
-    
+        return None
+
     def panel1_param(self):
         import wx
         return [["", "Geometry model using OpenCascade", 2, None],
