@@ -215,7 +215,6 @@ class GMSHMeshWrapper():
         gmsh_init = True
         self.add_model('main1')
 
-
         # default clmax
         self.clmax = CharacteristicLengthMax
         self.clmin = CharacteristicLengthMin
@@ -285,7 +284,8 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
         gmsh.option.setNumber("Mesh.MaxNumThreads3D", self.maxthreads[3])
         gmsh.option.setNumber("Mesh.Optimize", 0)
-
+        #gmsh.option.setNumber('Geometry.ReparamOnFaceRobust', 1)
+        
         self.target_entities0 = (gmsh.model.getEntities(3),
                                  gmsh.model.getEntities(2),
                                  gmsh.model.getEntities(1),
@@ -293,7 +293,7 @@ class GMSHMeshWrapper():
         self.target_entities = gmsh.model.getEntities()
         #
         self.vertex_geom_size = get_vertex_geom_zie()
-        
+
         # set default vertex mesh size
         sizes = []
         for tag in self.vertex_geom_size.keys():

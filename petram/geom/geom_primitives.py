@@ -98,9 +98,13 @@ class PointOnEdge(GeomPB):
 
 
 pdata = (('edge', VtableElement('edge', type='string',
-                                guilabel='Line',
+                                guilabel='Line(conic)',
                                 default="",
-                                tip="Edge to find center")), )
+                                tip="Edge to find center")),
+         ('use_focus', VtableElement('use_focus', type='bool',
+                                guilabel='Use focus (ellipse/hyperbola/parabola)',
+                                default=False,
+                                tip="Plcae point on focus (ellipse/hyperbola/parabola) ")), )
 
 
 class PointCircleCenter(GeomPB):
@@ -108,11 +112,11 @@ class PointCircleCenter(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'On center'
+        return 'On center/focus of conic'
 
     @classmethod
     def fancy_tree_name(self):
-        return "Point"
+        return "CharacteristicPoint"
 
 
 pdata = (('points1', VtableElement('points1', type='string',
@@ -204,6 +208,10 @@ cdata = (('center', VtableElement('center', type='float',
                                   guilabel='r',
                                   default=1.0,
                                   tip="radius")),
+         ('num_points', VtableElement('num_points', type='int',
+                                  guilabel='#points on circle (>0)',
+                                  default=2,
+                                  tip="numbe of points on circle")),
          ('fill_circle', VtableElement('fill circle', type='bool',
                                        guilabel='Fill circle',
                                        default=True,
@@ -242,6 +250,34 @@ class CircleByAxisPoint(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Axis and point'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Circle'
+
+cdata = (('axis_by_points', VtableElement('axis_by_points', type='string',
+                                          guilabel='Axis (edge or two points)',
+                                          default="",
+                                          tip="Points to define axis")),
+         ('center', VtableElement('center', type='string',
+                                          guilabel='Center point',
+                                          default="",
+                                          tip="Points to define axis")),         
+         ('radius', VtableElement('point_on_circle', type='string',
+                                           guilabel='Raidus',
+                                           default="1.0",
+                                           tip="Radius")),
+         ('fill_circle', VtableElement('fill circle', type='bool',
+                                       guilabel='Fill circle',
+                                       default=True,
+                                       tip="Make surface ")), )
+    
+class CircleByAxisCenterRadius(GeomPB):
+    vt = Vtable(cdata)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Axis/Center/Radius'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1746,27 +1782,27 @@ class WorkPlane(WPBase):
 
 
 data0 = (('center', VtableElement('pts1', type='string',
-                                  guilabel='center',
+                                  guilabel='Center point',
                                   default="",
                                   tip="center of WP")),
          ('ax1', VtableElement('ax1', type='string',
-                               guilabel='1st axis',
+                               guilabel='Point on 1st axis',
                                default="",
                                tip="point on the 1st axis")),
          ('ax2', VtableElement('ax2', type='string',
-                               guilabel='point on surface',
+                               guilabel='Point on surface',
                                default="",
                                tip="point on the surface")),
          ('flip1', VtableElement('flip1', type='bool',
-                                 guilabel='flip 1st axis',
+                                 guilabel='Flip 1st axis',
                                  default=False,
                                  tip="flip 1st axis")),
          ('flip2', VtableElement('flip2', type='bool',
-                                 guilabel='flip 2nd axis',
+                                 guilabel='Flip 2nd axis',
                                  default=False,
                                  tip="flip 2nd axis")),
          ('offset', VtableElement('offset', type='float',
-                                  guilabel='offset',
+                                  guilabel='Offset',
                                   default=0.0,
                                   tip="offset in normal direction")), )
 
@@ -1777,6 +1813,42 @@ class WorkPlaneByPoints(WPBase):
     @classmethod
     def fancy_menu_name(self):
         return 'WP By Points'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'WorkPlane'
+
+data0 = (('surface', VtableElement('surface', type='string',
+                                   guilabel='Surface',
+                                   default="",
+                                   tip="surface to which WP is paralle")),
+        ('center', VtableElement('pts1', type='string',
+                                  guilabel='Center point',
+                                  default="",
+                                  tip="center of WP")),
+        ('ax1', VtableElement('ax1', type='string',
+                               guilabel='Point on 1st axis',
+                               default="",
+                               tip="point on 1st axis")),
+         ('flip1', VtableElement('flip1', type='bool',
+                                 guilabel='Flip 1st axis',
+                                 default=False,
+                                 tip="flip 1st axis")),
+         ('flip2', VtableElement('flip2', type='bool',
+                                 guilabel='Flip 2nd axis',
+                                 default=False,
+                                 tip="flip 2nd axis")),
+         ('offset', VtableElement('offset', type='float',
+                                  guilabel='Offset',
+                                  default=0.0,
+                                  tip="offset in normal direction")), )
+    
+class WPParallelToPlane(WPBase):
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Parallel to plane'
 
     @classmethod
     def fancy_tree_name(self):

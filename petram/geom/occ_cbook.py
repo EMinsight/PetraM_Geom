@@ -5,7 +5,8 @@ import numpy as np
 hasOCC = False
 
 try:
-    from OCC.Core.GeomAPI import GeomAPI_Interpolate
+    from OCC.Core.GeomAPI import (GeomAPI_Interpolate,
+                                  GeomAPI_ProjectPointOnSurf)
     from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
     from OCC.Core.TopLoc import TopLoc_Location
     from OCC.Core.TopExp import (TopExp_Explorer,
@@ -106,6 +107,8 @@ try:
                                   ShapeExtend_FAIL2,
                                   ShapeExtend_FAIL3)
 
+    from OCC.Core.IMeshTools import IMeshTools_Parameters
+
     from OCC.Core.BRepCheck import BRepCheck_Analyzer
     from OCC.Core.BRepLib import breplib_OrientClosedSolid
 
@@ -131,7 +134,7 @@ except ImportError:
     traceback.print_exc()
 
 
-def iter_shape(shape, shape_type='shell', exclude_parent=False):
+def iter_shape(shape, shape_type='shell', exclude_parent=False, use_ex2=False):
     '''
     iterate over shape. this allows to write
 
@@ -144,11 +147,12 @@ def iter_shape(shape, shape_type='shell', exclude_parent=False):
     if exclude_parent:
         args.append(__expparam[shape_type][2])
 
-    __ex1.Init(shape, *args)
-    while __ex1.More():
-        sub_shape = cast(__ex1.Current())
+    ex = __ex2 if use_ex2 else __ex1
+    ex.Init(shape, *args)
+    while ex.More():
+        sub_shape = cast(ex.Current())
         yield sub_shape
-        __ex1.Next()
+        ex.Next()
 
 def get_mapper(shape, shape_type):
     mapper = TopTools_IndexedMapOfShape()
@@ -433,6 +437,104 @@ def box_containing_bbox(normal, cptx, xmin, ymin, zmin,
 
     return box
 
+def measure_edge_length(edge):
+    system = GProp_GProps()
+    brepgprop_LinearProperties(edge, system)
+    return system.Mass()
+
+def measure_face_area(face):
+    system = GProp_GProps()
+    brepgprop_SurfaceProperties(face, system)
+    return system.Mass()
+
+def check_shape_area(shape, thr, return_area=False):
+    surfacecount = []
+    faces = []
+    for face in iter_shape(shape, 'face'):
+        a = measure_face_area(face)        
+        surfacecount.append(a)
+        faces.append(face)
+
+    smax = np.max(surfacecount)
+    idx = np.where(surfacecount < smax*thr)[0]
+    faces = [faces[i] for i in idx]
+
+    if return_area:
+        areas = [surfacecount[i] for i in idx]
+        return len(idx), smax, faces, areas
+    return len(idx), smax, faces
+
+def check_shape_length(shape, thr, return_area=False):
+    lcount = []
+    edges = []
+    for edge in iter_shape(shape, 'edge'):
+        l = measure_edge_length(edge)
+        lcount.append(l)
+        edges.append(edge)
+
+    lmax = np.max(lcount)
+    idx = np.where(lcount < lmax*thr)[0]
+    edges = [edges[i] for i in idx]
+
+    if return_area:
+        ll = [lcount[i] for i in idx]
+        return len(idx), lmax, edges, ll
+    return len(idx), lmax, edges
+
+c_kinds = ('Geom_BezierCurve',
+           'Geom_BSplineCurve',
+           'Geom_TrimmedCurve',
+           'Geom_Circle',
+           'Geom_Ellipse',
+           'Geom_Hyperbola',
+           'Geom_Parabola',
+           'Geom_Line',
+           'Geom_OffsetCurve',
+           'ShapeExtend_ComplexCurve',
+           'Geom_BoundedCurve',
+           'Geom_Conic',)
+
+s_kinds = ('Geom_BezierSurface',
+           'Geom_BSplineSurface',
+           'Geom_RectangularTrimmedSurface',
+           'Geom_ConicalSurface',
+           'Geom_CylindricalSurface'
+           'Geom_Plane',
+           'Geom_SphericalSurface',
+           'Geom_ToroidalSurface',
+           'Geom_SurfaceOfLinearExtrusion',
+           'Geom_SurfaceOfRevolution',
+           'Geom_PlateSurface',
+           'Geom_OffsetSurface',
+           'Geom_BoundedSurface',
+           'ShapeExtended_CompositeSurface',
+           'Geom_ElementarySurface',           
+           'Geom_Surface',)
+
+import OCC.Core.Geom
+
+def downcast_curve(curve):
+    kind = 'unknown'
+    for k in c_kinds:
+        if curve.IsKind(k):
+            kind = k
+            break
+    handle = OCC.Core.Geom.__dict__[kind]
+    curve = handle.DownCast(curve)
+
+    return curve, kind.split('_')[-1]
+
+def downcast_surface(surf):
+    kind = 'unknown'
+    for k in s_kinds:
+        if surf.IsKind(k):
+            kind = k
+            break
+    handle = OCC.Core.Geom.__dict__[kind]
+    surf = handle.DownCast(surf)
+
+    return surf, kind.split('_')[-1]
+
 class topo_seen(list):
     def __init__(self, mapping):
         self.mapping = mapping
@@ -480,7 +582,7 @@ class topo_list():
 
     def current_group(self):
         for g in self.gg:
-            if g is self.d:
+            if self.gg[g] is self.d:
                 return g
 
     def __iter__(self):
@@ -500,12 +602,15 @@ class topo_list():
 
     def find_gid(self, shape1):
         mapper = self.get_mapper(shape1)
+
         for k in self.d:
             if mapper.Contains(self.d[k]):
-                return k
+                idx = k
+                break
         else:
             assert False, "Can not find a shape number to replace"
-            
+        return idx
+
     def get_item_from_group(self, val, group=0):
         return self.gg[group][val]
 

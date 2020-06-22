@@ -346,7 +346,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, CopyFace, CopyFaceRotate, RecombineSurface, ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve, CompoundSurface
         return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, CopyFaceRotate, RecombineSurface, ExtrudeMesh,  RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
 
-    def get_special_menu(self):
+    def get_special_menu(self, evt):
         from petram.geom.gmsh_geom_model import use_gmsh_api
         if use_gmsh_api:
             return [('Build All', self.onBuildAll, None),

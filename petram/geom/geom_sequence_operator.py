@@ -49,7 +49,7 @@ class GeomSequenceOperator():
     def inspect_geom(self, command):
         if (not hasattr(self, "_p") or
                 not self._p.is_alive()):
-            return None
+            return '', None
 
         p = self._p
         task_q = self._p.task_q
@@ -63,14 +63,35 @@ class GeomSequenceOperator():
                 if ret[1][0] == 'fail':
                     print(ret[1][1])
                     break
-                else:
-                    return ret[1][1]
+                return ret[1][1]
 
             except QueueEmpty:
                 if not p.is_alive():
                     self.clean_queue()
-        return None
+        return '', None
 
+    def export_shapes(self, selection, path):
+        if (not hasattr(self, "_p") or
+                not self._p.is_alive()):
+            return
+
+        p = self._p
+        task_q = self._p.task_q
+        q = self._p.q
+
+        task_q.put((3, (selection, path)))
+
+        while True:
+            try:
+                ret = q.get(True, 1)
+                if ret[1][0] == 'fail':
+                    print(ret[1][1])
+                break
+
+            except QueueEmpty:
+                if not p.is_alive():
+                    self.clean_queue()
+        
     def create_new_child(self, use_occ, pgb):
         from petram.geom.gmsh_geom_wrapper import (GMSHGeometryGenerator,
                                                    GMSHGeometryGeneratorTH)
@@ -98,9 +119,6 @@ class GeomSequenceOperator():
         if not hasattr(self, '_prev_sequence'):
             return True, 0
 
-        if len(self.geom_sequence) < len(self._prev_sequence):
-            return True, 0
-
         if pgb is None or globals()['test_thread']:
             if use_occ:
                 if self._p.__class__.__name__ != 'OCCGeometryGeneratorTH':
@@ -116,6 +134,11 @@ class GeomSequenceOperator():
                 if self._p.__class__.__name__ != 'GMSHGeometryGenerator':
                     return True, 0
 
+        if len(self.geom_sequence) < len(self._prev_sequence):
+            if not use_occ:
+                return True, 0
+            return False, 0
+
         start_idx = 0
         for k, s in enumerate(self._prev_sequence):
             if s[0] == 'WP_End' and use_occ:
@@ -128,7 +151,9 @@ class GeomSequenceOperator():
             s_txt2 = pickle.dumps(self.geom_sequence[k])
             if s_txt1 != s_txt2:
                 dprint1("check not passed", s[0])
-                return True, 0
+                if not use_occ:
+                    return True, 0
+                return False, 0          
             dprint1("check passed", s[0])
             start_idx = start_idx + 1
 

@@ -28,11 +28,13 @@ def _fix_Degenerated(shape, verbose=False):
         sff = ShapeFix_Face(face)
         sff.SetFixAddNaturalBoundMode(True)
         sff.SetFixSmallAreaWireMode(True)
-        sff.Perform()
+        sff.SetFixPeriodicDegeneratedMode(True)
 
+        sff.Perform()
+        sff.FixOrientation()
         if (sff.Status(ShapeExtend_DONE1) or sff.Status(ShapeExtend_DONE2) or
-            sff.Status(ShapeExtend_DONE3) or sff.Status(ShapeExtend_DONE4) or
-            sff.Status(ShapeExtend_DONE5)):
+                sff.Status(ShapeExtend_DONE3) or sff.Status(ShapeExtend_DONE4) or
+                sff.Status(ShapeExtend_DONE5)):
             pass
 
         if verbose:
@@ -113,6 +115,15 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
             rebuild.Replace(oldwire, newwire)
 
     shape = rebuild.Apply(shape)
+    
+    rebuild = ShapeBuild_ReShape()
+    for edge in iter_shape(shape, 'edge'):
+        system = GProp_GProps()
+        brepgprop_LinearProperties(edge, system)
+        if system.Mass() < tolerance:
+            print("  - Removing degenerated edge (length =" + str(system.Mass()) + ")")
+            rebuild.Remove(edge)
+    shape = rebuild.Apply(shape)
 
     rebuild = ShapeBuild_ReShape()
     for edge in iter_shape(shape, 'edge'):
@@ -124,9 +135,24 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
     sfwf.SetPrecision(tolerance)
     sfwf.Load(shape)
     sfwf.SetModeDropSmallEdges(True)
-
+    
+    num_fix = sfwf.FixWireGaps()
+    if num_fix >= 0:
+        if verbose:
+            print(" - Fixing wire gaps")
+            if sfwf.StatusWireGaps(ShapeExtend_OK):
+                print("  no gaps found")
+            if sfwf.StatusWireGaps(ShapeExtend_DONE1):
+                print(" . Some 2D gaps fixed")
+            if sfwf.StatusWireGaps(ShapeExtend_DONE2):
+                print(" . Some 3D gaps fixed")
+            if sfwf.StatusWireGaps(ShapeExtend_FAIL1):
+                print(" . Failed to fix some 2D gaps")
+            if sfwf.StatusWireGaps(ShapeExtend_FAIL2):
+                print(" . Failed to fix some 3D gaps")
+            
     num_fix = sfwf.FixSmallEdges()
-    if num_fix > 0:
+    if num_fix >= 0:
         if verbose:
             print(" - Fixing wire frames")
             if sfwf.StatusSmallEdges(ShapeExtend_OK):
@@ -141,7 +167,7 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
 
 def _fix_SmallFaces(shape, verbose=False, tolerance=1e-6):
     if verbose:
-        print(" - Fixing small faces")
+        print(" - Fixing spot and strip faces")
     sffsm = ShapeFix_FixSmallFace()
     sffsm.Init(shape)
     sffsm.SetPrecision(tolerance)
@@ -229,17 +255,21 @@ def make_new_compound(shape, builder=None):
     return comp
 
 
-def heal_shape(shape, scaling=1.0, fixDegenerated=False,
+def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
                fixSmallEdges=False, fixSmallFaces=False,
                sewFaces=False, makeSolids=False,
                verbose=False, tolerance=1e-8):
-    
+
+    builder = BRep_Builder()
+    shape = TopoDS_Compound()
+    builder.MakeCompound(shape)
+    builder.Add(shape, oshape)
+
     names = ('compound', 'compsolid', 'solid',
              'shell', 'face', 'wire', 'edge', 'vertex')
-    
+
     old_maps = prep_maps(shape, return_all=True, return_compound=True)
-    print([old_maps[n].Size() for n in names])
-        
+
     if scaling != 1.0:
         if verbose:
             print("Scaling geometry (factor = " + str(scaling) + ")")
