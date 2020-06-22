@@ -22,7 +22,11 @@ Algorithm3D = OrderedDict((("Delaunay", 1), ("New Delaunay", 2),
                            ("Frontal", 4),
                            ("Frontal Hex", 6), ("MMG3D", 7),
                            ("R-tree", 9), ("default", 1)))
-
+HighOrderOptimize = OrderedDict((("none", 0),
+                                 ("optimization", 1),
+                                 ("elastic+optimization", 2),
+                                 ("elastic", 3),
+                                 ("fast curving", 4)))
 debug = True
 debug2 = False
 
@@ -205,6 +209,8 @@ class GMSHMeshWrapper():
         self.trash = kwargs.pop("trash", '')
         self.edge_tss = kwargs.pop("edge_tss", None)
         self.mesh_sequence = kwargs.pop("mesh_sequence", [])
+        self.use_2nd_order = kwargs.pop("use_2nd_order", False)
+        self.optimize_2nd_order = kwargs.pop("optimize_2nd_order", 0)
 
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -285,6 +291,11 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.MaxNumThreads3D", self.maxthreads[3])
         gmsh.option.setNumber("Mesh.Optimize", 0)
         #gmsh.option.setNumber('Geometry.ReparamOnFaceRobust', 1)
+
+        if self.use_2nd_order:
+            gmsh.option.setNumber("Mesh.ElementOrder", 2)
+            gmsh.option.setNumber("Mesh.HighOrderOptimize",
+                                  HighOrderOptimize[self.optimize_2nd_order])
         
         self.target_entities0 = (gmsh.model.getEntities(3),
                                  gmsh.model.getEntities(2),

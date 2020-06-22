@@ -14,8 +14,8 @@ import time
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
 
-
 debug = True
+
 
 
 class GMesh(Mesh):
@@ -280,6 +280,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         v['gen_all_phys_entity'] = False
         v['use_profiler'] = False
         v['use_expert_mode'] = False
+        v['use_2nd_order'] = False
+        v['optimize_2nd_order'] = 'none'
+        
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v
@@ -288,14 +291,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         ll = [["Geometry", self.geom_group,  0, {}, ], ]
         ll.extend(self.vt.panel_param(self))
 
-        from petram.mesh.gmsh_mesh_wrapper import Algorithm2D, Algorithm3D
+        from petram.mesh.gmsh_mesh_wrapper import Algorithm2D, Algorithm3D, HighOrderOptimize
 
         c1 = list(Algorithm2D)
         c2 = list(Algorithm3D)
+        c3 = list(HighOrderOptimize)
 
         from wx import CB_READONLY
         setting1 = {"style": CB_READONLY, "choices": c1}
         setting2 = {"style": CB_READONLY, "choices": c2}
+        setting3 = {"style": CB_READONLY, "choices": c3}        
 
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
                    ["3D Algorithm", c2[-1], 4, setting2],
@@ -304,6 +309,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                    [None, self.use_profiler,  3, {"text": "use profiler"}],
                    [None, self.use_expert_mode,  3, {
                        "text": "use GMSH expert mode"}],
+                   [None, self.use_2nd_order,  3, {"text": "use 2nd order mesh (dev)"}],
+                   ["HighOrder optimize", c3[-1], 4, setting3],                   
                    [None, None, 341, {"label": "Use default size",
                                       "func": 'onSetDefSize',
                                       "noexpand": True}],
@@ -316,7 +323,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def get_panel1_value(self):
         return ([self.geom_group, ] + list(self.vt.get_panel_value(self)) +
                 [self.algorithm, self.algorithm3d, self.gen_all_phys_entity,
-                 self.use_profiler, self.use_expert_mode, self, self, ])
+                 self.use_profiler, self.use_expert_mode,
+                 self.use_2nd_order, self.optimize_2nd_order,
+                 self, self, ])
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
@@ -324,13 +333,15 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
     def import_panel1_value(self, v):
         self.geom_group = str(v[0])
-        self.vt.import_panel_value(self, v[1:-7])
+        self.vt.import_panel_value(self, v[1:-9])
 
-        self.algorithm = str(v[-7])
-        self.algorithm3d = str(v[-6])
-        self.gen_all_phys_entity = v[-5]
-        self.use_profiler = bool(v[-4])
-        self.use_expert_mode = bool(v[-3])
+        self.algorithm = str(v[-9])
+        self.algorithm3d = str(v[-8])
+        self.gen_all_phys_entity = v[-7]
+        self.use_profiler = bool(v[-6])
+        self.use_expert_mode = bool(v[-5])
+        self.use_2nd_order = bool(v[-4])
+        self.optimize_2nd_order = str(v[-3])
 
     def panel1_tip(self):
         return ([None] +
@@ -340,6 +351,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  "Write lower dimensional physical entity. This may take a long time",
                  "Use cProfiler",
                  "Enable GMSH expert mode to suppress some warning",
+                 "Generate 2nd order mesh",
+                 "Opitimize 2nd order mesh",
                  None, None])
 
     def get_possible_child(self):
@@ -372,29 +385,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.clmin_txt = str(clmin_root)
         dlg = evt.GetEventObject().GetTopLevelParent()
         dlg.OnItemSelChanged()
-
-    '''
-    def onExportGeom(self, evt):
-        if not hasattr(self, "_txt_rolled"):
-            evt.Skip()
-            return
-        from ifigure.widgets.dialog import write
-        parent = evt.GetEventObject()
-        path = write(parent,
-                     message = 'Enter .geo file name',
-                     wildcard = '*.geo')
-        
-        from petram.mesh.gmsh_mesher import write_physical, write_embed
-        embed = self.gather_embed()
-        geo_text = write_embed(self._txt_rolled[:], embed)        
-        geo_text = write_physical(geo_text)
-        geo_text.append('Show "*";')
-        
-        if path != '':
-            fid = open(path, 'w')
-            fid.write('\n'.join(geo_text))
-            fid.close()
-    '''
 
     def onExportMsh(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -615,6 +605,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                       'MeshAlgorithm3D': self.algorithm3d,
                       'use_profiler': self.use_profiler,
                       'use_expert_mode': self.use_expert_mode,
+                      'use_2nd_order': self.use_2nd_order,
+                      'optimize_2nd_order': self.optimize_2nd_order,
                       'trash': trash,
                       'gen_all_phys_entity': self.gen_all_phys_entity,
                       'meshformat': 2.2,
