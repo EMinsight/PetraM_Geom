@@ -498,7 +498,7 @@ s_kinds = ('Geom_BezierSurface',
            'Geom_BSplineSurface',
            'Geom_RectangularTrimmedSurface',
            'Geom_ConicalSurface',
-           'Geom_CylindricalSurface'
+           'Geom_CylindricalSurface',
            'Geom_Plane',
            'Geom_SphericalSurface',
            'Geom_ToroidalSurface',
@@ -508,7 +508,7 @@ s_kinds = ('Geom_BezierSurface',
            'Geom_OffsetSurface',
            'Geom_BoundedSurface',
            'ShapeExtended_CompositeSurface',
-           'Geom_ElementarySurface',           
+           'Geom_ElementarySurface',
            'Geom_Surface',)
 
 import OCC.Core.Geom

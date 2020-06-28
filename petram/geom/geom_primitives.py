@@ -165,7 +165,31 @@ class Circle2DCenterOnePoint(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return "Circle"
+    
+pdata = (('tlines', VtableElement('tlines', type='string',
+                                  guilabel='Tangent lines',
+                                  default="",
+                                  tip="two tangent lines of cirlce")),
+         ('radius', VtableElement('radius', type='float',
+                                  guilabel='Radius',
+                                  default=1.0,
+                                  tip="radius of circle")),
+         ('fill_circle', VtableElement('fill circle', type='bool',
+                                       guilabel='Fill circle',
+                                       default=True,
+                                       tip="Make surface ")), )
 
+class Circle2DRadiusTwoTangentCurve(GeomPB):
+    vt = Vtable(pdata)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Two tangents and radius'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return "Circle"
+    
 
 pdata = (('points', VtableElement('points', type='string',
                                   guilabel='Ends of diameter',
@@ -1730,7 +1754,7 @@ class WPBase(GeomPB):
     def get_possible_child(self):
         return [Point2D, PointCircleCenter, Line2D,
                 Circle2D, CircleBy3Points, Circle2DCenterOnePoint,
-                Circle2DByDiameter,
+                Circle2DByDiameter, Circle2DRadiusTwoTangentCurve,
                 Arc2D, Arc2DBy3Points, Arc2DBy2PointsAngle,
                 Rect2D, Rect2DByCorners,
                 Polygon2D, Spline2D,
@@ -1745,7 +1769,8 @@ class WPBase(GeomPB):
                 ("!", Arc2DBy2PointsAngle),
                 ("Add Rect", Rect2D), ("!", Rect2DByCorners),
                 ("Add Circle...", Circle2D), ("", CircleBy3Points),
-                ("", Circle2DCenterOnePoint), ("!", Circle2DByDiameter),
+                ("", Circle2DCenterOnePoint), ("", Circle2DRadiusTwoTangentCurve),
+                ("!", Circle2DByDiameter),
                 ("", Spline2D),
                 ("Create...", CreateLine), ("", CreateSurface), ("!", OCCPolygon),
                 ("Copy/Remove...", Copy), ("!", Remove),

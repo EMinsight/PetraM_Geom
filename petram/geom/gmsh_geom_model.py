@@ -427,12 +427,19 @@ class GmshGeom(GeomTopBase):
                 ]
 
     def get_special_menu(self, evt):
-        if use_gmsh_api:
-            return [('Build All', self.onBuildAll, None),
-                    ('Export .brep', self.onExportBrep, None)]
-        else:
-            return [('Build All', self.onBuildAll, None),
-                    ('Export .geo', self.onExportGeom, None)]
+        menu = [('Build All', self.onBuildAll, None),
+                ('Export .brep', self.onExportBrep, None)]
+
+        if hasattr(self, '_gso'):
+            print('here')
+            if self._gso.child_alive():
+                m2 = [('---', None, None),
+                      ('Terminate geometry process.',
+                       self.onTerminateChild, None),
+                      ('---', None, None),]
+                print(m2)
+                menu.extend(m2)
+        return menu
 
     def panel1_param(self):
         import wx
@@ -678,8 +685,9 @@ class GmshGeom(GeomTopBase):
         if data is None:  # if no_mesh = True
             self._gso.terminate_child()
             return
-        if finalize:
-            self._gso.terminate_child()
+        
+        #if finalize:
+        #    self._gso.terminate_child()
         # for the readablity I expend data here, do we need geom?
         ptx, cells, cell_data, l, s, v = data
         self._gmsh4_data = (ptx, cells, cell_data, l, s, v, self._gso)
@@ -693,7 +701,11 @@ class GmshGeom(GeomTopBase):
         self._vcl = vcl
         self._esize = esize
         return
-
+    
+    def onTerminateChild(self, evt):
+        self._gso.terminate_child()
+        evt.Skip()
+        
     def generate_final_geometry(self):
         cwd = os.getcwd()
         dprint1("Generating Geometry in " + cwd)

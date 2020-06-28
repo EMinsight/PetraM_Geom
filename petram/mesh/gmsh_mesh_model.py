@@ -35,7 +35,8 @@ class GMesh(Mesh):
                 return
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('mesh', self)
-
+        evt.Skip()
+        
     @property
     def geom_timestamp(self):
         return self.parent.geom_timestamp
@@ -67,6 +68,7 @@ class GMeshTop(Mesh):
                 return
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('mesh', self)
+        evt.Skip()
 
     def get_default_ns(self):
         '''
@@ -272,7 +274,11 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if hasattr(self, "_mesher_data"):
             return self._mesher_data
         return None
-
+    @property
+    def mesh_output(self):
+        if not hasattr(self, '_mesh_output'):
+            return ''
+        return self._mesh_output
     def attribute_set(self, v):
         v['geom_group'] = 'GmshGeom1'
         v['algorithm'] = 'default'
@@ -280,8 +286,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         v['gen_all_phys_entity'] = False
         v['use_profiler'] = False
         v['use_expert_mode'] = False
-        v['use_2nd_order'] = False
-        v['optimize_2nd_order'] = 'none'
+        v['use_ho'] = False
+        v['optimize_ho'] = 'none'
+        v['ho_order'] = 2
         
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -301,6 +308,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         setting1 = {"style": CB_READONLY, "choices": c1}
         setting2 = {"style": CB_READONLY, "choices": c2}
         setting3 = {"style": CB_READONLY, "choices": c3}        
+        ll_ho = [None,  [True, [1, c3[0]]], 27, [{'text':'use high order (in dev, upto order 3, tet only)'},
+                                                {'elp':[["Order", self.ho_order,  400],
+                                                        ["HighOrder optimize", c3[-1], 4, setting3],]}
+                                                ]]
 
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
                    ["3D Algorithm", c2[-1], 4, setting2],
@@ -309,8 +320,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                    [None, self.use_profiler,  3, {"text": "use profiler"}],
                    [None, self.use_expert_mode,  3, {
                        "text": "use GMSH expert mode"}],
-                   [None, self.use_2nd_order,  3, {"text": "use 2nd order mesh (dev)"}],
-                   ["HighOrder optimize", c3[-1], 4, setting3],                   
+                   ll_ho,
+                   #[None, self.use_2nd_order,  3, {"text": "use 2nd order mesh (in dev order 3, tet only)"}],
+                   #["HighOrder optimize", c3[-1], 4, setting3],                   
                    [None, None, 341, {"label": "Use default size",
                                       "func": 'onSetDefSize',
                                       "noexpand": True}],
@@ -324,7 +336,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return ([self.geom_group, ] + list(self.vt.get_panel_value(self)) +
                 [self.algorithm, self.algorithm3d, self.gen_all_phys_entity,
                  self.use_profiler, self.use_expert_mode,
-                 self.use_2nd_order, self.optimize_2nd_order,
+                 [self.use_ho, [self.ho_order, self.optimize_ho], ],
                  self, self, ])
 
     def preprocess_params(self, engine):
@@ -332,17 +344,23 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         return
 
     def import_panel1_value(self, v):
+        viewer_update = False
+        if self.geom_group != str(v[0]):
+            viewer_update = True
         self.geom_group = str(v[0])
-        self.vt.import_panel_value(self, v[1:-9])
+        self.vt.import_panel_value(self, v[1:-8])
 
-        self.algorithm = str(v[-9])
-        self.algorithm3d = str(v[-8])
-        self.gen_all_phys_entity = v[-7]
-        self.use_profiler = bool(v[-6])
-        self.use_expert_mode = bool(v[-5])
-        self.use_2nd_order = bool(v[-4])
-        self.optimize_2nd_order = str(v[-3])
+        self.algorithm = str(v[-8])
+        self.algorithm3d = str(v[-7])
+        self.gen_all_phys_entity = v[-6]
+        self.use_profiler = bool(v[-5])
+        self.use_expert_mode = bool(v[-4])
+        self.use_ho = bool(v[-3][0])
+        self.ho_order = int(v[-3][1][0])        
+        self.optimize_ho = str(v[-3][1][1])
 
+        return viewer_update
+            
     def panel1_tip(self):
         return ([None] +
                 self.vt.panel_tip() +
@@ -351,32 +369,44 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  "Write lower dimensional physical entity. This may take a long time",
                  "Use cProfiler",
                  "Enable GMSH expert mode to suppress some warning",
-                 "Generate 2nd order mesh",
-                 "Opitimize 2nd order mesh",
+                 "Generate high order mesh",
                  None, None])
 
     def get_possible_child(self):
-        from .gmsh_mesh_actions import TransfiniteLine, TransfiniteSurface, FreeFace, FreeVolume, FreeEdge, CharacteristicLength, CopyFace, CopyFaceRotate, RecombineSurface, ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve, CompoundSurface
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface, CharacteristicLength,  CopyFace, CopyFaceRotate, RecombineSurface, ExtrudeMesh,  RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
+        from .gmsh_mesh_actions import (TransfiniteLine, TransfiniteSurface, FreeFace,
+                                        FreeVolume, FreeEdge, CharacteristicLength,
+                                        CopyFace, CopyFaceRotate, RecombineSurface,
+                                        ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve,
+                                        CompoundSurface)
+        
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface,
+                CharacteristicLength,  CopyFace, CopyFaceRotate, RecombineSurface,
+                ExtrudeMesh,  RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
 
     def get_special_menu(self, evt):
         from petram.geom.gmsh_geom_model import use_gmsh_api
-        if use_gmsh_api:
-            return [('Build All', self.onBuildAll, None),
-                    ('Export .msh', self.onExportMsh, None),
-                    ('Clear Mesh', self.onClearMesh, None),
-                    ('Clear Mesh Sequense...', self.onClearMeshSq, None)]
-        else:
-            return [('Build All', self.onBuildAll, None),
-                    ('Export .msh', self.onExportMsh, None),
-                    ('Clear Mesh', self.onClearMesh, None),
-                    ('Clear Mesh Sequense...', self.onClearMeshSq, None)]
+        
+        return [('Build all', self.onBuildAll, None),
+                ('Export mesh', self.onExportMsh, None),
+                ('Clear mesh', self.onClearMesh, None),
+                ('Clear mesh sequense...', self.onClearMeshSq, None)]
 
     def on_created_in_tree(self):
         check = self.geom_group in self.root()['Geometry']
 
         if not check:
             self.geom_group = self.root()['Geometry'].get_children()[0].name()
+
+    def update_after_ELChanged(self, dlg):
+        pass
+    def update_after_ELChanged2(self, evt):
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+        
+        geom_root = self.geom_root        
+        geom_root.update_figure_data(viewer)
+        
+        self.onItemSelChanged(evt)
 
     def onSetDefSize(self, evt):
         geom_root = self.geom_root
@@ -390,17 +420,26 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
 
-        src = os.path.join(viewer.model.owndir(), self.name())+'.msh'
-
+        src = self.mesh_output
+        if src == '':
+           return
+       
+        ext = src.split('.')[-1]
+        
         from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         dst = write(parent,
-                    message='Enter .msh file name',
-                    wildcard='*.msh')
+                    deaultfile='Untitled.'+ext,
+                    message='Enter mesh file name')
+
+        
         if dst == '':
             return
         try:
             import shutil
+            dext = dst.split('.')[-1]
+            if dext != ext:
+                dst = dst + '.' + ext
             shutil.copyfile(src, dst)
         except:
             import ifigure.widgets.dialog as dialog
@@ -498,8 +537,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                                  title='Error',
                                  traceback=traceback.format_exc())
         dlg.OnRefreshTree()
-
         self.update_meshview(dlg, viewer, clear=do_clear)
+        evt.Skip()
 
     def gather_embed(self):
         children = [x for x in self.walk()]
@@ -539,21 +578,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         from petram.mesh.mesh_sequence_operator import MeshSequenceOperator
 
         mso = MeshSequenceOperator()
-
-        '''
-        from petram.mesh.gmsh_mesh_wrapper import GMSHMeshWrapper as GmshMesher
-        mesher = GmshMesher(meshformat=2.2,
-                            CharacteristicLengthMax=clmax,
-                            CharacteristicLengthMin=clmin,
-                            EdgeResolution=3,
-                            MeshAlgorithm=self.algorithm,
-                            MeshAlgorithm3D=self.algorithm3d,
-                            use_profiler=self.use_profiler,
-                            use_expert_mode=self.use_expert_mode,
-                            gen_all_phys_entity=self.gen_all_phys_entity,
-                            trash=trash)
-        '''
-        # mesher.load_brep(geom_root._geom_brep)
 
         children = [x for x in self.walk()]
         children = children[1:]
@@ -605,14 +629,19 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                       'MeshAlgorithm3D': self.algorithm3d,
                       'use_profiler': self.use_profiler,
                       'use_expert_mode': self.use_expert_mode,
-                      'use_2nd_order': self.use_2nd_order,
-                      'optimize_2nd_order': self.optimize_2nd_order,
+                      'use_ho': self.use_ho,
+                      'ho_order': self.ho_order,
+                      'optimize_ho': self.optimize_ho,
                       'trash': trash,
                       'gen_all_phys_entity': self.gen_all_phys_entity,
                       'meshformat': 2.2,
                       'MaxThreads': [1,1,1,1],
                       'edge_tss': edge_tss}
 
+            if self.mesh_output != '':
+                if os.path.exists(self.mesh_output):
+                    os.remove(self.mesh_output)
+            
             max_mdim, done, data, msh_output = mso.run_generater(geom_root._geom_brep,
                                                                  filename,
                                                                  kwargs,
@@ -621,9 +650,20 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             self._mesher_data = data
             self._max_mdim = max_mdim
             if finalize:
-                self._msh_output = msh_output
+                if self.use_ho:
+                    fname = msh_output[:-3]+'mesh'
+                    
+                    from petram.mesh.gmsh2mfem import Translator
+                    t = Translator(msh_output, verbose=True)
+                    t.write(fname)
+
+                    os.remove(msh_output)
+                    self._mesh_output = fname
+                else:
+                    self._mesh_output = msh_output
+
             else:
-                self._msh_output = ''
+                self._mesh_output = ''
         else:
             self._max_mdim = 0
             done = [], [], [], []
@@ -665,18 +705,20 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def get_meshfile_path(self):
         '''
         '''
-        if hasattr(self, '_msh_output') and self._msh_output != '':
-            path = self._msh_output
+        if hasattr(self, '_mesh_output') and self._mesh_output != '':
+            path = self._mesh_output
             if os.path.exists(path):
                 dprint1("gmsh file path", path)
                 return path
 
-        path = os.path.join(self.root().get_root_path(), self.name() + '.msh')
+        ext = '.mesh' if self.use_ho else '.msh'
+
+        path = os.path.join(self.root().get_root_path(), self.name() + ext)
         if os.path.exists(path):
             dprint1("gmsh file path", path)
             return path
 
-        path = os.path.abspath(self.name() + '.msh')
+        path = os.path.abspath(self.name() + ext)
         if os.path.exists(path):
             dprint1("gmsh file path", path)
             return path

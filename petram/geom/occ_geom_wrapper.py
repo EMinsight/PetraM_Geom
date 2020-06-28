@@ -3287,7 +3287,12 @@ class Geometry():
         newkey = objs.addobj(ps1, 'ps')
 
         return list(objs), [newkey]
-
+    
+    def Circle2DRadiusTwoTangentCurve_build_geom(self, objs, *args):
+        tlines, radius, make_face = args
+        newkeys = []
+        return list(objs), newkeys
+    
     def Circle2DCenterOnePoint_build_geom(self, objs, *args):
         center, pts, make_face = args
 
@@ -4467,7 +4472,7 @@ class Geometry():
         if not success:
             assert False, "Failed to read brep" + str(brep_file)
 
-        self.shape = self.new_compound()
+        self.shape = shape
         self.prep_topo_list()
 
         shape = self.select_highest_dim(shape)
@@ -4553,6 +4558,7 @@ class Geometry():
         shape_inspector = petram.geom.occ_inspect.shape_inspector
         #print(inspect_type, args)
         if inspect_type in ('property', 'distance'):
+            print("here", self.objs, args)
             gids = self.get_target2(self.objs, args)
             shapes = [self.get_shape_for_gid(gid) for gid in gids]
         elif inspect_type == 'shortedge':

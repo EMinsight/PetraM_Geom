@@ -1,5 +1,5 @@
 import numpy as np
-from ifigure.widgets.dialog import write
+
 
 from petram.geom.gmsh_geom_model import GmshGeom
 
@@ -50,6 +50,8 @@ class OCCGeom(GmshGeom):
             return None
 
         parent = evt.GetEventObject()
+        
+        from ifigure.widgets.dialog import write        
         path = write(parent,
                      message='Enter .brep file name',
                      wildcard='*.brep')
@@ -170,13 +172,18 @@ class OCCGeom(GmshGeom):
         selection = viewer.dom_bdr_sel
 
         if np.sum([len(x) for x in selection]) == 0:
-            return [('Build All', self.onBuildAll, None),
+            menu = [('Build All', self.onBuildAll, None),
                     ('Export Brep', self.onExportBrep, None)]
         else:
-            return [('Build All', self.onBuildAll, None),
-                    ('Export Selected Entity', self.onExportSelectedBrep, None),
+            menu = [('Build All', self.onBuildAll, None),
+                    ('Export Selected Entity',
+                     self.onExportSelectedBrep, None),
                     ('Export Brep', self.onExportBrep, None)]
 
-
-        
-
+        if self._gso.child_alive():
+            m2 = [('---', None, None),
+                  ('Terminate geometry process',
+                   self.onTerminateChild, None),
+                  ('---', None, None),]
+            menu.extend(m2)
+        return menu

@@ -33,6 +33,11 @@ class GeomSequenceOperator():
             self._p.task_q.cancel_join_thread()
             self._p.q.cancel_join_thread()
 
+    def child_alive(self):
+        if (hasattr(self, "_p") and self._p.is_alive()):
+            return True
+        return False
+    
     def terminate_child(self):
         if (hasattr(self, "_p") and self._p.is_alive()):
             if self.use_mp:

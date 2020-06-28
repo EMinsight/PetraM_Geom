@@ -209,8 +209,9 @@ class GMSHMeshWrapper():
         self.trash = kwargs.pop("trash", '')
         self.edge_tss = kwargs.pop("edge_tss", None)
         self.mesh_sequence = kwargs.pop("mesh_sequence", [])
-        self.use_2nd_order = kwargs.pop("use_2nd_order", False)
-        self.optimize_2nd_order = kwargs.pop("optimize_2nd_order", 0)
+        self.use_ho = kwargs.pop("use_ho", False)
+        self.ho_order = kwargs.pop("ho_order", 2)        
+        self.optimize_ho = kwargs.pop("optimize_ho", 0)
 
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -292,10 +293,10 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.Optimize", 0)
         #gmsh.option.setNumber('Geometry.ReparamOnFaceRobust', 1)
 
-        if self.use_2nd_order:
-            gmsh.option.setNumber("Mesh.ElementOrder", 2)
+        if self.use_ho:
+            gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
             gmsh.option.setNumber("Mesh.HighOrderOptimize",
-                                  HighOrderOptimize[self.optimize_2nd_order])
+                                  HighOrderOptimize[self.optimize_ho])
         
         self.target_entities0 = (gmsh.model.getEntities(3),
                                  gmsh.model.getEntities(2),
@@ -1894,94 +1895,6 @@ class GMSHMeshWrapper():
     def revolve_face_3D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         kwargs['revolve'] = True
         return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
-'''
-    def run_generater(self, brep_input, edge_tss, msh_file, finalize=False, dim=3,
-                      progressbar=None):
-
-        kwargs = {'CharacteristicLengthMax': self.clmax,
-                  'CharacteristicLengthMin': self.clmin,
-                  'EdgeResolution': self.res,
-                  'MeshAlgorithm': self.algorithm,
-                  'MeshAlgorithm3D': self.algorithm3d,
-                  'MaxThreads': self.maxthreads,
-                  'use_profiler': self.use_profiler,
-                  'use_expert_mode': self.use_expert_mode,
-                  'gen_all_phys_entity': self.gen_all_phys_entity,
-                  'trash': self.trash,
-                  'edge_tss': edge_tss}
-
-        q = mp.Queue()
-        p = mp.Process(target=generator,
-                       args=(q, brep_input, msh_file,  self.mesh_sequence,
-                             dim, finalize, kwargs))
-        p.start()
-        istep = 0
-
-        while True:
-            try:
-                ret = q.get(True, 1)
-                if ret[0]:
-                    break
-                if progressbar is not None:
-                    istep += 1
-                    progressbar.Update(istep, newmsg=ret[1])
-                else:
-                    print("Mesh Generator : Step = " +
-                          str(istep) + " : " + ret[1])
-
-            except QueueEmpty:
-                if not p.is_alive():
-                    if progressbar is not None:
-                        progressbar.Destroy()
-                    q.close()
-                    q.cancel_join_thread()
-                    assert False, "Child Process Died"
-                    break
-                time.sleep(1.)
-                if progressbar is not None:
-                    import wx
-                    wx.Yield()
-                    if progressbar.WasCancelled():
-                        if p.is_alive():
-                            p.terminate()
-                            q.close()
-                            q.cancel_join_thread()
-                        progressbar.Destroy()
-                        assert False, "Mesh Generation Aborted"
-
-            time.sleep(0.01)
-        q.close()
-        q.cancel_join_thread()
-
-        max_dim, done, msh_output = ret[1]
-
-        from petram.geom.read_gmsh import read_pts_groups, read_loops
-
-        if progressbar is not None:
-            progressbar.Update(istep, newmsg="Reading mesh file for rendering")
-        else:
-            print("Reading mesh file for rendering")
-
-        gmsh.open(msh_output)
-        ptx, cells, cell_data = read_pts_groups(gmsh,
-                                                finished_lines=done[1],
-                                                finished_faces=done[2])
-
-        data = ptx, cells, {}, cell_data, {}
-
-        return max_dim, done, data, msh_output
-
-def generator(q, brep_input, msh_file, sequence, dim, finalize, kwargs):
-
-    kwargs['queue'] = q
-    mw = GMSHMeshWrapper(**kwargs)
-
-    mw.mesh_sequence = sequence
-    max_dim, done, msh_output = mw.generate(
-        brep_input, msh_file, dim=dim, finalize=finalize)
-
-    q.put((True, (max_dim, done, msh_output)))
-'''
 
 class GMSHMeshGeneratorBase():
     def __init__(self, q, task_q):

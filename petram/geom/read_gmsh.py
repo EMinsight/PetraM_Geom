@@ -21,14 +21,14 @@ gmsh_element_type = {
         18: 'prism15',
         19: 'pyramid13',
         20: 'itriangle9',   # incomplete-triangle
-        21: 'triangle10', 
+        21: 'triangle10',
         22: 'itriangle12',  # incomplete-triangle
         23: 'triangle15',
         24: 'itriangle15',  # incomplete-triangle
         25: 'triangle21',
-        26: 'line4',    
-        27: 'line5',    
-        28: 'line6',    
+        26: 'line4',
+        27: 'line5',
+        28: 'line6',
         29: 'tetra20',
         30: 'tetra35',
         31: 'tetra56',
@@ -91,7 +91,114 @@ num_nodes_per_cell = {
     'pyramid14': 14,
     'line4': 4,
     'quad16': 16,
+    'triangle10':10,
+    'triangle15':15,
+    'triangle21':21,
+    'tetra20':20,
+    'tetra35':35,
+    'tetra56':56,
+    'line5': 5,
+    'line6': 6,
     }
+
+num_verts_per_cell = {
+        'line': 2,
+        'triangle':3,
+        'quad':4,
+        'tetra':4,
+        'hexahedron':8,
+        'wedge':6,
+        'pyramid':5,
+        'line3':2,
+        'triangle6':3,
+        'quad9':4,
+        'tetra10':4,
+        'hexahedron27':8,
+        'prism18':6,
+        'pyramid14':5,
+        'vertex':1,
+        'quad8':4,
+        'hexahedron20':8,
+        'prism15':6,
+        'pyramid13':5,
+        'itriangle9':3,   # incomplete-triangle
+        'triangle10':3,
+        'itriangle12':3,  # incomplete-triangle
+        'triangle15':3,
+        'itriangle15':3,  # incomplete-triangle
+        'triangle21':3,
+        'line4':2,
+        'line5':2,
+        'line6':2,
+        'tetra20':4,
+        'tetra35':4,
+        'tetra56':4,
+        'hexahedron64':8,
+        'hexahedron125':8,
+        }
+
+gmsh_element_mfemname = {
+        'line': 'Segment',
+        'triangle':'Triangle',
+        'quad':'Quad',
+        'tetra':'Tet',
+        'hexahedron':'Hex',
+        'wedge':'Wedge',
+        'pyramid':'',
+        'line3':'Segment',
+        'triangle6':'Triangle',
+        'quad9':'Quad',
+        'tetra10':'Tet',
+        'hexahedron27':'Hex',
+        'prism18':'Wedge',
+        'pyramid14':'',
+        'vertex':'Vertex',
+        'quad8':'Quad',
+        'hexahedron20':'Hex',
+        'prism15':'Wedge',
+        'pyramid13':'',
+        'itriangle9':'Triangle',   # incomplete-triangle
+        'triangle10':'Triangle',
+        'itriangle12':'Triangle',  # incomplete-triangle
+        'triangle15':'Triangle',
+        'itriangle15':'Triangle',  # incomplete-triangle
+        'triangle21':'Triangle',
+        'line4':'Segment',
+        'line5':'Segment',
+        'line6':'Segment',
+        'tetra20':'Tet',
+        'tetra35':'Tet',
+        'tetra56':'Tet',
+        'hexahedron64': 'Hex',
+        'hexahedron125': 'Hex',
+        }
+gmsh_element_order = {
+        'line': 1,
+        'triangle':1,
+        'quad':1,
+        'tetra':1,
+        'hexahedron':1,
+        'wedge': 1,
+        'pyramid': 2,
+        'line3': 2,
+        'triangle6': 2,
+        'quad9': 2,
+        'tetra10': 2,
+        'hexahedron27': 2,
+        'prism18': 2,
+        'pyramid14': 2,
+        'vertex': 1,
+        'quad8': 2,
+        'hexahedron20': 2,
+        'prism15': 2,
+        'pyramid13': 2,
+        'triangle10':3,
+        'tetra20':3,    
+        'triangle15':4,
+        'tetra35':4,
+        'triangle21':5,    
+        'tetra56':5,
+        }
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('ReadGMSH')
@@ -233,9 +340,6 @@ def read_pts_groups(geom, finished_lines=None,
     finished_lines=None
     finished_faces=None
 
-    dprint1("finished faces", finished_faces)
-    dprint1("finished lines", finished_lines)    
-    #finished_faces is None: finished_faces = []     
     model = geom.model
     
     node_id, node_coords, parametric_coods =  model.mesh.getNodes()
