@@ -602,7 +602,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
             if gui_parent is not None:
                 import wx
-                gui_parent = wx.GetApp().TopWindow
+                #gui_parent = wx.GetApp().TopWindow
                 pgb = wx.ProgressDialog("Generating mesh...",
                                         "", L, parent=gui_parent,
                                         style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT)
@@ -642,7 +642,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 if os.path.exists(self.mesh_output):
                     os.remove(self.mesh_output)
             
-            max_mdim, done, data, msh_output = mso.run_generater(geom_root._geom_brep,
+            max_mdim, done, data, msh_output = mso.run_generater(geom_root.geom_brep,
                                                                  filename,
                                                                  kwargs,
                                                                  finalize=finalize,

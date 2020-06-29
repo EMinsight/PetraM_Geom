@@ -348,6 +348,20 @@ class GmshGeom(GeomTopBase):
             self._build_stop = (None, None)
         return self._build_stop
 
+    @property
+    def geom_brep(self):
+        if not hasattr(self, "_geom_brep"):        
+            return ''
+        base = self._geom_brep
+        
+        if self._geom_brep_dir == '':
+            import wx
+            trash = wx.GetApp().GetTopWindow().proj.get_trash()
+        else:
+            trash = self._geom_brep_dir
+            
+        return os.path.join(trash, base)
+
     def attribute_set(self, v):
         v = super(GmshGeom, self).attribute_set(v)
         v['geom_timestamp'] = 0
@@ -651,7 +665,7 @@ class GmshGeom(GeomTopBase):
 
         if gui_parent is not None:
             import wx
-            gui_parent = wx.GetApp().TopWindow
+            #gui_parent = wx.GetApp().TopWindow
             pgb = wx.ProgressDialog("Generating geometry...",
                                     "", L, parent=gui_parent,
                                     style=wx.PD_APP_MODAL | wx.PD_AUTO_HIDE | wx.PD_CAN_ABORT)
@@ -660,13 +674,15 @@ class GmshGeom(GeomTopBase):
                 pgb.Destroy()
             pgb.Bind(wx.EVT_CLOSE, close_dlg)
             trash = wx.GetApp().GetTopWindow().proj.get_trash()
+            self._geom_brep_dir = ''            
         else:
             pgb = None
             cwd = os.getcwd()
             trash = os.path.join(cwd, '.trash')
             if not os.path.exists(trash):
                 os.mkdir(trash)
-
+            self._geom_brep_dir = trash
+            
         success, dataset = self._gso.run_generator(self, no_mesh=no_mesh, finalize=finalize,
                                                   filename=stopname, progressbar=pgb,
                                                   trash=trash,)
@@ -677,7 +693,8 @@ class GmshGeom(GeomTopBase):
 
         gui_data, objs, brep_file, data, vcl, esize = dataset
 
-        self._geom_brep = brep_file
+        self._geom_brep = os.path.basename(brep_file)
+        
         self.update_GUI_after_geom(gui_data, objs)
 
         if data is None:  # if no_mesh = True
@@ -738,9 +755,10 @@ class GmshGeom(GeomTopBase):
             fid.close()
 
     def onExportBrep(self, evt):
-        if not hasattr(self, "_geom_brep"):
+        if self.geom_brep == '':
             evt.Skip()
             return
+        
         from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         path = write(parent,
@@ -748,7 +766,7 @@ class GmshGeom(GeomTopBase):
                      wildcard='*.brep')
         if path != '':
             from shutil import copyfile
-            copyfile(self._geom_brep, path)
+            copyfile(self.geom_brep, path)
 
     def is_viewmode_grouphead(self):
         return True

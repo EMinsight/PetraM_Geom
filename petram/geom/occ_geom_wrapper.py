@@ -920,6 +920,7 @@ class Geometry():
     def add_surface_loop(self, sl):
         tags = list(np.atleast_1d(sl))
 
+        ### first sew the surfaces.
         try:
             sewingMaker = BRepBuilderAPI_Sewing()
             for t in tags:
@@ -929,6 +930,30 @@ class Geometry():
             result = sewingMaker.SewedShape()
         except BaseException:
             assert False, "Failed to sew faces"
+
+        ### remove input if it is not used anymore.
+        # (1) find tags which is not in other existing shells
+        tags2 = tags[:]
+        for shell in iter_shape(self.shape, 'shell'):
+            mapper = get_mapper(shell, 'face')
+            for t in tags:
+                face = self.faces[t]
+                if mapper.Contains(face):
+                    tags2.remove(t)
+        # (2) find tags which are used in sewed shape
+        remove = []
+        mapper = get_mapper(result, 'face')
+        for t in tags2:
+            face = self.faces[t]
+            if not mapper.Contains(face):
+                remove.append(face)
+
+        # (3) find tags which are used in sewed shape
+        if len(remove) > 0:    
+            rebuild = ShapeBuild_ReShape()
+            for shape in remove:
+                rebuild.Remove(shape)
+            self.shape = rebuild.Apply(self.shape)
 
         ex1 = TopExp_Explorer(result, TopAbs_SHELL)
         while ex1.More():
@@ -1482,7 +1507,7 @@ class Geometry():
         if len(keys) > 1:
             gid_objs = keys[:1]
             gid_tools = keys[1:]
-
+            print(gid_objs, gid_tools)
             self.fragments(gid_objs, gid_tools,
                            remove_obj=True, remove_tool=True)
 
@@ -1831,7 +1856,7 @@ class Geometry():
         gids_new = self.register_shaps_balk(result)
         return gids_new
 
-    def apply_fixshpae_shell(self, gids):
+    def apply_fixshape_shell(self, gids):
         for gid in gids:
             print(self.get_face_normal(gid))
 
@@ -2398,7 +2423,7 @@ class Geometry():
         self.builder.Add(self.shape, shape)
 
         newobj2 = objs.addobj(v1, 'vol')
-        self.synchronize_topo_list(action='both', verbose=True)
+        self.synchronize_topo_list(action='both', verbose=False)
         return list(objs), [newobj2]
 
     def Box_build_geom(self, objs, *args):
@@ -3131,7 +3156,7 @@ class Geometry():
             all([isinstance(x, SurfaceID) for x in gid_tools]) and
                 do_upgrade):
             print("atttempting face orientation fix")
-            self.apply_fixshpae_shell(gid_objs + gid_tools)
+            self.apply_fixshape_shell(gid_objs + gid_tools)
 
         gids_new = self.union(gid_objs, gid_tools,
                               remove_obj=delete_input,
@@ -4202,10 +4227,12 @@ class Geometry():
         filename = '_'.join(filename.split(":"))
         filename = '_'.join(filename.split("\\"))
 
-        if trash == '':  # when finalizing
-            return os.path.join(os.getcwd(), filename + ext)
-        else:
-            return os.path.join(trash, filename + ext)
+        return os.path.join(trash, filename + ext)
+
+        #if trash == '':  # when finalizing
+        #    return os.path.join(os.getcwd(), filename + ext)
+        #else:
+        
 
     def generate_preview_mesh0(self):
 
@@ -4518,14 +4545,15 @@ class Geometry():
             return data_main
         return None
 
-    def generate_brep(self, filename='', trash='', finalize=False):
+    def generate_brep(self, filename, trash, finalize=False):
 
+        print("finalize", finalize)
         if finalize and not self.skip_final_frag:
             if self.logfile is not None:
                 self.logfile.write("finalize is on \n")
             if self.queue is not None:
                 self.queue.put((False, "finalize is on"))
-
+            dprint1('apply frag')
             self.apply_fragments()
 
         geom_brep = self.make_safe_file(filename, trash, '.brep')
@@ -4683,21 +4711,21 @@ class OCCGeometryGeneratorBase():
             if task[0] == -1:
                 # self.task_queue.task_done()
                 break
-            
+
             if task[0] == 2:
                 try:
                     ret = self.mw.inspect_geom(*task[1])
                     self.q.put((True, ('success', ret)))
-                except:       
+                except:
                     txt = traceback.format_exc()
                     self.q.put((True, ('fail', txt, None)))
-                    
+
             if task[0] == 3:
                 try:
                     print("exporting", task[1])
                     ret = self.mw.export_shapes(*task[1])
                     self.q.put((True, ('success', ret)))
-                except:       
+                except:
                     txt = traceback.format_exc()
                     self.q.put((True, ('fail', txt)))
 
@@ -4736,12 +4764,12 @@ class OCCGeometryGeneratorBase():
 
         if finalize:
             #filename = filename
-            brep_file = self.mw.generate_brep(filename=filename,
+            brep_file = self.mw.generate_brep(filename, trash,
                                               finalize=True)
         else:
             filename = sequence[-1][0]
-            brep_file = self.mw.generate_brep(filename=filename,
-                                              trash=trash, finalize=False)
+            brep_file = self.mw.generate_brep(filename, trash,
+                                              finalize=False)
 
         if no_mesh:
             q.put((True, (self.gui_data, self.objs, brep_file, None, None)))
