@@ -176,7 +176,7 @@ pdata = (('tlines', VtableElement('tlines', type='string',
                                   tip="radius of circle")),
          ('fill_circle', VtableElement('fill circle', type='bool',
                                        guilabel='Fill circle',
-                                       default=True,
+                                       default=False,
                                        tip="Make surface ")), )
 
 class Circle2DRadiusTwoTangentCurve(GeomPB):
@@ -1769,7 +1769,7 @@ class WPBase(GeomPB):
                 ("!", Arc2DBy2PointsAngle),
                 ("Add Rect", Rect2D), ("!", Rect2DByCorners),
                 ("Add Circle...", Circle2D), ("", CircleBy3Points),
-                ("", Circle2DCenterOnePoint), ("", Circle2DRadiusTwoTangentCurve),
+                ("", Circle2DCenterOnePoint), #("", Circle2DRadiusTwoTangentCurve),
                 ("!", Circle2DByDiameter),
                 ("", Spline2D),
                 ("Create...", CreateLine), ("", CreateSurface), ("!", OCCPolygon),

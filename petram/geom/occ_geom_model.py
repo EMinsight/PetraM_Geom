@@ -183,7 +183,6 @@ class OCCGeom(GmshGeom):
         if self._gso.child_alive():
             m2 = [('---', None, None),
                   ('Terminate geometry process',
-                   self.onTerminateChild, None),
-                  ('---', None, None),]
+                   self.onTerminateChild, None),]
             menu.extend(m2)
         return menu

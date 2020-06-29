@@ -65,10 +65,11 @@ def get_gmsh_major_version():
     return int(ex[0])
 
 use_gmsh_api = True
+'''
 gmsh_Major = get_gmsh_major_version()
 if gmsh_Major <= 3:
     use_gmsh_api = False
-
+'''
 '''
 def enqueue_output(p, queue):
     while True:
@@ -549,10 +550,7 @@ class GmshGeom(GeomTopBase):
         viewer._s_v_loop['mesh'] = s, v
 
     def onUpdateGeoView(self, evt, filename=None):
-        if globals()['gmsh_Major'] == 4 and use_gmsh_api:
-            return self.onUpdateGeoView4(evt, filename=filename)
-        else:
-            assert False, "GMSH 3 is not supported"
+        return self.onUpdateGeoView4(evt, filename=filename)
 
     def walk_over_geom_chidlren(self, geom, stop1=None, stop2=None):
         geom.clear_sequence()
@@ -720,17 +718,10 @@ class GmshGeom(GeomTopBase):
 
     def build_geom(self, stop1=None, stop2=None, filename=None,
                    finalize=False, gui_parent=None):
-
-        if globals()['gmsh_Major'] == 4 and use_gmsh_api:
-            self.build_geom4(stop1=stop1, stop2=stop2,
+        self.build_geom4(stop1=stop1, stop2=stop2,
                              filename=filename,
                              finalize=finalize,
                              gui_parent=gui_parent)
-        else:
-            assert False, "GMSH 3 is not supported"
-            # self.build_geom3(stop1=stop1, stop2=stop2,
-            #                 filename=filename,
-            #                 finalize=finalize)
 
     def onExportGeom(self, evt):
         if not hasattr(self, "_txt_unrolled"):

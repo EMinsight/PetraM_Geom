@@ -1769,7 +1769,6 @@ class Geometry():
         pnt = gp_Pnt(c1[0], c1[1], c1[2])
         dr = gp_Dir(n1[0], n1[1], n1[2])
 
-        from OCC.Core.Geom import Geom_Plane
         pl = Geom_Plane(pnt, dr)
 
         maker = BRepBuilderAPI_MakeFace(pl, self.occ_geom_tolerance)
@@ -3287,9 +3286,79 @@ class Geometry():
         newkey = objs.addobj(ps1, 'ps')
 
         return list(objs), [newkey]
-    
+
     def Circle2DRadiusTwoTangentCurve_build_geom(self, objs, *args):
         tlines, radius, make_face = args
+        print(tlines, radius, make_face)
+
+        tlines = [x.strip() for x in tlines.split(',')]
+        gids = self.get_target1(objs, tlines, 'l')
+
+        e1 = self.edges[gids[0]]
+        e2 = self.edges[gids[1]]
+
+        pnt = gp_Pnt(0, 0, 0)
+        dr = gp_Dir(0, 0, 1)
+
+        pl = Geom_Plane(pnt, dr)
+
+        from OCC.Core.GccAna import GccAna_Circ2d2TanRad
+
+        loc =TopLoc_Location()
+        e1_2d, first1, _last1 = self.bt.CurveOnPlane(e1, pl, loc)
+        e2_2d, first2, _last2 = self.bt.CurveOnPlane(e2, pl, loc)
+
+        p1, v1 = gp_Pnt2d(), gp_Vec2d()
+        e1_2d.D1(first1, p1, v1)
+        p2, v2 = gp_Pnt2d(), gp_Vec2d()
+        e2_2d.D1(first2, p2, v2)
+        
+        l1 = gp_Lin2d(p1, gp_Dir2d(v1))
+        l2 = gp_Lin2d(p2, gp_Dir2d(v2))
+        print(l1, l2)
+
+        from OCC.Core.GccEnt import gccent_Unqualified, GccEnt_QualifiedLin
+        from OCC.Core.Geom2d import Geom2d_Circle
+        
+        l1_q = gccent_Unqualified(l1)
+        l2_q = gccent_Unqualified(l2)
+
+        #l1_q = GccEnt_QualifiedLin(l1, gccent_Unqualified())
+        #l2_q = GccEnt_QualifiedLin(l1, gccent_Unqualified())
+
+        c_solver = GccAna_Circ2d2TanRad(l1_q, l2_q,
+                                     radius, self.occ_geom_tolerance)
+        print(c_solver.IsDone())
+        print(c_solver.NbSolutions())
+        for i in range(c_solver.NbSolutions()):
+            c_sol = c_solver.ThisSolution(i+1)
+            c = Geom2d_Circle(c_sol)
+            
+            edgeMaker = BRepBuilderAPI_MakeEdge(c, pl)
+            edgeMaker.Build()
+            if not edgeMaker.IsDone():
+                assert False, "Can not make circle"
+            edge = edgeMaker.Edge()
+            
+            eid = self.edges.add(edge)
+            shape = self.edges[eid]
+            self.builder.Add(self.shape, shape)
+
+        self.synchronize_topo_list(action='both')
+
+        return list(objs), []
+
+        '''
+        #gp_Lin2d (const gp_Pnt2d &P, const gp_Dir2d &V)
+        print(e1_2d)
+        curve.IsKind(':
+         handle = OCC.Core.Geom.__dict__[kind]
+        
+
+        print(circle) 
+        '''
+
+        
         newkeys = []
         return list(objs), newkeys
     
@@ -4308,8 +4377,10 @@ class Geometry():
                     try:
                         iparent = parent_imap[p]
                     except BaseException:
-                        # continue
-                        assert False, "Not found"
+                        print("parent for ", p, "not found")
+                        continue
+                    
+                        #assert False, "Not found"
 
                     if not iobj in idxmap[iparent]:
                         idxmap[iparent].append(iobj)

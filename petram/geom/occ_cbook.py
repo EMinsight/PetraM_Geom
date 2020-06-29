@@ -7,6 +7,7 @@ hasOCC = False
 try:
     from OCC.Core.GeomAPI import (GeomAPI_Interpolate,
                                   GeomAPI_ProjectPointOnSurf)
+    from OCC.Core.Geom import Geom_Plane    
     from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
     from OCC.Core.TopLoc import TopLoc_Location
     from OCC.Core.TopExp import (TopExp_Explorer,
@@ -81,8 +82,9 @@ try:
                                       BRepAlgoAPI_BuilderAlgo,
                                       BRepAlgoAPI_Defeaturing)
     from OCC.Core.gp import (gp_Ax1, gp_Ax2, gp_Pnt,
-                             gp_Dir, gp_Pnt2d, gp_Trsf,
-                             gp_Vec, gp_XYZ, gp_GTrsf, gp_Mat)
+                             gp_Dir, gp_Pnt2d, gp_Trsf, gp_Vec2d,
+                             gp_Vec, gp_XYZ, gp_GTrsf, gp_Mat,
+                             gp_Lin2d, gp_Dir2d)
     from OCC.Core.GC import (GC_MakeArcOfCircle,
                              GC_MakeSegment,
                              GC_MakeCircle)
