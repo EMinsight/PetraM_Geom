@@ -150,7 +150,14 @@ class Translator():
                                19, 18, 17, 16, 8, 9, 10, 11, 27, 26, 25,
                                24, 23, 22, 21, 20, 47, 50, 48, 49, 51, 46,
                                40, 43, 41, 45, 44, 42, 34, 37, 35, 39, 38,
-                               36, 28, 31, 29, 33, 32, 30, 52, 53, 54, 55]}
+                               36, 28, 31, 29, 33, 32, 30, 52, 53, 54, 55],
+                   'triangle6':[0, 1, 2, 3, 4, 5],
+                   'triangle10':[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                   'triangle15':[0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                                 10, 11, 12, 13, 14],
+                   'triangle21':[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+                                 13, 14, 15, 18, 16, 20, 19, 17]}
+
         if kind in mappers:
             mapper = mappers[kind]
         else:
@@ -164,7 +171,7 @@ class Translator():
             dof_idx = [[fes.DofToVDof(i, d)
                        for d in range(sdim)] for i in dofs]
             verts = data[-n_nodes:]
-            for kk in range(10):
+            for kk in range(len(mapper)):
                 kkv = verts[mapper[kk]]-1
                 nodes[dof_idx[kk][0]] = msh.nodes[kkv][0]
                 nodes[dof_idx[kk][1]] = msh.nodes[kkv][1]
