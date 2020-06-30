@@ -15,12 +15,13 @@ import multiprocessing as mp
 from six.moves.queue import Empty as QueueEmpty
 
 from collections import OrderedDict
-Algorithm2D = OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 3),
+Algorithm2D = OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 5),
                            ("Frontal", 6), ("BAMG", 7), ("DelQuad", 8),
+                           ("FrrontalQuad", 8), ("Paking of parallelograms", 9),
                            ("default", 2)))
-Algorithm3D = OrderedDict((("Delaunay", 1), ("New Delaunay", 2),
+Algorithm3D = OrderedDict((("Delaunay", 1), 
                            ("Frontal", 4),
-                           ("Frontal Hex", 6), ("MMG3D", 7),
+                           ("HXT", 10), ("MMG3D", 7),
                            ("R-tree", 9), ("default", 1)))
 HighOrderOptimize = OrderedDict((("none", 0),
                                  ("optimization", 1),
@@ -278,8 +279,6 @@ class GMSHMeshWrapper():
                               Algorithm2D[self.algorithm])
         gmsh.option.setNumber("Mesh.Algorithm3D",
                               Algorithm3D[self.algorithm3d])
-        gmsh.option.setNumber("Mesh.Algorithm3D",
-                              Algorithm3D[self.algorithm3d])
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
         
@@ -293,10 +292,10 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.Optimize", 0)
         #gmsh.option.setNumber('Geometry.ReparamOnFaceRobust', 1)
 
-        if self.use_ho:
-            gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
-            gmsh.option.setNumber("Mesh.HighOrderOptimize",
-                                  HighOrderOptimize[self.optimize_ho])
+        #if self.use_ho:
+        #    gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
+        #    gmsh.option.setNumber("Mesh.HighOrderOptimize",
+        #                          HighOrderOptimize[self.optimize_ho])
         
         self.target_entities0 = (gmsh.model.getEntities(3),
                                  gmsh.model.getEntities(2),
@@ -324,9 +323,17 @@ class GMSHMeshWrapper():
 
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
+        adim = self.check_algorith_dim()
 
         for mdim in range(maxdim+1):
             for idx, sq in enumerate(self.mesh_sequence):
+                if (mdim == adim and
+                        idx == len(self.mesh_sequence)-1 and
+                        self.use_ho):
+                    # turn on high order if it is the last step
+                    gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
+                    gmsh.option.setNumber("Mesh.HighOrderOptimize",
+                                          HighOrderOptimize[self.optimize_ho])
                 proc, args, kwargs = sq
                 f = getattr(self, proc+"_"+str(mdim)+"D")
 
@@ -752,6 +759,25 @@ class GMSHMeshWrapper():
         os.close(handle)
         gmsh.merge(geo_filename)
         os.remove(geo_filename)
+
+    def check_algorith_dim(self):
+        dims = {'cl': 0,
+                'freevolume':3,
+                'freeface':2,
+                'freeedge':1,
+                'transfinite_volume':3,
+                'transfinite_face':2,
+                'transfinite_edge':1,
+                'copy_face':2,
+                'extrude_face':2,
+                'revolve_face':2,
+                }
+        d = []
+        for sq in self.mesh_sequence:
+            proc, _args, _kwargs = sq
+            d.append(dims[proc])
+
+        return max(d)
 
     '''
     Low-level implementation at each mesh dim
