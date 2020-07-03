@@ -80,7 +80,7 @@ def shape_property_txt(bt, shape):
         surfacecount = system.Mass()
 
         surf, kind = downcast_surface(surf)
-        print(surf, kind)
+        
         txt = ['Surface:',
                ' Kind:\t' + kind,
                ' Area:\t' + str(surfacecount),
@@ -89,14 +89,99 @@ def shape_property_txt(bt, shape):
                ' Periodic (U,V):\t' + str([is_uperiodic, is_vperiodic]),]
 
         if surf.IsKind('Geom_Plane'):
-            a, b, c, d = surf.Coefficient()
-            txt = ', '.join([str(x) for x in (a, b, c, d)])
-            txt.extend(['  Coefficient:\t' + txt])
+            a, b, c, d = surf.Coefficients()
+            txt2 = ', '.join([str(x) for x in (a, b, c, d)])
+            txt.extend(['  Coefficient:\t' + txt2])
 
     if isinstance(shape, TopoDS_Solid):
         txt = ['',]
 
     return '\n'.join(txt)
+
+def find_sameface(bt, shape, face, tol):
+    '''
+    find faces which has same kind,
+    same area, edges with same length
+    '''
+    system = GProp_GProps()
+
+    def count_edges(face):
+        k = 0
+        lens = []
+        for edge in iter_shape_once(face, 'edge', use_ex2=True):
+            brepgprop_LinearProperties(edge, system)
+            lens.append(system.Mass())
+            k = k + 1
+        return k, np.sort(lens)
+    surf = bt.Surface(face)
+    surf, kind = downcast_surface(surf)
+
+    brepgprop_SurfaceProperties(face, system)
+    area = system.Mass()
+    nedges, lengths = count_edges(face)
+
+    samefaces = []
+    for f2 in iter_shape_once(shape, 'face'):
+        surf2 = bt.Surface(f2)
+        surf2, kind2 = downcast_surface(surf2)
+        if kind != kind2:
+            continue
+        brepgprop_SurfaceProperties(f2, system)
+        area2 = system.Mass()
+        if abs(area - area2)/(area + area2) > tol:
+            continue
+        nedges2, lengths2 = count_edges(face)
+        if nedges != nedges2:
+            continue
+        flag = False
+        for l1, l2 in zip(lengths, lengths2):
+            if abs(l1 - l2)/(l1 + l2) > tol:
+                flag = True
+                break
+        if flag:
+            continue
+        samefaces.append(f2)
+
+    return samefaces
+
+def find_sameedge(bt, shape, edge, tol):
+    '''
+    find edges which has same kind and length
+    '''
+    system = GProp_GProps()
+
+    def measure_len(edge):
+        brepgprop_LinearProperties(edge, system)
+        return system.Mass()
+
+    l1 = measure_len(edge)
+    params = bt.Curve(edge)
+    if len(params) == 2:
+        ## null handle case
+        return []
+    
+    curve = params[0]
+    curve, kind = downcast_curve(curve)
+
+    sameedges = []
+
+    for e2 in iter_shape_once(shape, 'edge'):
+        params = bt.Curve(e2)
+        if len(params) == 2:
+            ## null handle case            
+            continue
+        curve2 = params[0]
+        curve2, kind2 = downcast_curve(curve2)
+
+        if kind != kind2:
+            continue
+        l2 = measure_len(e2)
+
+        if abs(l1 - l2)/(l1 + l2) > tol:
+            continue
+
+        sameedges.append(e2)
+    return sameedges
 
 def shape_inspector(shape, inspect_type, shapes):
 
@@ -110,13 +195,13 @@ def shape_inspector(shape, inspect_type, shapes):
         prop = [shape_property_txt(bt, s) for s in shapes]
         return ' \n\n'.join(prop), ''
 
-    if inspect_type == 'smallface':
+    elif inspect_type == 'smallface':
         args, topolist = shapes
         thr = args[0]
         nsmall, smax, faces, areas = check_shape_area(shape, thr,
                                                       return_area=True)
         gids = [topolist.find_gid(f) for f in faces]
-        txt = ',\n'.join([str(gid) + " (area = "+str(a) + ")"
+        txt = ',\n'.join([str(int(gid)) + " (area = "+str(a) + ")"
                           for gid, a in zip(gids, areas)])
 
         txt = txt + '\n smax = ' + str(smax)
@@ -125,13 +210,13 @@ def shape_inspector(shape, inspect_type, shapes):
             data = gids
         return txt, data
 
-    if inspect_type == 'shortedge':
+    elif inspect_type == 'shortedge':
         args, topolist = shapes
         thr = args[0]
         nsmall, lmax, edges, ll = check_shape_length(shape, thr,
                                                      return_area=True)
         gids = [topolist.find_gid(e) for e in edges]
-        txt = ',\n'.join([str(gid) + " (L = "+str(l) + ")"
+        txt = ',\n'.join([str(int(gid)) + " (L = "+str(l) + ")"
                           for gid, l in zip(gids, ll)])
 
         txt = txt + '\n smax = ' + str(lmax)
@@ -140,22 +225,79 @@ def shape_inspector(shape, inspect_type, shapes):
             data = gids
         return txt, data
 
-    if inspect_type == 'dist_p_s':
-        # distance between point and surface
+    elif inspect_type == 'distance':
+        if shape_dim(shapes[0]) > shape_dim(shapes[1]):
+            shapes = (shapes[1], shapes[0])
 
-        pnt = bt.Pnt(shapes[0])
-        p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
-        surf = bt.Surface(shapes[1])
 
-        pj = GeomAPI_ProjectPointOnSurf(pnt, surf)
-        print("number of solution ", pj.NbPoints())
+        if (isinstance(shapes[0], TopoDS_Vertex) and
+                isinstance(shapes[1], TopoDS_Face)):
+            # distance between point and surface            
+            pnt = bt.Pnt(shapes[0])
+            p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            surf = bt.Surface(shapes[1])
 
-        pnt = pj.NearestPoint()
-        p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            pj = GeomAPI_ProjectPointOnSurf(pnt, surf)
+            print("number of solution ", pj.NbPoints())
 
-        print("number of solution ", pj.NbPoints())
+            pnt = pj.NearestPoint()
+            p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
 
-        dist = np.sqrt(np.sum((p1 - p2)**2))
-        ret = dist
+            dist = np.sqrt(np.sum((p1 - p2)**2))
+            ret = dist
+            
+        elif (isinstance(shapes[0], TopoDS_Vertex) and
+              isinstance(shapes[1], TopoDS_Edge)):
+            # distance between point and edge                        
+            pnt = bt.Pnt(shapes[0])
+            p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            assert False, "not implemented"
+
+        elif (isinstance(shapes[0], TopoDS_Vertex) and
+              isinstance(shapes[1], TopoDS_Vertex)):
+            # distance between point and point
+            pnt = bt.Pnt(shapes[0])
+            p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            pnt = bt.Pnt(shapes[1])
+            p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            dist = np.sqrt(np.sum((p1 - p2)**2))
+
+        elif (isinstance(shapes[0], TopoDS_Edge) and
+              isinstance(shapes[1], TopoDS_Face)):
+            # distance between edge and face
+            assert False, "not implemented"
+
+        elif (isinstance(shapes[0], TopoDS_Edge) and
+              isinstance(shapes[1], TopoDS_Edge)):
+            # distance between edge and edge
+            assert False, "not implemented"
+
+        elif (isinstance(shapes[0], TopoDS_Face) and
+              isinstance(shapes[1], TopoDS_Face)):
+            # distance between face and face
+            assert False, "not implemented"
+
+        return str(dist), data
+
+    elif inspect_type == 'findsame':
+        tol, shapes, topolists = shapes
+        facelist = topolists[0]
+        edgelist = topolists[1]
+        gids = []
+        for s in  shapes:
+            if isinstance(s, TopoDS_Face):
+                samefaces = find_sameface(bt, shape, s, tol)
+                gidsf = [facelist.find_gid(f) for f in samefaces]
+                gids.extend(gidsf)
+            elif isinstance(s, TopoDS_Edge):
+                sameedges = find_sameedge(bt, shape, s, tol)
+                gidse = [edgelist.find_gid(e) for e in sameedges]
+                gids.extend(gidse)
+            else:
+                assert False, "finesame support only face and edge"
+        txt = ',\n'.join([str(int(x)) for x in gids])
+        return txt, gids
+    else:
+        assert False, "unknown mode" + inspect_type
     return ret, data
 

@@ -937,7 +937,15 @@ class GMSHMeshWrapper():
 
         self.show_only(dimtags)
         #print("2D meshing for ", dimtags)
-        gmsh.model.mesh.generate(2)
+        alg2d = kwargs.get("alg2d", "default")
+        if alg2d != 'default':
+            gmsh.option.setNumber("Mesh.Algorithm",
+                                  Algorithm2D[alg2d])
+            gmsh.model.mesh.generate(2)
+            gmsh.option.setNumber("Mesh.Algorithm",
+                                  Algorithm2D[self.algorithm])
+        else:
+            gmsh.model.mesh.generate(2)        
         done[2].extend([x for dim, x in tags])
         return done, params
 
@@ -947,7 +955,17 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         tags = [(dim, tag) for dim, tag in dimtags if not tag in done[3]]
         self.show_only(tags, recursive=True)
-        gmsh.model.mesh.generate(3)
+
+        alg3d = kwargs.get("alg3d", "default")
+        if alg3d != 'default':
+            gmsh.option.setNumber("Mesh.Algorithm3D",
+                                  Algorithm3D[alg3d])
+            gmsh.model.mesh.generate(3)
+            gmsh.option.setNumber("Mesh.Algorithm3D",
+                                  Algorithm3D[self.algorithm3d])
+        else:
+            gmsh.model.mesh.generate(3)            
+        
         done[3].extend([x for dim, x in tags])
         return done, params
 
@@ -1022,7 +1040,17 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         tags = [(dim, tag) for dim, tag in dimtags]
         self.show_only(dimtags)
-        gmsh.model.mesh.generate(2)
+
+        alg2d = kwargs.get("alg2d", "default")
+        if alg2d != 'default':
+            gmsh.option.setNumber("Mesh.Algorithm",
+                                    Algorithm2D[alg2d])
+            gmsh.model.mesh.generate(2)
+            gmsh.option.setNumber("Mesh.Algorithm",
+                                   Algorithm2D[self.algorithm])
+        else:
+            gmsh.model.mesh.generate(2)            
+        
         done[2].extend([x for dim, x in tags])
         return done, params
 

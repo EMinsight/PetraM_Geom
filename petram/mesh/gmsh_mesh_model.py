@@ -237,7 +237,10 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             assert False, "can not interpret entity number : " + text
 
         if not isinstance(values, str):
-            assert False, "entity id field must be text"
+            try:
+                values = ",".join([str(int(x)) for x in values])
+            except:
+                assert False, "entity id field must be text or arrays convertible to text"
 
         return values
 
@@ -393,8 +396,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
     def on_created_in_tree(self):
         check = self.geom_group in self.root()['Geometry']
-
         if not check:
+            if len(self.root()['Geometry'].get_children()) == 0:
+                assert False, "No geometry is found in the model"
             self.geom_group = self.root()['Geometry'].get_children()[0].name()
 
     def update_after_ELChanged(self, dlg):

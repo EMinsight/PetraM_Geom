@@ -14,8 +14,8 @@ from ifigure.widgets.miniframe_with_windowlist import DialogWithWindowList
 
 from petram.pi.simple_frame_plus import SimpleFramePlus
 
-choices = ['Property', 'Distance', 'Find small face', 'Find short edge']
-choices2 = ['property', 'distance', 'smallface', 'shortedge']
+choices = ['Property', 'Distance', 'Find small face', 'Find short edge', 'Find same...']
+choices2 = ['property', 'distance', 'smallface', 'shortedge', 'findsame']
 
 def find_surf(x, s, l):
     lines = s[x]
@@ -38,13 +38,16 @@ class GeomInfoPalette(SimpleFramePlus):
                 ['target (p/l/f)', '', 0, {},],]
         elp3 = [['threshold', 1e-6, 300, {},],]
         elp4 = [['threshold', 1e-4, 300, {},],]
+        elp5 = [['entity (l/f)', '', 0, {},],
+                ['tolelance', 1e-5, 300, {}],]
 
         setting = [{'choices':choices,
                     'text': ''},
                    {'elp': elp1},
                    {'elp': elp2},
                    {'elp': elp3},
-                   {'elp': elp4},]           
+                   {'elp': elp4},
+                   {'elp': elp5},]
         ll = [(None, None, 34, setting), ]
 
         p = self
@@ -131,11 +134,13 @@ class GeomInfoPalette(SimpleFramePlus):
         v = geom.geom_data[5]
 
         def show_solids(solids):
+            solids = [int(x) for x in solids]            
             x = [v[xx] for xx in solids]
             faces = np.unique(x)
             show_faces(faces)
             
         def show_faces(faces):
+            faces = [int(x) for x in faces]
             xx = [find_surf(x, s, l) for x in faces]
             lines = np.unique(np.hstack([x[0] for x in xx]))
             points = np.unique(np.hstack([x[1] for x in xx]))
@@ -144,6 +149,7 @@ class GeomInfoPalette(SimpleFramePlus):
             viewer.highlight_point(points, unselect=False)
 
         def show_edges(edges):
+            edges = [int(x) for x in edges]
             points = np.unique(np.hstack([l[x] for x in edges]))
             viewer.highlight_edge(edges)
             viewer.highlight_point(points, unselect=False)
@@ -155,6 +161,14 @@ class GeomInfoPalette(SimpleFramePlus):
 
         if inspect_type == 'shortedge':
             show_edges(self.data)
+
+        if inspect_type == 'findsame':
+            sid = [int(x) for x in self.data if x.idx == 3]
+            if len(sid) > 0:
+                viewer.highlight_face(sid)
+            eid = [int(x) for x in self.data if x.idx == 1]
+            if len(eid) > 0:
+                viewer.highlight_edge(eid)
 
         if inspect_type == 'property':
             p = params[0]

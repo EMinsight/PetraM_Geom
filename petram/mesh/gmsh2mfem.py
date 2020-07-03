@@ -112,7 +112,7 @@ class Translator():
 
         sdim = mesh.SpaceDimension()
         fec_type = mfem.H1_FECollection
-        fe_coll = fec_type(order, sdim)
+        fe_coll = fec_type(order, sdim, mfem.BasisType.ClosedUniform)
         nodal_fes = mfem.FiniteElementSpace(mesh, fe_coll, sdim)
         mesh.SetNodalFESpace(nodal_fes)
         mesh._nodal= nodal_fes
@@ -123,20 +123,19 @@ class Translator():
 
     def move_nodal(self, mesh, kind, elems, kelem, verbose=True):
         msh = self.msh
-        
+
         nodes = mesh.GetNodes()
         sdim = mesh.SpaceDimension()
         fes = mesh._nodal
-        
+
         n_nodes = num_nodes_per_cell[kind]
         n_verts = num_verts_per_cell[kind]
-        
+
         fe = fes.GetFE(kelem)
         ir = fe.GetNodes()
 
         ipoints = np.array([(ir.IntPoint(i).x, ir.IntPoint(i).y, ir.IntPoint(i).z)
                             for i in range(ir.GetNPoints())])
-       
 
         # mapping gmsh index to mfem index
         mappers = {'tetra10': [0, 1, 2, 3, 4, 6, 7, 5, 9, 8],

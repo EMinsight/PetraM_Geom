@@ -1507,7 +1507,6 @@ class Geometry():
         if len(keys) > 1:
             gid_objs = keys[:1]
             gid_tools = keys[1:]
-            print(gid_objs, gid_tools)
             self.fragments(gid_objs, gid_tools,
                            remove_obj=True, remove_tool=True)
 
@@ -1814,8 +1813,8 @@ class Geometry():
         # somehow some points are not projected. we check if all points
         # are projected if not we add it to results.
         ###
-        ###
-        point_shapes = [p for p in iter_shape(result, 'vertex')]
+
+        point_shapes = [p for p in iter_shape_once(result, 'vertex')]
         pnts = [self.bt.Pnt(p) for p in point_shapes]
         ptx = np.array([(pnt.X(), pnt.Y(), pnt.Z(),) for pnt in pnts])
 
@@ -4553,7 +4552,7 @@ class Geometry():
                 self.logfile.write("finalize is on \n")
             if self.queue is not None:
                 self.queue.put((False, "finalize is on"))
-            dprint1('apply frag')
+            dprint1('appling fragmentation')
             self.apply_fragments()
 
         geom_brep = self.make_safe_file(filename, trash, '.brep')
@@ -4657,15 +4656,19 @@ class Geometry():
         shape_inspector = petram.geom.occ_inspect.shape_inspector
         #print(inspect_type, args)
         if inspect_type in ('property', 'distance'):
-            print("here", self.objs, args)
             gids = self.get_target2(self.objs, args)
             shapes = [self.get_shape_for_gid(gid) for gid in gids]
         elif inspect_type == 'shortedge':
             shapes = (args, self.edges)
         elif inspect_type == 'smallface':
             shapes = (args, self.faces)
+        elif inspect_type == 'findsame':
+            gids = [x.strip() for x in args[0].split(',')]
+            gids = self.get_target2(self.objs, gids)
+            shapes = [self.get_shape_for_gid(gid) for gid in gids]
+            shapes = (args[1], shapes, (self.faces, self.edges))
         else:
-            return ''
+            assert False, "unknown mode:" +  inspect_type
         return shape_inspector(self.shape, inspect_type, shapes)
 
     def export_shapes(self, selection, filename):

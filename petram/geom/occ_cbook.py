@@ -156,6 +156,31 @@ def iter_shape(shape, shape_type='shell', exclude_parent=False, use_ex2=False):
         yield sub_shape
         ex.Next()
 
+def iter_shape_once(shape, shape_type='shell', exclude_parent=False, use_ex2=False):
+    mapper = get_mapper(shape, shape_type)
+    seen = topo_seen(mapping=mapper)
+
+    for s in iter_shape(shape, shape_type=shape_type,
+                        exclude_parent=exclude_parent,
+                        use_ex2=use_ex2):
+        if seen.check_shape(s) == 0:
+            yield s
+
+def shape_dim(shape):
+    if isinstance(shape, TopoDS_Solid):
+        return 3
+    if isinstance(shape, TopoDS_Face):
+        return 2
+    if isinstance(shape, TopoDS_Edge):
+        return 1
+    if isinstance(shape, TopoDS_Vertex):
+        return 0
+    if isinstance(shape, TopoDS_Shell):
+        return -2
+    if isinstance(shape, TopoDS_Wire):
+        return -2
+    return -3
+
 def get_mapper(shape, shape_type):
     mapper = TopTools_IndexedMapOfShape()
     topo_abs = __expparam[shape_type][0]
@@ -452,7 +477,7 @@ def measure_face_area(face):
 def check_shape_area(shape, thr, return_area=False):
     surfacecount = []
     faces = []
-    for face in iter_shape(shape, 'face'):
+    for face in iter_shape_once(shape, 'face'):
         a = measure_face_area(face)        
         surfacecount.append(a)
         faces.append(face)
@@ -469,7 +494,7 @@ def check_shape_area(shape, thr, return_area=False):
 def check_shape_length(shape, thr, return_area=False):
     lcount = []
     edges = []
-    for edge in iter_shape(shape, 'edge'):
+    for edge in iter_shape_once(shape, 'edge'):
         l = measure_edge_length(edge)
         lcount.append(l)
         edges.append(edge)
@@ -558,7 +583,8 @@ class topo_seen(list):
 class topo_list():
     name = 'base'
     myclass = type(None)
-
+    gidclass = type(None)
+    
     def __init__(self):
         self.gg = {0: {}, }
         self.d = self.gg[0]
@@ -611,7 +637,7 @@ class topo_list():
                 break
         else:
             assert False, "Can not find a shape number to replace"
-        return idx
+        return self.gidclass(idx)
 
     def get_item_from_group(self, val, group=0):
         return self.gg[group][val]
@@ -661,7 +687,8 @@ class topo_list():
 class topo_list_vertex(topo_list):
     name = 'vertex'
     myclass = TopoDS_Vertex
-
+    gidclass = VertexID
+    
     def child_generator(self, val):
         del val  # unused
         return []
@@ -695,6 +722,7 @@ class topo_list_vertex(topo_list):
 class topo_list_edge(topo_list):
     name = 'edge'
     myclass = TopoDS_Edge
+    gidclass = LineID
 
     def get_children(self, val):
         shape = self[val]
@@ -737,6 +765,7 @@ class topo_list_edge(topo_list):
 class topo_list_wire(topo_list):
     name = 'wire'
     myclass = TopoDS_Wire
+    gidclass = LineLoopID
 
     def get_children(self, val):
         shape = self[val]
@@ -763,7 +792,8 @@ class topo_list_wire(topo_list):
 class topo_list_face(topo_list):
     name = 'face'
     myclass = TopoDS_Face
-
+    gidclass = SurfaceID
+    
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'wire')
@@ -798,7 +828,8 @@ class topo_list_face(topo_list):
 class topo_list_shell(topo_list):
     name = 'shell'
     myclass = TopoDS_Shell
-
+    gidclass = SurfaceLoopID
+    
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'face')
@@ -824,6 +855,7 @@ class topo_list_shell(topo_list):
 class topo_list_solid(topo_list):
     name = 'solid'
     myclass = TopoDS_Solid
+    gidclass = VolumeID
 
     def get_children(self, val):
         shape = self[val]
