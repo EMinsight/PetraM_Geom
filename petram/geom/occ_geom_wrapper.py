@@ -1619,9 +1619,19 @@ class Geometry():
         gid = topolist.add(shape)
         return gid
 
-    def _perform_transform(self, gid, transformer, copy):
-        topolist = self.get_topo_list_for_gid(gid)
-        shape = topolist[gid]
+    def _perform_transform(self, gid, transformer, copy, transformer2=None):
+        if isinstance(gid, (tuple, list)):
+            if len(gid) > 1:
+                shape = self.new_compound(gids = gid)
+                use_compound = True
+            else:
+                topolist = self.get_topo_list_for_gid(gid[0])
+                shape = topolist[gid[0]]
+                use_compound = False            
+        else:
+            topolist = self.get_topo_list_for_gid(gid)
+            shape = topolist[gid]
+            use_compound = False            
 
         transformer.Perform(shape, True)
 
@@ -1629,9 +1639,21 @@ class Geometry():
             assert False, "can not translate"
 
         new_shape = transformer.ModifiedShape(shape)
+        
+        if transformer2 is not None:
+            transformer2.Perform(new_shape, True)
+            new_shape = transformer2.ModifiedShape(new_shape)
+            
         isNew = not new_shape.IsSame(shape)
 
-        if isNew:
+        if use_compound:
+            gids_new = self.register_shaps_balk(new_shape)
+            if not copy:
+               for g in gid:
+                   self.remove(g)
+            self.synchronize_topo_list()
+            return gids_new
+        elif isNew:
             if not copy:
                 self.remove(gid)
             self.builder.Add(self.shape, new_shape)
@@ -1643,7 +1665,9 @@ class Geometry():
                 new_gid = topolist.add(new_shape)
         else:
             new_gid = None
-
+            
+        if isinstance(gid, (tuple, list)):
+            return [new_gid]
         return new_gid
 
     def translate(self, gid, delta, copy=False):
@@ -1665,6 +1689,22 @@ class Geometry():
 
         return self._perform_transform(gid, transformer, copy)
 
+    def translate_rot(self, gid, delta, point_on_axis, axis_dir, angle,
+                      copy=False):
+        trans = gp_Trsf()
+        trans.SetTranslation(gp_Vec(delta[0], delta[1], delta[2]))
+        transformer = BRepBuilderAPI_Transform(trans)
+
+        trans2 = gp_Trsf()
+        x, y, z = point_on_axis
+        ax, ay, az = axis_dir
+        axis_revolution = gp_Ax1(gp_Pnt(x, y, z), gp_Dir(ax, ay, az))
+        trans2.SetRotation(axis_revolution, angle)
+        transformer2 = BRepBuilderAPI_Transform(trans2)        
+
+        return self._perform_transform(gid, transformer, copy,
+                                       transformer2=transformer2)
+    
     def dilate(self, gid, xyz, abc, copy=False):
         x, y, z = xyz
         a, b, c = abc
@@ -3028,6 +3068,133 @@ class Geometry():
 
         self.synchronize_topo_list(action='add')
 
+        return list(objs), newkeys
+
+
+    def ArrayPath_build_geom(self, objs, *args):
+        newkeys = []
+        targets, rpnt, lines, count, margin1, margin2, ignore_rot = args
+        targets = [x.strip() for x in targets.split(',')]
+        rpnt = [x.strip() for x in rpnt.split(',')]        
+        lines = [x.strip() for x in lines.split(',')]
+
+        gids = self.get_target2(objs, targets)
+        gids_l = self.get_target1(objs, lines, 'l')
+        gid_p = self.get_target1(objs, rpnt, 'p')[0]
+
+
+        ## t (length along the path)
+        lines = [self.edges[gid] for gid in gids_l]
+        l = [measure_edge_length(x) for x in lines]
+
+        intvls = np.array([margin1] + [1]*(count-1) + [margin2])
+
+        t = np.cumsum(intvls)
+        t = (t/t[-1])[:-1] * np.sum(l)
+
+
+        if len(lines) > 1:
+            curve, first, last = self.bt.Curve(lines[0])
+            pnt = curve.Value(first)
+            p11 = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+            pnt = curve.Value(last)
+            p12 = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+            
+            curve, first, last = self.bt.Curve(lines[1])
+            pnt = curve.Value(first)
+            p21 = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+            pnt = curve.Value(last)
+            p22 = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+
+            d1 = np.min((np.sum((p11-p21)**2),
+                         np.sum((p11-p22)**2)))
+            d2 = np.min((np.sum((p12-p21)**2),
+                         np.sum((p12-p22)**2)))
+            if d2 < d1:
+                flip = False
+                endpoint = p12
+            else:
+                flip = True
+                endpoint = p11
+        else:
+            curve, _first, last = self.bt.Curve(lines[0])
+            pnt = curve.Value(last)
+            endpoint = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+                        
+        curve, _first, last = self.bt.Curve(lines[0])
+        pnt = curve.Value(last)
+        endpoint = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+
+        k = 0
+        sols = []
+        flip = False
+
+        while len(t) > 0:
+            line = lines[k]
+
+            if k > 0:
+                curve, first, last = self.bt.Curve(lines[0])
+                pnt = curve.Value(last)
+                p1 = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+                pnt = curve.Value(last)
+                p2 = np.array((pnt.X(), pnt.Y(), pnt.Z()))
+                if (np.sum((p1 - endpoint)**2) >
+                        np.sum((p2 - endpoint)**2)):
+                    flip = True
+                    endpoint = p1
+                else:
+                    endpoint = p2
+
+            ufit = find_point_on_curve(line, t, tol=1e-4, flip=flip)
+            sols.append([line, ufit])
+            t = t[len(ufit):] - measure_edge_length(line)
+            if len(t) == 0:
+                break
+            k = k + 1
+
+        transforms = []
+        gpnt = gp_Pnt()
+        gvec = gp_Vec()
+        for sol in sols:
+            l, ufit = sol
+            curve, _first, _last = self.bt.Curve(l)
+            for u in ufit:
+                curve.D1(u, gpnt, gvec)
+                p = np.array((gpnt.X(), gpnt.Y(), gpnt.Z()))
+                v = np.array((gvec.X(), gvec.Y(), gvec.Z()))
+                transforms.append((p, v))
+
+        p0 = self.get_point_coord(gid_p)        
+        gids_new = []
+        for i, trans in enumerate(transforms):
+            if i == 0:
+                v0 = trans[1]
+                v0 = v0/ np.linalg.norm(v0)
+
+            p1, v1 = trans
+            v1 = v1/ np.linalg.norm(v0)            
+            tt = p1 - p0
+            
+            v2 = np.cross(v0, v1)
+
+            if ignore_rot or np.sum(v2**2) < 1e-10:
+                 gids_new.extend(self.translate(gids, tt, copy=True))
+
+            else:
+                poa = p1
+                cs = np.sum(v1*v0)
+                ss = np.linalg.norm(v2)
+                v2 = v2/ss
+                ang = np.arctan2(ss, cs)
+                
+                gids_new.extend(self.translate_rot(gids, tt, poa,
+                                                   v2, ang, copy=True))
+
+        print(gids_new)
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'arr'))
+
+        self.synchronize_topo_list()
         return list(objs), newkeys
 
     # fillet/chamfer
@@ -4655,9 +4822,14 @@ class Geometry():
 
         shape_inspector = petram.geom.occ_inspect.shape_inspector
         #print(inspect_type, args)
-        if inspect_type in ('property', 'distance'):
+        if inspect_type in 'property':
             gids = self.get_target2(self.objs, args)
             shapes = [self.get_shape_for_gid(gid) for gid in gids]
+        elif inspect_type in 'distance':
+            gids = self.get_target2(self.objs, args[1:])
+            shapes = [self.get_shape_for_gid(gid) for gid in gids]
+            s0 = self.vertices[args[0]]
+            shapes = [s0] + [self.get_shape_for_gid(gid) for gid in gids]            
         elif inspect_type == 'shortedge':
             shapes = (args, self.edges)
         elif inspect_type == 'smallface':

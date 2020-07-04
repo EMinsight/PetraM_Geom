@@ -22,7 +22,7 @@ class GeomBase(Model, NS_mixin):
     def __init__(self, *args, **kwargs):
         super(GeomBase, self).__init__(*args, **kwargs)
         NS_mixin.__init__(self, *args, **kwargs)
-        
+
     def onItemSelChanged(self, evt):
         '''
         GUI response when model object is selected in
@@ -31,7 +31,7 @@ class GeomBase(Model, NS_mixin):
 
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('geom', self)
-        
+
 class GeomTopBase(GeomBase):
     def attribute_set(self, v):
         v = super(GeomBase, self).attribute_set(v)
@@ -46,6 +46,6 @@ class GeomTopBase(GeomBase):
         '''
         raise NotImplementedError(
              "you must specify this method in subclass")
-        
+
 # this is needed for backward compatibility        
 from petram.mfem_model import MFEM_GeomRoot

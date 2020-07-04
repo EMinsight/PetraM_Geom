@@ -1041,15 +1041,60 @@ class ArrayRotByPoints(GeomPB):
     vt = Vtable(data0)
 
     @classmethod
-    def fancy_menu_name(self):
+    def fancy_menu_name(cls):
         return 'Angular (by points)'
 
     @classmethod
-    def fancy_tree_name(self):
+    def fancy_tree_name(cls):
         return 'ArrayRot'
 
+class ArrayPath(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Objects (v/f/l/p)',
+                                             default="",
+                                             tip="object to move")),
+             ('ref_pnt', VtableElement('ref_pnt', type='string',
+                                         default='',
+                                         guilabel='Reference Point',
+                                         tip="Reference point of object")),
+             ('pathlines', VtableElement('pathlines', type='string',
+                                         default='',
+                                         guilabel='Path(lines)',
+                                         tip="Path to crate array")),
+             ('array_count', VtableElement('array_count', type='int',
+                                           guilabel='Count',
+                                           default=1,
+                                           tip="Center of Circle")),
+             ('margin_start', VtableElement('margin_start',
+                                            type='float',
+                                            guilabel='Margin(start)',
+                                            default=1,
+                                            tip="Margin at the path beginning")),
+             ('margin_end', VtableElement('margin_end',
+                                          type='float',
+                                          guilabel='Margin(end)',
+                                          default=1,
+                                          tip="Margin at the path end")),
+             ('ignore_angle', VtableElement('ignore_angle',
+                                            type='bool',
+                                            guilabel='Translation only',
+                                            default=False,
+                                            tip="Ignore rotation along the path")), )
 
-data0 = (('target_object', VtableElement('target_object', type='string',
+         
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(cls):
+        return 'Path'
+
+    @classmethod
+    def fancy_tree_name(cls):
+        return 'ArrayPath'
+
+
+data0 = (('target_object', VtableElement('target_object',
+                                         type='string',
                                          guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")),
@@ -1074,12 +1119,11 @@ data0 = (('target_object', VtableElement('target_object', type='string',
                                     default=True,
                                     tip="Keep original")), )
 
-
 class Flip(GeomPB):
     vt = Vtable(data0)
 
-
-data0 = (('target_object', VtableElement('target_object', type='string',
+data0 = (('target_object', VtableElement('target_object',
+                                         type='string',
                                          guilabel='Volume',
                                          default="",
                                          tip="object to add fillet")),
@@ -1095,7 +1139,6 @@ data0 = (('target_object', VtableElement('target_object', type='string',
 
 class Fillet(GeomPB):
     vt = Vtable(data0)
-
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Volume',
@@ -1118,12 +1161,11 @@ data0 = (('target_object', VtableElement('target_object', type='string',
 class Chamfer(GeomPB):
     vt = Vtable(data0)
 
-
-data0 = (('target_object', VtableElement('target_object', type='string',
+data0 = (('target_object', VtableElement('target_object',
+                                         type='string',
                                          guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")), )
-
 
 class Copy(GeomPB):
     vt = Vtable(data0)

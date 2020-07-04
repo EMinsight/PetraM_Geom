@@ -106,6 +106,7 @@ class OCCGeom(GmshGeom):
                                                  healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                                                 ArrayPath,
                                                  ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
         return [Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
@@ -119,6 +120,7 @@ class OCCGeom(GmshGeom):
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, WPParallelToPlane,
                 healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                ArrayPath,                
                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine]
 
     def get_possible_child_menu(self):
@@ -137,6 +139,7 @@ class OCCGeom(GmshGeom):
                                                  healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                                                 ArrayPath,
                                                  ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
 
         return [("Points...", Point), ("", PointCenter), ("", PointOnEdge),
@@ -155,7 +158,8 @@ class OCCGeom(GmshGeom):
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
                 ("Translate...", Move,), ("", MoveByPoints), ("", Rotate), ("", RotateCenterPoints),
                 ("", Flip), ("!", Scale),
-                ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("!", ArrayRotByPoints),
+                ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("", ArrayRotByPoints),
+                ("!", ArrayPath), 
                 ("Boolean...", Union), ("", MergeFace), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints), ("!", WPParallelToPlane),

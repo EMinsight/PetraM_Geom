@@ -65,51 +65,6 @@ def get_gmsh_major_version():
     return int(ex[0])
 
 use_gmsh_api = True
-'''
-gmsh_Major = get_gmsh_major_version()
-if gmsh_Major <= 3:
-    use_gmsh_api = False
-'''
-'''
-def enqueue_output(p, queue):
-    while True:
-        line = p.stdout.readline()
-
-        queue.put(line.strip())
-        if p.poll() is not None:
-            queue.put("End of Thread")
-            return
-        print(line.strip())
-    queue.put("End of Thread")
-
-
-def collect_std_out(p, verbose=True):
-    q = Queue()
-    t = Thread(target=enqueue_output, args=(p, q))
-    t.daemon = True  # thread dies with the program
-    t.start()
-
-    lines = []
-    alive = True
-    while True:
-
-        time.sleep(0.01)
-
-        try:
-            line = q.get_nowait()  # or q.get(timeout=.1)
-        except Empty:
-            if p.poll() is not None:
-                print('proces exited')
-                break
-            else:
-                continue
-        ec = p.poll()
-        if ec is not None and ec < 0:
-            print("RETURNIng due to this?")
-            break  # on unix, this means process killed by a signal
-        lines.append(line)
-    return lines, p.poll()
-'''
 
 def get_geom_key(obj):
     if obj.__class__.__name__ in geom_key_dict:

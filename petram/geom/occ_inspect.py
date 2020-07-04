@@ -185,7 +185,7 @@ def find_sameedge(bt, shape, edge, tol):
 
 def shape_inspector(shape, inspect_type, shapes):
 
-    print("inspection ", shape, inspect_type, shapes)
+    #print("inspection ", shape, inspect_type, shapes)
     bt = BRep_Tool()
 
     ret = ''
@@ -229,7 +229,6 @@ def shape_inspector(shape, inspect_type, shapes):
         if shape_dim(shapes[0]) > shape_dim(shapes[1]):
             shapes = (shapes[1], shapes[0])
 
-
         if (isinstance(shapes[0], TopoDS_Vertex) and
                 isinstance(shapes[1], TopoDS_Face)):
             # distance between point and surface            
@@ -238,20 +237,40 @@ def shape_inspector(shape, inspect_type, shapes):
             surf = bt.Surface(shapes[1])
 
             pj = GeomAPI_ProjectPointOnSurf(pnt, surf)
-            print("number of solution ", pj.NbPoints())
+            #print("number of solution ", pj.NbPoints())
 
             pnt = pj.NearestPoint()
             p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
 
             dist = np.sqrt(np.sum((p1 - p2)**2))
             ret = dist
-            
+            txt = "\n".join(["Number of projection point: " +
+                             str(pj.NbPoints()),
+                             "Nearest point: "+  str(p2),
+                             "Distance: " + str(dist)])
+            return txt, data
+
         elif (isinstance(shapes[0], TopoDS_Vertex) and
               isinstance(shapes[1], TopoDS_Edge)):
-            # distance between point and edge                        
+            # distance between point and edge
             pnt = bt.Pnt(shapes[0])
             p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
-            assert False, "not implemented"
+            curve, _first, _last = bt.Curve(shapes[1])
+
+            pj = GeomAPI_ProjectPointOnCurve(pnt, curve)
+            #print("number of solution ", pj.NbPoints())
+
+            pnt = pj.NearestPoint()
+            p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+
+            dist = np.sqrt(np.sum((p1 - p2)**2))
+            ret = dist
+
+            txt = "\n".join(["Number of projection point: " +
+                             str(pj.NbPoints()),
+                             "Nearest point: "+  str(p2),
+                             "Distance: " + str(dist)])
+            return txt, data
 
         elif (isinstance(shapes[0], TopoDS_Vertex) and
               isinstance(shapes[1], TopoDS_Vertex)):
@@ -262,6 +281,9 @@ def shape_inspector(shape, inspect_type, shapes):
             p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
             dist = np.sqrt(np.sum((p1 - p2)**2))
 
+            txt = "Distance: " + str(dist)
+            return txt, data
+            
         elif (isinstance(shapes[0], TopoDS_Edge) and
               isinstance(shapes[1], TopoDS_Face)):
             # distance between edge and face
@@ -276,14 +298,25 @@ def shape_inspector(shape, inspect_type, shapes):
               isinstance(shapes[1], TopoDS_Face)):
             # distance between face and face
             assert False, "not implemented"
-
-        return str(dist), data
+        else:
+            assert False, "not implemented"
 
     elif inspect_type == 'findsame':
         tol, shapes, topolists = shapes
         facelist = topolists[0]
         edgelist = topolists[1]
         gids = []
+        nface = 0
+        nedge = 0
+        for s in  shapes:
+            if isinstance(s, TopoDS_Face):
+                nface = nface + 1
+            if isinstance(s, TopoDS_Edge):
+                nedge = nedge + 1
+                
+        assert nface > 0 or nedge > 0, "Specify either faces or edges"
+        assert nface == 0 or nedge == 0, "Specify either faces or edges"
+
         for s in  shapes:
             if isinstance(s, TopoDS_Face):
                 samefaces = find_sameface(bt, shape, s, tol)
@@ -295,7 +328,13 @@ def shape_inspector(shape, inspect_type, shapes):
                 gids.extend(gidse)
             else:
                 assert False, "finesame support only face and edge"
+        gids_int = np.unique([int(x) for x in gids])
+        if nface > 0:
+            gids = [SurfaceID(int(x)) for x in gids_int]
+        if nedge > 0:
+            gids = [LineID(int(x)) for x in gids_int]
         txt = ',\n'.join([str(int(x)) for x in gids])
+
         return txt, gids
     else:
         assert False, "unknown mode" + inspect_type

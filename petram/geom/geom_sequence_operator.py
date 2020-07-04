@@ -118,6 +118,7 @@ class GeomSequenceOperator():
                 p = GMSHGeometryGenerator()
 
         p.start()
+
         self._p = p
 
     def check_create_new_child(self, use_occ, pgb):
@@ -277,7 +278,10 @@ class GeomSequenceOperator():
         if new_process:
             self.terminate_child()
             self.create_new_child(gui.use_occ_preview, progressbar)
-
+            if not self.child_alive():
+                del self._p
+                return False, "child process did not start"
+            
         #else:
         #    ll = len(self._prev_sequence)
         #    start_idx = ll

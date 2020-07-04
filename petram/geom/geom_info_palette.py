@@ -173,7 +173,6 @@ class GeomInfoPalette(SimpleFramePlus):
         if inspect_type == 'property':
             p = params[0]
             idx = [int(p[1:])]
-            print(idx)
             if p.startswith('f'):
                 show_faces(idx)
             if p.startswith('l'):

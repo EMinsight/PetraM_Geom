@@ -6,7 +6,8 @@ hasOCC = False
 
 try:
     from OCC.Core.GeomAPI import (GeomAPI_Interpolate,
-                                  GeomAPI_ProjectPointOnSurf)
+                                  GeomAPI_ProjectPointOnSurf,
+                                  GeomAPI_ProjectPointOnCurve)    
     from OCC.Core.Geom import Geom_Plane    
     from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
     from OCC.Core.TopLoc import TopLoc_Location
@@ -118,7 +119,8 @@ try:
 
     __ex1 = TopExp_Explorer()
     __ex2 = TopExp_Explorer()
-    
+    _system = GProp_GProps()
+    _bt = BRep_Tool()
     __expparam = {'compound': (TopAbs_COMPOUND, topods_Compound, ''),
                   'compsolid': (TopAbs_COMPSOLID, topods_CompSolid, ''),
                   'solid': (TopAbs_SOLID, topods_Solid, ''),                  
@@ -465,20 +467,56 @@ def box_containing_bbox(normal, cptx, xmin, ymin, zmin,
     return box
 
 def measure_edge_length(edge):
-    system = GProp_GProps()
-    brepgprop_LinearProperties(edge, system)
-    return system.Mass()
+    brepgprop_LinearProperties(edge, _system)
+    return _system.Mass()
 
 def measure_face_area(face):
-    system = GProp_GProps()
-    brepgprop_SurfaceProperties(face, system)
-    return system.Mass()
+    brepgprop_SurfaceProperties(face, _system)
+    return _system.Mass()
+
+def find_point_on_curve(edge, lengths, tol=1e-4, flip=False):
+
+    length = measure_edge_length(edge)
+
+    curve, first, last = _bt.Curve(edge)
+
+    # Number of points
+    segs = 100
+
+    while segs < 1e5:
+
+        if flip:
+            u = np.linspace(last, first, segs)
+        else:
+            u = np.linspace(first, last, segs)
+
+        pnts = [curve.Value(x) for x in u]
+        ptx = np.array([(p.X(), p.Y(), p.Z()) for p in pnts])
+        l = np.cumsum(np.sqrt(np.sum((ptx[:-1] - ptx[1:])**2, -1)))
+        rtol = abs(l[-1]-length)/length
+        if rtol < tol:
+            break
+        # this array converges somewhat different value from
+        # what brepgprop returns. We check convergence with the
+        # last step value
+
+        length = l[-1]
+        segs = segs * 3
+
+    assert rtol < tol, ("(fint_point_on_curve) cannot " +
+                        "achive request tol. : "+str(tol))
+
+    l = np.hstack(([0], l))/l[-1]*length
+    flag = (lengths <= length)
+
+    ufit = np.interp(lengths[flag], l, u)
+    return ufit
 
 def check_shape_area(shape, thr, return_area=False):
     surfacecount = []
     faces = []
     for face in iter_shape_once(shape, 'face'):
-        a = measure_face_area(face)        
+        a = measure_face_area(face)
         surfacecount.append(a)
         faces.append(face)
 
