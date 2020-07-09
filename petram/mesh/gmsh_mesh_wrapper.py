@@ -285,6 +285,7 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         gmsh.option.setNumber("General.ExpertMode",
                               1 if self.use_expert_mode else 0)
+        self.maxthreads = (3,3,3,3)
         gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
@@ -334,6 +335,7 @@ class GMSHMeshWrapper():
                     gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
                     gmsh.option.setNumber("Mesh.HighOrderOptimize",
                                           HighOrderOptimize[self.optimize_ho])
+                    #gmsh.option.setNumber("Mesh.HighOrderDistCAD", 1)
                 proc, args, kwargs = sq
                 f = getattr(self, proc+"_"+str(mdim)+"D")
 
@@ -912,11 +914,11 @@ class GMSHMeshWrapper():
         dimtags = self.expand_dimtags(dimtags, return_dim=1)
 
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
-        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
+        #tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
 
         self.show_only(dimtags)
         gmsh.model.mesh.generate(1)
-        done[1].extend([x for dim, x in tags])
+        done[1].extend([x for dim, x in dimtags])
         return done, params
 
     @set_restore_maxmin_cl
@@ -933,7 +935,7 @@ class GMSHMeshWrapper():
         dimtags = self.expand_dimtags(dimtags, return_dim=2)
 
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
-        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
+        #tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
 
         self.show_only(dimtags)
         #print("2D meshing for ", dimtags)
@@ -946,7 +948,7 @@ class GMSHMeshWrapper():
                                   Algorithm2D[self.algorithm])
         else:
             gmsh.model.mesh.generate(2)        
-        done[2].extend([x for dim, x in tags])
+        done[2].extend([x for dim, x in dimtags])
         return done, params
 
     @set_restore_maxmin_cl
@@ -1024,13 +1026,13 @@ class GMSHMeshWrapper():
         dimtags.extend(embedl)
 
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
-        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
+        #tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
         self.show_only(dimtags)
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
         gmsh.model.mesh.generate(1)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)
-        done[1].extend([x for dim, x in tags])
+        done[1].extend([x for dim, x in dimtags])
 
         return done, params
 

@@ -433,7 +433,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         dst = write(parent,
-                    deaultfile='Untitled.'+ext,
+                    defaultfile='Untitled.'+ext,
                     message='Enter mesh file name')
 
         

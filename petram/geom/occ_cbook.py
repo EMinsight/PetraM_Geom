@@ -520,9 +520,14 @@ def check_shape_area(shape, thr, return_area=False):
         surfacecount.append(a)
         faces.append(face)
 
-    smax = np.max(surfacecount)
-    idx = np.where(surfacecount < smax*thr)[0]
-    faces = [faces[i] for i in idx]
+    if len(faces) == 0:
+        smax = 0.0
+        idx = []
+        faces = []
+    else:
+        smax = np.max(surfacecount)
+        idx = np.where(surfacecount < smax*thr)[0]
+        faces = [faces[i] for i in idx]
 
     if return_area:
         areas = [surfacecount[i] for i in idx]

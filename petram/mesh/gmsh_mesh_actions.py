@@ -159,8 +159,10 @@ class FreeVolume(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        values = self.vt.make_value_or_expression(self)
+        gid = self.eval_enitity_id(values[0])
         try:
-            ret['volume'] = [int(x) for x in self.geom_id.split(',')]
+            ret['volume'] = [int(x) for x in self.gid.split(',')]
         except:
             pass
         return ret, 'volume'

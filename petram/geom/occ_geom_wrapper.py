@@ -1320,7 +1320,7 @@ class Geometry():
         if keep_highest:
             result = self.select_highest_dim(result)
 
-        nsmall, smax, faces = check_shape_area(shape, 1e-6)
+        nsmall, smax, faces = check_shape_area(result, 1e-6)
         if nsmall > 0:
             dprint1("!!!!! after boolean " + str(nsmall) + " faces are found too small")
         new_objs = self.register_shaps_balk(result)
