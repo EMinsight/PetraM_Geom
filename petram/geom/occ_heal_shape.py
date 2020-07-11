@@ -15,7 +15,7 @@ def _fix_Degenerated(shape, verbose=False):
         print(" - Fixing degenerated edges and faces")
 
     rebuild = ShapeBuild_ReShape()
-    for edge in iter_shape(shape, 'edge'):
+    for edge in iter_shape_once(shape, 'edge'):
         if BRep_Tool.Degenerated(edge):
             rebuild.Remove(edge)
     shape = rebuild.Apply(shape)
@@ -24,7 +24,7 @@ def _fix_Degenerated(shape, verbose=False):
     topexp_MapShapes(shape, TopAbs_FACE, mapper)
 
     rebuild = ShapeBuild_ReShape()
-    for face in iter_shape(shape, 'face'):
+    for face in iter_shape_once(shape, 'face'):
         sff = ShapeFix_Face(face)
         sff.SetFixAddNaturalBoundMode(True)
         sff.SetFixSmallAreaWireMode(True)
@@ -55,7 +55,7 @@ def _fix_Degenerated(shape, verbose=False):
     shape = rebuild.Apply(shape)
 
     rebuild = ShapeBuild_ReShape()
-    for edge in iter_shape(shape, 'edge'):
+    for edge in iter_shape_once(shape, 'edge'):
         if BRep_Tool.Degenerated(edge):
             rebuild.Remove(edge)
     shape = rebuild.Apply(shape)
@@ -117,7 +117,7 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
     shape = rebuild.Apply(shape)
     
     rebuild = ShapeBuild_ReShape()
-    for edge in iter_shape(shape, 'edge'):
+    for edge in iter_shape_once(shape, 'edge'):
         system = GProp_GProps()
         brepgprop_LinearProperties(edge, system)
         if system.Mass() < tolerance:
@@ -126,7 +126,7 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
     shape = rebuild.Apply(shape)
 
     rebuild = ShapeBuild_ReShape()
-    for edge in iter_shape(shape, 'edge'):
+    for edge in iter_shape_once(shape, 'edge'):
         if BRep_Tool.Degenerated(edge):
             rebuild.Remove(edge)
     shape = rebuild.Apply(shape)
@@ -182,7 +182,7 @@ def _sew_Faces(shape, verbose=False, tolerance=1e-6):
         print(" - Sew faces")
 
     sewedObj = BRepBuilderAPI_Sewing(tolerance)
-    for face in iter_shape(shape, 'face'):
+    for face in iter_shape_once(shape, 'face'):
         sewedObj.Add(face)
 
     sewedObj.Perform()
@@ -199,7 +199,7 @@ def _make_Solids(shape, verbose=False, tolerance=1e-6):
     ms = BRepBuilderAPI_MakeSolid()
 
     count = 0
-    for shell in iter_shape(shape, 'shell'):
+    for shell in iter_shape_once(shape, 'shell'):
         ms.Add(shell)
         count = count + 1
         
@@ -210,14 +210,14 @@ def _make_Solids(shape, verbose=False, tolerance=1e-6):
         ba = BRepCheck_Analyzer(shape)
         if ba.IsValid():
             sfs = ShapeFix_Shape()
-            sfs.Init(ms)
+            sfs.Init(shape)
             sfs.SetPrecision(tolerance)
             sfs.SetMaxTolerance(tolerance)
             sfs.Perform()
 
             shape = sfs.Shape()
 
-            for solid in iter_shape(shape, solid):
+            for solid in iter_shape_once(shape, 'solid'):
                 newsolid = solid
                 breplib_OrientClosedSolid(newsolid)
                 rebuild = ShapeBuild_ReShape()
@@ -289,7 +289,7 @@ def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
         print("Healing shapes (tolerance = ", str(tolerance) + ")")
 
     surfacecount = 0
-    for face in iter_shape(shape, 'face'):
+    for face in iter_shape_once(shape, 'face'):
         system = GProp_GProps()
         brepgprop_SurfaceProperties(face, system)
         surfacecount += system.Mass()
@@ -313,7 +313,7 @@ def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
 
     if do_final:
         rebuild = ShapeBuild_ReShape()
-        for edge in iter_shape(shape, 'edge'):
+        for edge in iter_shape_once(shape, 'edge'):
             if BRep_Tool.Degenerated(edge):
                 rebuild.Remove(edge)
         shape = rebuild.Apply(shape)
@@ -322,7 +322,7 @@ def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
         shape = _make_Solids(shape, verbose=False, tolerance=tolerance)
 
     surfacecount2 = 0
-    for face in iter_shape(shape, 'face'):
+    for face in iter_shape_once(shape, 'face'):
         system = GProp_GProps()
         brepgprop_SurfaceProperties(face, system)
         surfacecount2 += system.Mass()

@@ -1274,45 +1274,13 @@ class GeomPB_Bool(GeomPB):
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
-
-ddata = (('objplus', VtableElement('objplus', type='string',
-                                   guilabel='+ (v/f/l/p)',
-                                   default="",
-                                   tip="added objects")),
-         ('objminus', VtableElement('objminus', type='string',
-                                    guilabel='- (v/f/l/p)',
-                                    default="",
-                                    tip="objects to be subtracted")),)
-
-
-class Difference(GeomPB_Bool):
-    vt = Vtable(ddata)
-
-
-udata = (('objplus', VtableElement('obj1', type='string',
-                                   guilabel='Input (v/f/l/p)',
-                                   default="",
-                                   tip="objects")),
-         ('tool_object', VtableElement('tool_object', type='string',
-                                       guilabel='Tool Obj. (v/f/l/p)',
-                                       default="",
-                                       tip="object to move")),)
-
-
-class Union(GeomPB_Bool):
-    vt = Vtable(udata)
-
-    @classmethod
-    def fancy_menu_name(self):
-        return 'Union'
-
-    @classmethod
-    def fancy_tree_name(self):
-        return "Union"
-
+class GeomPB_Bool_with_UP(GeomPB):
     def attribute_set(self, v):
-        v = super(Union, self).attribute_set(v)
+        v = super(GeomPB, self).attribute_set(v)
         self.vt.attribute_set(v)
+        v["delete_input"] = True
+        v["delete_tool"] = True
+        v["keep_highest"] = False
         v["use_upgrade"] = False
         return v
     
@@ -1357,6 +1325,40 @@ class Union(GeomPB_Bool):
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
+
+ddata = (('objplus', VtableElement('objplus', type='string',
+                                   guilabel='+ (v/f/l/p)',
+                                   default="",
+                                   tip="added objects")),
+         ('objminus', VtableElement('objminus', type='string',
+                                    guilabel='- (v/f/l/p)',
+                                    default="",
+                                    tip="objects to be subtracted")),)
+
+
+class Difference(GeomPB_Bool_with_UP):
+    vt = Vtable(ddata)
+
+udata = (('objplus', VtableElement('obj1', type='string',
+                                   guilabel='Input (v/f/l/p)',
+                                   default="",
+                                   tip="objects")),
+         ('tool_object', VtableElement('tool_object', type='string',
+                                       guilabel='Tool Obj. (v/f/l/p)',
+                                       default="",
+                                       tip="object to move")),)
+
+class Union(GeomPB_Bool_with_UP):
+    vt = Vtable(udata)
+
+    @classmethod
+    def fancy_menu_name(cls):
+        return 'Union'
+
+    @classmethod
+    def fancy_tree_name(cls):
+        return "Union"
+        
 class Union2(Union):
     vt = Vtable(udata)
 
@@ -1370,10 +1372,10 @@ class Union2D(GeomPB_Bool):
     vt = Vtable(udata)
 
     @classmethod
-    def fancy_menu_name(self):
+    def fancy_menu_name(cls):
         return 'Union'
 
-class Intersection(GeomPB_Bool):
+class Intersection(GeomPB_Bool_with_UP):
     vt = Vtable(udata)
 
 

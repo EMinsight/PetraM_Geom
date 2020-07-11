@@ -1337,20 +1337,22 @@ class Geometry():
                                upgrade=upgrade)
 
     def intersection(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
-                     keep_highest=False):
+                     keep_highest=False, upgrade=False):
 
         return self.do_boolean('common', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
-                               keep_highest=keep_highest)
+                               keep_highest=keep_highest,
+                               upgrade=upgrade)    
 
     def difference(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
-                   keep_highest=False):
+                   keep_highest=False, upgrade=False):
 
         return self.do_boolean('cut', gid_objs, gid_tools,
                                remove_tool=remove_tool,
                                remove_obj=remove_obj,
-                               keep_highest=keep_highest)
+                               keep_highest=keep_highest,
+                               upgrade=upgrade)        
 
     def fragments(self, gid_objs, gid_tools, remove_tool=True, remove_obj=True,
                   keep_highest=False):
@@ -2852,12 +2854,18 @@ class Geometry():
 
         gids = self.get_target2(objs, targets)
 
+        '''
         for gid in gids:
             new_gid = self.rotate(gid, point_on_axis, axis_dir,
                                   np.pi * angle / 180., copy=keep)
             if new_gid is not None:
                 newkeys.append(objs.addobj(new_gid, 'mv'))
-
+        '''
+        new_gids = self.rotate(gids, point_on_axis, axis_dir,
+                               np.pi * angle / 180., copy=keep)
+        for new_gid in new_gids:
+            newkeys.append(objs.addobj(new_gid, 'mv'))
+        
         self.synchronize_topo_list(action='both')
 
         return list(objs), newkeys
@@ -3355,7 +3363,7 @@ class Geometry():
         return self._Union_build_geom(objs, *args, **kwargs)
 
     def Difference_build_geom(self, objs, *args):
-        tp, tm, delete_input, delete_tool, keep_highest = args
+        tp, tm, delete_input, delete_tool, keep_highest, do_upgrade = args
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]
 
@@ -3365,7 +3373,8 @@ class Geometry():
         gids_new = self.difference(gid_objs, gid_tools,
                                    remove_obj=delete_input,
                                    remove_tool=delete_tool,
-                                   keep_highest=keep_highest)
+                                   keep_highest=keep_highest,
+                                   upgrade=do_upgrade)        
 
         newkeys = []
         for gid in gids_new:
@@ -3377,7 +3386,7 @@ class Geometry():
         return list(objs), newkeys
 
     def Intersection_build_geom(self, objs, *args):
-        tp, tm, delete_input, delete_tool, keep_highest = args
+        tp, tm, delete_input, delete_tool, keep_highest, do_upgrade = args
         tp = [x.strip() for x in tp.split(',')]
         tm = [x.strip() for x in tm.split(',')]
 
@@ -3387,7 +3396,8 @@ class Geometry():
         gids_new = self.intersection(gid_objs, gid_tools,
                                      remove_obj=delete_input,
                                      remove_tool=delete_tool,
-                                     keep_highest=keep_highest)
+                                     keep_highest=keep_highest,
+                                     upgrade=do_upgrade)                
 
         newkeys = []
         for gid in gids_new:
