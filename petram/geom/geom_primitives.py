@@ -46,7 +46,22 @@ class Point(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'By XYZ'
+        return 'Point'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Point'
+
+class PointOCC(Point):
+    vt = Vtable(pdata)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'by XYZ'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Point'
 
 
 pdata = (('surf', VtableElement('surf', type='string',
@@ -68,7 +83,7 @@ class PointByUV(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'On surface'
+        return 'on Surface'
 
     @classmethod
     def fancy_tree_name(self):
@@ -90,7 +105,7 @@ class PointOnEdge(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'On line'
+        return 'on Line'
 
     @classmethod
     def fancy_tree_name(self):
@@ -112,7 +127,7 @@ class PointCircleCenter(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'On center/focus of conic'
+        return 'on Center/Focus of Conic'
 
     @classmethod
     def fancy_tree_name(self):
@@ -134,7 +149,7 @@ class PointCenter(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Center of 2 points'
+        return 'Center of 2 Points'
 
     @classmethod
     def fancy_tree_name(self):
@@ -184,7 +199,7 @@ class Circle2DRadiusTwoTangentCurve(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Two tangents and radius'
+        return 'Two Tangents and Radius'
 
     @classmethod
     def fancy_tree_name(self):
@@ -247,7 +262,18 @@ class Circle(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Two axes and radius'
+        return 'Circle'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Circle'
+    
+class CircleOCC(GeomPB):
+    vt = Vtable(cdata)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Two Axes and Radius'
 
     @classmethod
     def fancy_tree_name(self):
@@ -273,7 +299,7 @@ class CircleByAxisPoint(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Axis and point'
+        return 'Axis and Point'
 
     @classmethod
     def fancy_tree_name(self):
@@ -323,7 +349,7 @@ class CircleBy3Points(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return '3 points'
+        return '3 Points'
 
     @classmethod
     def fancy_tree_name(self):
@@ -530,7 +556,7 @@ class Line(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'by XYZ'
+        return 'Line'
 
     @classmethod
     def fancy_tree_name(self):
@@ -580,10 +606,26 @@ class Line(GeomPB):
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
+class LineOCC(Line):
+    @classmethod
+    def fancy_menu_name(self):
+        return 'by XYZ'
+    @classmethod    
+    def fancy_tree_name(self):
+        return 'Line'
 
 class Polygon(GeomPB):
     vt = Vtable(pdata)
-
+    
+class Polygon2(Polygon):
+    vt = Vtable(pdata)
+    
+    @classmethod
+    def fancy_menu_name(self):
+        return 'by XYZ'
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Polygon'
 
 ldata = (('lines', VtableElement('lines', type='string',
                                  guilabel='Lines',
@@ -604,7 +646,7 @@ class ExtendedLine(GeomPB):
     
     @classmethod    
     def fancy_menu_name(self):
-        return 'by existing lines'
+        return 'by Existing Lines'
 
     @classmethod
     def fancy_tree_name(self):
@@ -622,7 +664,7 @@ class OCCPolygon(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Polygon'
+        return 'by Points'
 
     @classmethod
     def fancy_tree_name(self):
@@ -639,6 +681,10 @@ class CreateLine(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Line'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Line'
 
 
 ldata = (('lines', VtableElement('lines', type='string',
@@ -646,10 +692,8 @@ ldata = (('lines', VtableElement('lines', type='string',
                                  default="",
                                  tip="lines to be connected")), )
 
-
 class LineLoop(GeomPB):
     vt = Vtable(ldata)
-
 
 ldata = (('loop1', VtableElement('loop1', type='string',
                                  guilabel='Edges1',
@@ -697,6 +741,10 @@ class CreateSurface(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Surface'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Surface'
 
 
 ldata = (('surfs', VtableElement('surfs', type='string',
@@ -714,6 +762,10 @@ class CreateVolume(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
+        return 'Volume'
+    
+    @classmethod
+    def fancy_tree_name(self):
         return 'Volume'
 
 
@@ -843,7 +895,7 @@ class MoveByPoints(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Move (by points)'
+        return 'Move (by Points)'
 
     @classmethod
     def fancy_tree_name(self):
@@ -905,7 +957,7 @@ class RotateCenterPoints(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Rotate (by points)'
+        return 'Rotate (by Points)'
 
     @classmethod
     def fancy_tree_name(self):
@@ -953,7 +1005,7 @@ class Array(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Linear (by displacement)'
+        return 'Linear (by Displacement)'
 
     @classmethod
     def fancy_tree_name(self):
@@ -976,7 +1028,7 @@ class ArrayByPoints(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Linear (by points)'
+        return 'Linear (by Points)'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1009,7 +1061,7 @@ class ArrayRot(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Angular (by angle)'
+        return 'Angular (by Angle)'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1041,11 +1093,11 @@ class ArrayRotByPoints(GeomPB):
     vt = Vtable(data0)
 
     @classmethod
-    def fancy_menu_name(cls):
-        return 'Angular (by points)'
+    def fancy_menu_name(self):
+        return 'Angular (by Points)'
 
     @classmethod
-    def fancy_tree_name(cls):
+    def fancy_tree_name(self):
         return 'ArrayRot'
 
 class ArrayPath(GeomPB):
@@ -1085,11 +1137,11 @@ class ArrayPath(GeomPB):
     vt = Vtable(data0)
 
     @classmethod
-    def fancy_menu_name(cls):
+    def fancy_menu_name(self):
         return 'Path'
 
     @classmethod
-    def fancy_tree_name(cls):
+    def fancy_tree_name(self):
         return 'ArrayPath'
 
 
@@ -1173,6 +1225,10 @@ class Copy(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Copy'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Copy'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1191,6 +1247,10 @@ class Remove(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Delete'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Delete'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1204,6 +1264,10 @@ class Remove2(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
+        return 'Delete Rest'
+    
+    @classmethod
+    def fancy_tree_name(self):
         return 'DeleteRest'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1220,7 +1284,7 @@ class MergeFace(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Merge faces'
+        return 'Merge Faces'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1352,11 +1416,11 @@ class Union(GeomPB_Bool_with_UP):
     vt = Vtable(udata)
 
     @classmethod
-    def fancy_menu_name(cls):
+    def fancy_menu_name(self):
         return 'Union'
 
     @classmethod
-    def fancy_tree_name(cls):
+    def fancy_tree_name(self):
         return "Union"
         
 class Union2(Union):
@@ -1372,7 +1436,11 @@ class Union2D(GeomPB_Bool):
     vt = Vtable(udata)
 
     @classmethod
-    def fancy_menu_name(cls):
+    def fancy_menu_name(self):
+        return 'Union'
+    
+    @classmethod
+    def fancy_tree_name(self):
         return 'Union'
 
 class Intersection(GeomPB_Bool_with_UP):
@@ -1409,7 +1477,10 @@ class Point2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Point'
-
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Point'
 
 pdata = (('xarr', VtableElement('xarr', type='array',
                                 guilabel='X',
@@ -1434,6 +1505,9 @@ class Line2D(Line):
     def fancy_menu_name(self):
         return 'Line'
 
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Line'
 
 cdata = (('center', VtableElement('center', type='float',
                                   guilabel='Center',
@@ -1461,6 +1535,10 @@ class Circle2D(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
+        return 'Circle'
+    
+    @classmethod
+    def fancy_tree_name(self):
         return 'Circle'
 
 
@@ -1502,7 +1580,7 @@ class Arc2D(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Arc by coords'
+        return 'Arc by Coords'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1524,7 +1602,7 @@ class Arc2DBy3Points(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Arc by 3 points'
+        return 'Arc by 3 Points'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1550,7 +1628,7 @@ class Arc2DBy2PointsAngle(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Arc by 2 points and angle'
+        return 'Arc by 2 Points and Angle'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1581,6 +1659,9 @@ class Rect2D(GeomPB):
     def fancy_menu_name(self):
         return 'Rect'
 
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Rect'
 
 cdata = (('corner_of_rect', VtableElement('corner_of_rect', type='string',
                                           guilabel='Points (2) at corner',
@@ -1593,7 +1674,7 @@ class Rect2DByCorners(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Rect by 2 corners'
+        return 'Rect by 2 Corners'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1623,6 +1704,10 @@ class Spline2D(Spline):
     @classmethod
     def fancy_menu_name(self):
         return 'Spline'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Spline'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1650,6 +1735,9 @@ class Move2D(GeomPB):  # tanslate in gmsh
     def fancy_menu_name(self):
         return 'Move'
 
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Move'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Object',
@@ -1675,6 +1763,10 @@ class Rotate2D(GeomPB):
 
     @classmethod
     def fancy_menu_name(self):
+        return 'Rotate'
+
+    @classmethod
+    def fancy_tree_name(self):
         return 'Rotate'
 
 
@@ -1706,6 +1798,10 @@ class Flip2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Flip'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Flip'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1734,6 +1830,10 @@ class Scale2D(GeomPB):  # Dilate in gmsh
     @classmethod
     def fancy_menu_name(self):
         return 'Scale'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Scale'
 
 
 class Array2D(GeomPB):
@@ -1754,7 +1854,10 @@ class Array2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Array'
-
+    
+    @classmethod
+    def fancy_Tree_name(self):
+        return 'Array'
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Target',
@@ -1843,7 +1946,7 @@ class WorkPlane(WPBase):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'WP By Coordinates'
+        return 'WP by Coords'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1881,7 +1984,7 @@ class WorkPlaneByPoints(WPBase):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'WP By Points'
+        return 'WP by Points'
 
     @classmethod
     def fancy_tree_name(self):
@@ -1917,7 +2020,7 @@ class WPParallelToPlane(WPBase):
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Parallel to plane'
+        return 'Parallel to Plane'
 
     @classmethod
     def fancy_tree_name(self):

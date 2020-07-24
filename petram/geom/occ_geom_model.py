@@ -18,7 +18,15 @@ class OCCGeom(GmshGeom):
         v = super(OCCGeom, self).attribute_set(v)
         v['long_edge_thr'] = 0.5
         v['small_edge_thr'] = 0.01
+        v['use_occ_preview'] = True
         return v
+
+    def build_geom4(self, stop1=None, stop2=None, filename=None,
+                    finalize=False, no_mesh=False, gui_parent=None):
+
+        self.use_occ_preview = True
+        self.do_build_geom4(stop1=stop1, stop2=stop2, filename=filename,
+                         finalize=finalize, no_mesh=no_mesh, gui_parent=gui_parent)
 
     def inspect_geom(self, inspect_type, params):
         '''
@@ -91,7 +99,8 @@ class OCCGeom(GmshGeom):
         self.use_occ_preview = True
 
     def get_possible_child(self):
-        from petram.geom.geom_primitives import (Point, PointCenter, PointByUV, PointOnEdge,
+        from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
+                                                 Point, PointCenter, PointByUV, PointOnEdge,
                                                  PointCircleCenter, Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  CircleByAxisCenterRadius,
@@ -108,7 +117,8 @@ class OCCGeom(GmshGeom):
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ArrayPath,
                                                  ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
-        return [Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
+        return [PointOCC, LineOCC, CircleOCC, Polygon2,
+                Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
                 CircleByAxisCenterRadius,
                 Rect, Polygon,  OCCPolygon, Spline, Box,
@@ -124,11 +134,12 @@ class OCCGeom(GmshGeom):
                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine]
 
     def get_possible_child_menu(self):
-        from petram.geom.geom_primitives import (Point, PointCenter, PointCircleCenter,
+        from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
+                                                 Point, PointCenter, PointCircleCenter,
                                                  PointOnEdge, PointByUV, Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  CircleByAxisCenterRadius,
-                                                 Rect, OCCPolygon, Box, Ball,
+                                                 Rect, Polygon, OCCPolygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
                                                  LineLoop, CreateLine, CreateSurface, CreateVolume,
                                                  SurfaceLoop, Union, Union2, MergeFace,
@@ -142,19 +153,23 @@ class OCCGeom(GmshGeom):
                                                  ArrayPath,
                                                  ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
 
-        return [("Points...", Point), ("", PointCenter), ("", PointOnEdge),
+        return [("Geometry Element...", None),
+                ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
                 ("", PointCircleCenter), ("!", PointByUV),
-                ("Lines...", Line), ("!", ExtendedLine),
-                ("Circle...", Circle), ("", CircleByAxisPoint),
+                ("Lines...", LineOCC), ("!", ExtendedLine),
+                ("Polygon...", Polygon2), ("!", OCCPolygon), 
+                ("Circle...", CircleOCC), ("", CircleByAxisPoint),
                 ("", CircleByAxisCenterRadius), ("!", CircleBy3Points),
                 ("", Rect),
-                ("", Spline), ("", Fillet), ("", Chamfer),
+                ("", Spline),
+                ("!", None),
                 ("3D shape...", Box),
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
                 ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("", OCCPolygon), ("!", ThruSection), #("", SurfaceLoop),
+                ("!", ThruSection), #("", SurfaceLoop),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
+                ("Fillet/Chamfer", Fillet), ("!", Chamfer),                                
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
                 ("Translate...", Move,), ("", MoveByPoints), ("", Rotate), ("", RotateCenterPoints),
                 ("", Flip), ("!", Scale),

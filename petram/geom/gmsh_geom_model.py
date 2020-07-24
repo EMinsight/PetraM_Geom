@@ -326,7 +326,7 @@ class GmshGeom(GeomTopBase):
         v['maxthreads'] = 1
         v['skip_final_frag'] = False
         v['use_1d_preview'] = False
-        v['use_occ_preview'] = True
+        v['use_occ_preview'] = False
         v['use_curvature'] = False
         v['long_edge_thr'] = 0.3
         v['small_edge_thr'] = 0.001
@@ -374,27 +374,23 @@ class GmshGeom(GeomTopBase):
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ThruSection, RotateCenterPoints, MoveByPoints)
-        return [("Add Points...", Point), ("", PointCenter), ("", PointOnEdge),
-                ("", PointCircleCenter), ("!", PointByUV),
-                ("", Line),
-                ("Add Circle...", Circle), ("", CircleByAxisPoint), ("!", CircleBy3Points),
-                ("", Rect),
-                ("", Spline), ("", Fillet), ("", Chamfer),
+        
+        return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
+                ("", Spline),("", Fillet), ("", Chamfer), 
                 ("3D shape...", Box),
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
-                ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("!", ThruSection), #("", SurfaceLoop),
+                ("Create...", CreateLine), ("", CreateSurface), ("!", CreateVolume),
+                #("", LineLoop), ("", SurfaceLoop),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
-                ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
-                ("Translate...", Move,), ("", MoveByPoints), ("", Rotate), ("", RotateCenterPoints),
-                ("", Flip), ("!", Scale),
-                ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("!", ArrayRotByPoints), 
-                ("Boolean...", Union), ("", Union2), ("", Intersection),
-                ("", Difference), ("", Fragments), ("!", SplitByPlane),
+                ("", Copy), ("", Remove),
+                ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
+                ("", Array), ("!", ArrayRot),
+                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
-                ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
+                ("Import...", BrepImport),("", CADImport),("!", healCAD),
                 ]
+
 
     def get_special_menu(self, evt):
         menu = [('Build All', self.onBuildAll, None),
@@ -427,8 +423,8 @@ class GmshGeom(GeomTopBase):
                 [None, self.skip_final_frag, 3, {
                     "text": "Skip fragmentationn"}],
                 [None, self.use_1d_preview, 3, {"text": "Use line preview"}],
-                [None, self.use_occ_preview, 3, {
-                    "text": "OCC preview (in dev.)"}],
+#                [None, self.use_occ_preview, 3, {
+#                    "text": "OCC preview (in dev.)"}],
                 [None, self.use_curvature, 3, {
                     "text": "Consider curvature in preview generation"}],
                 [None, None, 341, {"label": "Finalize Geom",
@@ -441,7 +437,7 @@ class GmshGeom(GeomTopBase):
         return [None, txt, self.geom_prev_res, self.long_edge_thr,
                 self.small_edge_thr, self.small_edge_seg, self.max_seg,
                 self.maxthreads, self.occ_parallel,
-                self.skip_final_frag, self.use_1d_preview, self.use_occ_preview, self.use_curvature, self]
+                self.skip_final_frag, self.use_1d_preview, self.use_curvature, self]
 
     def import_panel1_value(self, v):
         aname = {2: "Auto", 1: "MeshAdpat", 5: "Delaunay", 6: "Frontal"}
@@ -458,8 +454,9 @@ class GmshGeom(GeomTopBase):
         self.occ_parallel = v[8]
         self.skip_final_frag = v[9]
         self.use_1d_preview = v[10]
-        self.use_occ_preview = v[11]
-        self.use_curvature = v[12]
+        #self.use_occ_preview = v[11]
+        self.use_curvature = v[11]
+        self.use_occ_preview = False
 
     def onBuildAll(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -604,7 +601,7 @@ class GmshGeom(GeomTopBase):
 
         self._objs = objs
 
-    def build_geom4(self, stop1=None, stop2=None, filename=None,
+    def do_build_geom4(self, stop1=None, stop2=None, filename=None,
                     finalize=False, no_mesh=False, gui_parent=None):
 
         if not hasattr(self, "_gmsh4_data"):
@@ -671,7 +668,15 @@ class GmshGeom(GeomTopBase):
         self._vcl = vcl
         self._esize = esize
         return
-    
+ 
+    def build_geom4(self, stop1=None, stop2=None, filename=None,
+                    finalize=False, no_mesh=False, gui_parent=None):
+        
+        self.use_occ_preview = False
+        self.build_geom4(stop1=stop1, stop2=stop2, filename=filename,
+                         finalize=finalize, no_mesh=no_mesh, gui_parent=gui_parent)
+
+        
     def onTerminateChild(self, evt):
         self._gso.terminate_child()
         evt.Skip()
@@ -690,7 +695,7 @@ class GmshGeom(GeomTopBase):
 
     def build_geom(self, stop1=None, stop2=None, filename=None,
                    finalize=False, gui_parent=None):
-        self.build_geom4(stop1=stop1, stop2=stop2,
+        self.do_build_geom4(stop1=stop1, stop2=stop2,
                              filename=filename,
                              finalize=finalize,
                              gui_parent=gui_parent)

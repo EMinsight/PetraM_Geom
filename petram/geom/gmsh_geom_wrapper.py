@@ -2915,7 +2915,7 @@ class GMSHGeometryGeneratorBase():
 
         if finalize:
             brep_file, mappings = self.mw.generate_brep(
-                self.objs, filename=filename, finalize=True)
+                self.objs, filename=filename, trash=trash, finalize=True)
         else:
             filename = sequence[-1][0]
             brep_file, mappings = self.mw.generate_brep(

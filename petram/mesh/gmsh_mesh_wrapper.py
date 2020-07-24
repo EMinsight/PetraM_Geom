@@ -266,6 +266,7 @@ class GMSHMeshWrapper():
         generate mesh based on  meshing job sequence.
         brep must be loaed 
         '''
+        print("brep input", brep_input)
         if brep_input != '':
             self.load_brep(brep_input)
         if not self._new_brep:
@@ -317,7 +318,8 @@ class GMSHMeshWrapper():
             gmsh.model.mesh.setSize(((0, tag),), size)
             sizes.append(size)
             #print("Default Point Size", (0, tag), size)
-        print("Default Point Size Max/Min", max(sizes), min(sizes))
+        if len(sizes) > 0:
+            print("Default Point Size Max/Min", max(sizes), min(sizes))
 
         done = [[], [], [], []]
         params = [None]*len(self.mesh_sequence)

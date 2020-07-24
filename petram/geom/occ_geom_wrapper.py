@@ -1976,7 +1976,10 @@ class Geometry():
             _newobjs.append(newkey)
 
         return list(objs), _newobjs
-
+    
+    def PointOCC_build_geom(self, objs, *args):    
+        return self.Point_build_geom(objs, *args)
+    
     def PointCenter_build_geom(self, objs, *args):
         targets1, targets2 = args
         targets1 = [x.strip() for x in targets1.split(',')]
@@ -2111,7 +2114,10 @@ class Geometry():
             _newobjs = [newobj]
 
         return list(objs), _newobjs
-
+    
+    def LineOCC_build_geom(self, objs, *args):
+        return self.Line_build_geom(objs, *args)
+        
     def ExtendedLine_build_geom(self, objs, *args):
         lines, ratio, resample = args
         lines = [x.strip() for x in lines.split(',')]
@@ -2128,6 +2134,31 @@ class Geometry():
             newobjs.append(newobj)
         return list(objs), newobjs
 
+    def Polygon_build_geom(self, objs, *args):
+        xarr, yarr, zarr = args
+        lcar = 0.0
+        if len(xarr) < 2:
+            return
+        try:
+            pos = np.vstack((xarr, yarr, zarr)).transpose()
+        except BaseException:
+            print("can not make proper input array")
+            return
+        # check if data is already closed...
+        if np.abs(np.sum((pos[0] - pos[-1])**2)) < 1e-17:
+            pos = pos[:-1]
+
+        gids = [self.add_point(p) for p in pos]        
+        polygon = self.add_polygon(gids)
+        shape = self.faces[polygon]
+        self.builder.Add(self.shape, shape)
+
+        newobj = objs.addobj(polygon, 'plg')
+        return list(objs), [newobj]
+    
+    def Polygon2_build_geom(self, objs, *args):
+        return self.Polygon_build_geom(objs, *args)
+    
     def OCCPolygon_build_geom(self, objs, *args):
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
@@ -2272,6 +2303,9 @@ class Geometry():
 
         return list(objs), newkey
 
+    def CircleOCC_build_geom(self, objs, *args):    
+        return self.Circle_build_geom(objs, *args)
+    
     def CircleByAxisPoint_build_geom(self, objs, *args):
         pts, pt_on_cl, make_face = args
 
