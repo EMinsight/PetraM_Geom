@@ -673,7 +673,7 @@ class GmshGeom(GeomTopBase):
                     finalize=False, no_mesh=False, gui_parent=None):
         
         self.use_occ_preview = False
-        self.build_geom4(stop1=stop1, stop2=stop2, filename=filename,
+        self.do_build_geom4(stop1=stop1, stop2=stop2, filename=filename,
                          finalize=finalize, no_mesh=no_mesh, gui_parent=gui_parent)
 
         

@@ -247,10 +247,6 @@ cdata = (('center', VtableElement('center', type='float',
                                   guilabel='r',
                                   default=1.0,
                                   tip="radius")),
-         ('num_points', VtableElement('num_points', type='int',
-                                  guilabel='#points on circle (>0)',
-                                  default=2,
-                                  tip="numbe of points on circle")),
          ('fill_circle', VtableElement('fill circle', type='bool',
                                        guilabel='Fill circle',
                                        default=True,
@@ -267,7 +263,35 @@ class Circle(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'Circle'
+
     
+cdata = (('center', VtableElement('center', type='float',
+                                  guilabel='Center',
+                                  suffix=('x', 'y', 'z'),
+                                  default=[0, 0, 0],
+                                  tip="Center of Circle")),
+         ('ax1', VtableElement('ax1', type='float',
+                               guilabel='Axis1',
+                               suffix=('x', 'y', 'z'),
+                               default=[1, 0, 0],
+                               tip="axis 1")),
+         ('ax2', VtableElement('ax2', type='float',
+                               guilabel='Axis2',
+                               suffix=('x', 'y', 'z'),
+                               default=[0, 1, 0],
+                               tip="axis 2")),
+         ('radius', VtableElement('radius', type='float',
+                                  guilabel='r',
+                                  default=1.0,
+                                  tip="radius")),
+         ('num_points', VtableElement('num_points', type='int',
+                                  guilabel='#points on circle (>0)',
+                                  default=2,
+                                  tip="numbe of points on circle")),
+         ('fill_circle', VtableElement('fill circle', type='bool',
+                                       guilabel='Fill circle',
+                                       default=True,
+                                       tip="Make surface ")), )
 class CircleOCC(GeomPB):
     vt = Vtable(cdata)
 

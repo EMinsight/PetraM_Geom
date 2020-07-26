@@ -12,11 +12,18 @@ import traceback
 import time
 
 import petram.debug as debug
-dprint1, dprint2, dprint3 = debug.init_dprints('GeomModel')
+dprint1, dprint2, dprint3 = debug.init_dprints('GmshMeshModel')
 
-debug = True
+from petram.mfem_config import use_parallel
 
-
+if use_parallel:
+   import mfem.par as mfem
+   from mpi4py import MPI
+   num_proc = MPI.COMM_WORLD.size
+   myid     = MPI.COMM_WORLD.rank
+   from petram.helper.mpi_recipes import *   
+else:
+   import mfem.ser as mfem
 
 class GMesh(Mesh):
     def onItemSelChanged(self, evt):
@@ -675,20 +682,41 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self._mesh_fface = done[2]  # finished surfaces
         self._mesh_fline = done[1]  # finished lines
 
-        return (mso.count_sequence() > 0)
+        return mso.count_sequence() > 0
 
     def generate_mesh_file(self):
+        '''
+        called from solver_model
+        '''
         cwd = os.getcwd()
         dprint1("Generating Mesh in " + cwd)
-        geom_root = self.geom_root
-        filename = os.path.join(cwd, self.name())+'.msh'
-        count = self.build_mesh(geom_root, finalize=True, filename=filename,
-                                gui_parent=None)
+        self._mesh_output = ''
+
+        myid = MPI.COMM_WORLD.rank                
+        if myid == 0:
+            geom_root = self.geom_root
+            filename = os.path.join(cwd, self.name())+'.msh'
+
+            # reset this value so that it does not delete a
+            # file in parametric scan
+
+            count = self.build_mesh(geom_root,
+                                    finalize=True,
+                                    filename=filename,
+                                    gui_parent=None,)
+        else:
+            count = 0
+
+        if use_parallel:
+            count = MPI.COMM_WORLD.bcast(count)
         if count == 0:
             assert False, "Failed to generate mesh"
-        else:
-            dprint1("Generating Mesh ... Done")
 
+        if use_parallel:
+            self._mesh_output = MPI.COMM_WORLD.bcast(self._mesh_output)
+
+        dprint1("Generating Mesh ... Done")
+        
     def load_gui_figure_data(self, viewer):
         return 'mesh', self.name(), None
 

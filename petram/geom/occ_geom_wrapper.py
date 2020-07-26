@@ -2247,8 +2247,11 @@ class Geometry():
         return list(objs), [newkey]
 
     def Circle_build_geom(self, objs, *args):
-        center, ax1, ax2, radius, npts, make_face = args
-
+        if len(args) == 6:
+            center, ax1, ax2, radius, npts, make_face = args
+        else:
+            center, ax1, ax2, radius, make_face = args
+            npts = 4
         assert radius != 0, "Circle radius must be >0"
 
         a1 = np.array(ax1)

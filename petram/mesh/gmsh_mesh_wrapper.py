@@ -375,7 +375,7 @@ class GMSHMeshWrapper():
                 tmp0 = os.path.join(self.trash, 'tmp0.msh')
                 gmsh.write(tmp0)
 
-                print("generating final mesh file")
+                print("generating final mesh file", msh_file)
                 self.edit_msh_to_add_sequential_physicals(tmp0, msh_file)
         else:
             print("creating temporary mesh file")
@@ -636,6 +636,7 @@ class GMSHMeshWrapper():
             elines2 = elines[2] + elines[3]
             nphys = len(ndims[2]) + len(ndims[3])
             ndims[0] = {}
+            ndims[1] = {}
             if verbose:
                 print("Adding " + str(len(ndims[2])) + " Surface(s)")
                 print("Adding " + str(len(ndims[3])) + " Volume(s)")
@@ -772,7 +773,7 @@ class GMSHMeshWrapper():
                 'transfinite_volume':3,
                 'transfinite_face':2,
                 'transfinite_edge':1,
-                'copy_face':2,
+                'copyface':2,
                 'extrude_face':2,
                 'revolve_face':2,
                 }
