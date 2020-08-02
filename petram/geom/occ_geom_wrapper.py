@@ -1949,6 +1949,58 @@ class Geometry():
             break
             ex.Next()
         '''
+    def process_plane_parameters(self, args, objs):
+        if args[0] == '3_points':
+            # args[1] = ['3_points', '1', '7', '8']
+
+            gid_ptx1 = self.get_target1(objs, [args[1], ], 'p')[0]
+            gid_ptx2 = self.get_target1(objs, [args[2], ], 'p')[0]
+            gid_ptx3 = self.get_target1(objs, [args[3], ], 'p')[0]
+            ptx1 = self.get_point_coord(gid_ptx1)
+            ptx2 = self.get_point_coord(gid_ptx2)
+            ptx3 = self.get_point_coord(gid_ptx3)
+
+            n = np.cross(ptx1 - ptx2, ptx1 - ptx3)
+            if np.sum(n**2) == 0:
+                assert False, "three points does not span a surface."
+            normal = n / np.sqrt(np.sum(n**2))
+            cptx = (ptx1 + ptx2 + ptx3) / 3.0
+
+        elif args[0] == 'by_abc':
+            data = np.array(args[1]).flatten()
+            normal = data[:3]
+            xx = np.array(
+                [(xmin + xmax) / 2, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0])
+            s = data[-1] - np.sum(normal * xx)
+            cptx = xx + s * normal
+
+        elif args[0] == 'face_parallel':
+            gid_face = self.get_target1(objs, [args[1], ], 'f')[0]
+            gid_ptx = self.get_target1(objs, [args[2], ], 'p')[0]
+            cptx = self.get_point_coord(gid_ptx)
+            normal, _void = self.get_face_normal(gid_face, check_flat=True)
+
+        elif args[0] == 'face_normal':
+            gid_face = self.get_target1(objs, [args[1], ], 'f')[0]
+            tmp = [x.strip() for x in args[2].split(',')]
+            gid_ptx = self.get_target1(objs, tmp, 'p')
+            ptx1 = self.get_point_coord(gid_ptx[0])
+            ptx2 = self.get_point_coord(gid_ptx[1])
+
+            cptx = ptx1
+
+            n1, _void = self.get_face_normal(gid_face, check_flat=True)
+            n2 = ptx2 - ptx1
+            n2 = n2 / np.sqrt(np.sum(n2**2))
+
+            normal = np.cross(n1, n2)
+        elif args[0] == 'workplane':
+            wp = objs['wp'+args[1]]
+            normal = wp.get_norm()
+            cptx = wp.get_center()
+        else:
+            assert False, "unknown option:" + args
+        return cptx, normal
 
     def add_sequence(self, gui_name, gui_param, geom_name):
         self.geom_sequence.append((gui_name, gui_param, geom_name))
@@ -2984,13 +3036,18 @@ class Geometry():
         return list(objs), newkeys
 
     def Flip_build_geom(self, objs, *args):
-        targets, a, b, c, d, keep = args
-        abcd = (a, b, c, d)
-        targets = [x.strip() for x in targets.split(',')]
+        targets, plane_param, keep = args
 
-        newkeys = []
+        newkeys = []        
+        targets = [x.strip() for x in targets.split(',')]
+        
         gids = self.get_target2(objs, targets)
 
+        cptx, normal = self.process_plane_parameters(plane_param, objs)
+
+        d = -np.sum(normal*cptx)
+        abcd = (normal[0], normal[1], normal[2], d)
+        
         for gid in gids:
             new_gid = self.symmetrize(gid, abcd, copy=keep)
             if new_gid is not None:
@@ -4005,6 +4062,8 @@ class Geometry():
         comp = self.new_compound(gids)
         xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
 
+        cptx, normal = self.process_plane_parameters(args[1], objs)
+        '''
         if args[1][0] == '3_points':
             # args[1] = ['3_points', '1', '7', '8']
 
@@ -4052,6 +4111,7 @@ class Geometry():
 
         else:
             assert False, "unknown option:" + args
+        '''
 
         offset = args[-1]
         if offset != 0:

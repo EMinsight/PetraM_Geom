@@ -3,9 +3,7 @@ from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 
 '''
 Custom  Vtable for geometry
-'''
-
-
+'''    
 class VtableElement_Direction(VtableElement):
     def add_attribute(self, v):
         v = VtableElement.add_attribute(self, v)
@@ -303,6 +301,8 @@ class VtableElement_Plane(VtableElement):
         v['use_face_normal'] = False
         v['face_normal_txt1'] = ''
         v['face_normal_txt2'] = ''
+        v['use_wp'] = False
+        v['wp_txt1'] = ''
 
         return v
 
@@ -312,6 +312,7 @@ class VtableElement_Plane(VtableElement):
         ret[3][0]['choices'].append('By 3 points')
         ret[3][0]['choices'].append('Face parallel and point')
         ret[3][0]['choices'].append('Face normal and two points')
+        ret[3][0]['choices'].append('WorkPlane')
         elp3 = [["Point 1", None, 0, {}],
                 ["Point 2", None, 0, {}],
                 ["Point 3", None, 0, {}], ]
@@ -319,10 +320,12 @@ class VtableElement_Plane(VtableElement):
                 ["Point", None, 0, {}], ]
         elp5 = [["Face", None, 0, {}],
                 ["Points", None, 0, {}], ]
+        elp6 = [["WP", None, 0, {}],]
 
         ret[3].append({'elp': elp3})
         ret[3].append({'elp': elp4})
         ret[3].append({'elp': elp5})
+        ret[3].append({'elp': elp6})        
 
         return ret
 
@@ -334,6 +337,8 @@ class VtableElement_Plane(VtableElement):
             ret[0] = 'By 3 points'
         elif obj.use_face_normal:
             ret[0] = 'Face normal and two points'
+        elif obj.use_wp:
+            ret[0] = 'WorkPlane'
         else:
             pass
 
@@ -344,13 +349,15 @@ class VtableElement_Plane(VtableElement):
                     obj.face_parallel_txt2, ])
         ret.append([obj.face_normal_txt1,
                     obj.face_normal_txt2, ])
+        ret.append([obj.wp_txt1,])
 
         return ret
 
     def import_panel_value(self, obj, v):
         obj.use_3_points = False
         obj.use_face_parallel = False
-        obj.use_face_normal = False        
+        obj.use_face_normal = False
+        obj.use_wp = False
         if v[0] == 'Face parallel and point':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_face_parallel = True
@@ -367,6 +374,9 @@ class VtableElement_Plane(VtableElement):
             obj.by_3_points_txt1 = v[3][0]
             obj.by_3_points_txt2 = v[3][1]
             obj.by_3_points_txt3 = v[3][2]
+        elif v[0] == 'WorkPlane':
+            obj.use_wp = True
+            obj.wp_txt1 = v[6][0]
         else:
             VtableElement.import_panel_value(self, obj, v)
 
@@ -385,6 +395,9 @@ class VtableElement_Plane(VtableElement):
                    obj.by_3_points_txt1,
                    obj.by_3_points_txt2,
                    obj.by_3_points_txt3, ]
+        elif obj.use_wp:
+            ret = ['workplane',
+                   obj.wp_txt1,]
         else:
             ret = ['by_abc', ret]
         return ret
