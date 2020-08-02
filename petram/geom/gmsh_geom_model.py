@@ -204,6 +204,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
             os.chdir(od)
             success = True
         except BaseException:
+            os.chdir(od)
+            
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to build geometry',
@@ -470,6 +472,8 @@ class GmshGeom(GeomTopBase):
             self.build_geom(finalize=True, gui_parent=dlg)
             os.chdir(od)
         except BaseException:
+            os.chdir(od)
+            
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to build geometry',
@@ -614,7 +618,7 @@ class GmshGeom(GeomTopBase):
         stopname = self.walk_over_geom_chidlren(self._gso, stop1=stop1, stop2=stop2)
 
         L = len(self._gso.geom_sequence) + 3
-
+        
         if gui_parent is not None:
             import wx
             #gui_parent = wx.GetApp().TopWindow
@@ -629,16 +633,14 @@ class GmshGeom(GeomTopBase):
             self._geom_brep_dir = ''            
         else:
             pgb = None
-            cwd = os.getcwd()
             trash = os.path.join(cwd, '.trash')
             if not os.path.exists(trash):
                 os.mkdir(trash)
             self._geom_brep_dir = trash
-            
-        success, dataset = self._gso.run_generator(self, no_mesh=no_mesh, finalize=finalize,
-                                                  filename=stopname, progressbar=pgb,
-                                                  trash=trash,)
 
+        success, dataset = self._gso.run_generator(self, no_mesh=no_mesh, finalize=finalize,
+                                                   filename=stopname, progressbar=pgb,
+                                                   trash=trash,)
         if not success:
             assert False, dataset
             return
@@ -725,6 +727,8 @@ class GmshGeom(GeomTopBase):
                      message='Enter .brep file name',
                      wildcard='*.brep')
         if path != '':
+            if not path.endswith('.brep'):
+                path = path + '.brep'            
             from shutil import copyfile
             copyfile(self.geom_brep, path)
 

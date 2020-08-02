@@ -1,3 +1,5 @@
+import numpy as np
+
 class GeomIDBase(int):
     def __init__(self, v=0):
         super(GeomIDBase, self).__init__()
@@ -58,3 +60,24 @@ class VolumeID(GeomIDBase):
         return VolumeID(int(self) + v)
     def __neg__(self):
         return VolumeID(-int(self))
+
+class WorkPlaneParam():
+    '''
+    parameters to define workplane
+    '''
+    def __init__(self, c1, a1, a2):
+        self.params = (c1, a1, a2)
+    
+    def get_norm(self):
+        nn = np.cross(self.params[1], self.params[2])
+        nn /= np.sqrt(np.sum(nn**2))
+        return nn
+
+    def get_center(self):
+        return self.params[0]
+
+    def get_axis1(self):
+        return self.params[1]   
+
+    def get_axis2(self):
+        return self.params[2]

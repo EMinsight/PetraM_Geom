@@ -613,7 +613,8 @@ class GMSHMeshWrapper():
             else:
                 lines[section].append(line)
             l = fid.readline()
-
+        fid.close()
+        
         # process element
         ndims = [defaultdict(int),
                  defaultdict(int),
@@ -695,6 +696,8 @@ class GMSHMeshWrapper():
             write_section(fid, lines, sec)
 
         fid.close()
+        #from shutil import copyfile
+        #copyfile(filename, filename+'.bk')
 
     def add_sequential_physicals(self, verbose=True):
         '''
@@ -773,9 +776,11 @@ class GMSHMeshWrapper():
                 'transfinite_volume':3,
                 'transfinite_face':2,
                 'transfinite_edge':1,
+                'recombine_surface':2,
                 'copyface':2,
                 'extrude_face':2,
                 'revolve_face':2,
+                'mergetxt':0,
                 }
         d = []
         for sq in self.mesh_sequence:

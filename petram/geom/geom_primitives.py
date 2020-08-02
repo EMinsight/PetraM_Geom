@@ -6,14 +6,17 @@
    geometry generation routine
 
 '''
+import numpy as np
+from collections import defaultdict
+
 from petram.geom.gmsh_config import has_gmsh
 from petram.geom.vtable_geom import *
 from petram.geom.gmsh_geom_model import use_gmsh_api
 from petram.geom.gmsh_geom_model import get_geom_key
 from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.phys.vtable import VtableElement, Vtable
-import numpy as np
-from collections import defaultdict
+
+
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshPrimitives')
@@ -824,7 +827,6 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
 
 class Extrude(GeomPB):
     vt = Vtable(edata)
-
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Targets (v/f/l/p)',
@@ -2150,11 +2152,10 @@ class CADImport(ImportBase):
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
         wc = "ANY|*|STEP|*.stp|IGES|*.igs"
-
         ll = [[None, None, 241, {'buttons': [b1, b2],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["File(STEP/IGES)", None, 45, {'wildcard': wc}],
+              ["File(STEP/IGES)", None, 45, {'wildcard': wc,}],
               cad_fix_elp,
               [None, True, 3, {'text': "Highest Dim Only"}],
               ["Unit", None, 0, {}],
@@ -2219,7 +2220,7 @@ class BrepImport(ImportBase):
         ll = [[None, None, 241, {'buttons': [b1, b2],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["File(.brep)", None, 45, {'wildcard': wc}],
+              ["File(.brep)", None, 45, {'wildcard': wc,}],
               cad_fix_elp,
               [None, True, 3, {'text': "Highest Dim Only"}],
               ]

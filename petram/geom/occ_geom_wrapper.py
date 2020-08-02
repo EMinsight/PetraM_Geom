@@ -3,7 +3,7 @@ from threading import Thread
 from queue import Queue
 from petram.geom.occ_cbook import *
 from petram.geom.geom_id import (GeomIDBase, VertexID, LineID, SurfaceID, VolumeID,
-                                 LineLoopID, SurfaceLoopID)
+                                 LineLoopID, SurfaceLoopID, WorkPlaneParam)
 import os
 import numpy as np
 import time
@@ -47,7 +47,6 @@ class topo2id():
         out = self.mapper.FindIndex(val)
         return self.mapperout2k[out]
         #assert False, "ID is not found in ap from Topo to ID"
-
 
 class Geometry():
     def __init__(self, **kwargs):
@@ -625,7 +624,9 @@ class Geometry():
         if not edgeMaker.IsDone():
             assert False, "Can not make line"
         edge = edgeMaker.Edge()
-        return self.edges.add(edge)
+        #return self.edges.add(edge)
+        new_objs = self.register_shaps_balk(edge)        
+        return new_objs
 
     def add_circle_arc(self, p1, p3, p2):
         bt = self.bt
@@ -1535,14 +1536,17 @@ class Geometry():
                 sub_shapes.append(copier.Shape())
             org_subshapes = anc
 
-        mapper = get_mapper(self.shape, akind[gid.__class__])
+        if not isinstance(gid, VertexID):            
+            mapper = get_mapper(self.shape, akind[gid.__class__])
+            
         # this may work, too?
         # self.builder.Remove(self.shape, shape)
         rebuild = ShapeBuild_ReShape()
         rebuild.Remove(shape)
         new_shape = rebuild.Apply(self.shape)
 
-        mapper2 = get_mapper(new_shape, akind[gid.__class__])
+        if not isinstance(gid, VertexID):                    
+            mapper2 = get_mapper(new_shape, akind[gid.__class__])
 
         #self.print_number_of_topo_objects(new_shape)
 
@@ -2126,13 +2130,18 @@ class Geometry():
         lines = [self.add_extended_line(gid, ratio, resample)
                  for gid in gids]
 
+        print(lines)
         newobjs = []
-        for l in lines:
-            shape = self.edges[l]
-            self.builder.Add(self.shape, shape)
-            newobj = objs.addobj(l, 'sp')
-            newobjs.append(newobj)
-        return list(objs), newobjs
+        newkeys = []
+        for l in lines:        
+            for gid in l:
+                newkeys.append(objs.addobj(gid, 'ln'))
+        return list(objs), newkeys        
+#            shape = self.edges[l]
+#            self.builder.Add(self.shape, shape)
+#            newobj = objs.addobj(l, 'sp')
+#            newobjs.append(newobj)
+#        return list(objs), newobjs
 
     def Polygon_build_geom(self, objs, *args):
         xarr, yarr, zarr = args
@@ -2611,10 +2620,14 @@ class Geometry():
             for length in lengths:
                 trans2 = []
                 for gid in gids:
-                    assert isinstance(gid, SurfaceID), "target must be surface"
-                    n1, p0 = self.get_face_normal(gid, check_flat=False)
-
-                    if tax[1]:
+                    if tax[1] == '':
+                        assert isinstance(gid, SurfaceID), "target must be surface"
+                        n1, p0 = self.get_face_normal(gid, check_flat=False)
+                    else:
+                        wp = objs['wp'+tax[1]]
+                        n1 = wp.get_norm()
+                        p0 = wp.get_center()                        
+                    if tax[2]:
                         tt = -n1 * length
                     else:
                         tt = n1 * length
@@ -2623,15 +2636,20 @@ class Geometry():
 
         elif tax[0] == 'normalp':
             assert len(lengths) == 1, "length should have one element"
-            assert isinstance(gids[0], SurfaceID), "target must be surface"
-            n1, p0 = self.get_face_normal(gids[0], check_flat=False)
+            if tax[2] == '':
+                assert isinstance(gids[0], SurfaceID), "target must be surface"
+                n1, p0 = self.get_face_normal(gids[0], check_flat=False)
+            else:
+                wp = objs['wp'+tax[2]]
+                n1 = wp.get_norm()
+                p0 = wp.get_center()                        
 
             dests = [x.strip() for x in tax[1].split(',')]
             gid_dests = self.get_target1(objs, dests, 'p')
             length = lengths[0]
             for gid_dest in gid_dests:
                 p1 = self.get_point_coord(gid_dest)
-                if tax[2]:
+                if tax[3]:
                     tt = -n1 * np.sum((p1 - p0) * n1) * length
                 else:
                     tt = n1 * np.sum((p1 - p0) * n1) * length
@@ -4098,8 +4116,8 @@ class Geometry():
         #self.inspect_shape(self.shape, verbose=True)
 
         newkeys = []
-        for gid in gids_new:
-            newkeys.append(objs.addobj(gid, 'wp'))
+        gid = WorkPlaneParam(c1, a1, a2)
+        newkeys.append(objs.addobj(gid, 'wp'))
 
         return list(objs), newkeys
 
@@ -4808,6 +4826,7 @@ class Geometry():
             self.shape = self.new_compound()
             self.prep_topo_list()
             self.isWP = 0
+            self.workplanes = []
 
         self.org_objs = objs
         if self.isWP == 0:

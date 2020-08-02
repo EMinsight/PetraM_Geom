@@ -65,6 +65,8 @@ class OCCGeom(GmshGeom):
                      wildcard='*.brep')
 
         if path != '':
+            if not path.endswith('.brep'):
+                path = path + '.brep'
             return self._gso.export_shapes(selection, path)
 
         evt.Skip()

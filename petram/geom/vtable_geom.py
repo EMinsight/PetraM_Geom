@@ -10,6 +10,7 @@ class VtableElement_Direction(VtableElement):
     def add_attribute(self, v):
         v = VtableElement.add_attribute(self, v)
         v['use_normal'] = False
+        v['use_normal_wp'] = False        
         v['use_fromto_points'] = False
         v['fromto_points_txt1'] = ''
         v['fromto_points_txt2'] = ''
@@ -23,6 +24,8 @@ class VtableElement_Direction(VtableElement):
         v['use_polar'] = False
         v['use_normalp'] = False
         v['normalp_dest'] = ''
+        v['normalp_wp'] = ''
+        v['normal_wp'] = ''                
         v['reverse_dir_normalp'] = False
         v['reverse_dir_polar'] = False
         v['reverse_dir_radial'] = False
@@ -41,14 +44,16 @@ class VtableElement_Direction(VtableElement):
                 ["Point(to)",    None, 0,  {}],
                 [None, True, 3,  {"text": "Use distance between points"}],
                 [None, True, 3,  {"text": "Reverse direction"}], ]
-        elp4 = [[None, True, 3,  {"text": "Reverse direction"}],
-                [None,  "(Note) Face must be flat-plane", 2,  {}], ]
-        elp5 = [["Point(to)",    None, 0,  {}],
+        elp4 = [["WP",    None, 0,  {}],
                 [None, True, 3,  {"text": "Reverse direction"}],
-                [None,  "(Note) Face must be flat-plane. Length below is mulitplier", 2,  {}], ]
-        elp6 = [["Axis Dir.",    None, 0,  {}],
-                ["Point on axis",    None, 0,  {}],
-                [None, True, 3,  {"text": "Reverse direction"}], ]
+                [None,  "(Note) Face must be flat-plane or use WP", 2,  {}], ]
+        elp5 = [["Point(to)",    None, 0,  {}],
+                ["WP",    None, 0,  {}],
+                [None, True, 3,  {"text": "Reverse direction"}],
+                [None,  "(Note) Face must be flat-plane or use WP. Length below is mulitplier", 2,  {}],]
+        elp6 = [["Axis Dir.", None, 0, {}],
+                ["Point on axis", None, 0, {}],
+                [None, True, 3, {"text": "Reverse direction"}], ]
         elp7 = [["Center",    None, 0,  {}],
                 [None, True, 3,  {"text": "Reverse direction"}], ]
 
@@ -79,9 +84,11 @@ class VtableElement_Direction(VtableElement):
                     obj.fromto_points_txt2,
                     obj.fromto_points_use_dist,
                     obj.reverse_dir_fromto])
-        ret.append([obj.reverse_dir_normal,
+        ret.append([obj.normal_wp,
+                    obj.reverse_dir_normal,
                     '(Note) Face must be flat-plane', ])
         ret.append([obj.normalp_dest,
+                    obj.normalp_wp,
                     obj.reverse_dir_normalp,
                     '(Note) Face must be flat-plane. Distance below is ignored', ])
         ret.append([obj.radial_axis_txt,
@@ -102,12 +109,14 @@ class VtableElement_Direction(VtableElement):
         if v[0] == 'Normal':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_normal = True
-            obj.reverse_dir_normal = v[4][0]
+            obj.normal_wp = v[4][0]                
+            obj.reverse_dir_normal = v[4][1]
         elif v[0] == 'Normal to point':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_normalp = True
             obj.normalp_dest = v[5][0]
-            obj.reverse_dir_normalp = v[5][1]
+            obj.normalp_wp = v[5][1]                
+            obj.reverse_dir_normalp = v[5][2]
         elif v[0] == 'By two points':
             setattr(obj, 'use_m_'+self.name, False)
             obj.use_fromto_points = True
@@ -132,9 +141,10 @@ class VtableElement_Direction(VtableElement):
     def make_value_or_expression(self, obj):
         ret = VtableElement.make_value_or_expression(self, obj)
         if obj.use_normal:
-            ret = ['normal', obj.reverse_dir_normal]
+            ret = ['normal', obj.normal_wp, obj.reverse_dir_normal]
         elif obj.use_normalp:
-            ret = ['normalp', obj.normalp_dest, obj.reverse_dir_normalp]
+            ret = ['normalp', obj.normalp_dest, obj.normalp_wp,
+                   obj.reverse_dir_normalp]
         elif obj.use_fromto_points:
             ret = ['fromto_points',
                    obj.fromto_points_txt1,
