@@ -145,12 +145,12 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        b1 = {"label": "S", "func": self.onBuildBefore,
-              "noexpand": True, "style": BU_EXACTFIT}
+        #b1 = {"label": "S", "func": self.onBuildBefore,
+        #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
 
-        ll = [[None, None, 241, {'buttons': [b1, b2],
+        ll = [[None, None, 241, {'buttons': [b2],# b2],
                                  'alignright':True,
                                  'noexpand': True}, ], ]
         ll.extend(self.vt.panel_param(self))

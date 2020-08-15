@@ -2079,13 +2079,13 @@ class healCAD(ImportBase):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        b1 = {"label": "S", "func": self.onBuildBefore,
-              "noexpand": True, "style": BU_EXACTFIT}
+        #b1 = {"label": "S", "func": self.onBuildBefore,
+        #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
         wc = "ANY|*|STEP|*.stp|IGES|*.igs"
 
-        ll = [[None, None, 241, {'buttons': [b1, b2],
+        ll = [[None, None, 241, {'buttons': [b2, ],
                                  'alignright':True,
                                  'noexpand': True}, ],
               ["Entity", "", 0, {}],
@@ -2136,12 +2136,12 @@ class CADImport(ImportBase):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        b1 = {"label": "S", "func": self.onBuildBefore,
-              "noexpand": True, "style": BU_EXACTFIT}
+        #b1 = {"label": "S", "func": self.onBuildBefore,
+        #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
         wc = "ANY|*|STEP|*.stp|IGES|*.igs"
-        ll = [[None, None, 241, {'buttons': [b1, b2],
+        ll = [[None, None, 241, {'buttons': [b2,],
                                  'alignright':True,
                                  'noexpand': True}, ],
               ["File(STEP/IGES)", None, 45, {'wildcard': wc,}],
@@ -2201,12 +2201,12 @@ class BrepImport(ImportBase):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        b1 = {"label": "S", "func": self.onBuildBefore,
-              "noexpand": True, "style": BU_EXACTFIT}
+        #b1 = {"label": "S", "func": self.onBuildBefore,
+        #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
         wc = "ANY|*|Brep|*.brep"
-        ll = [[None, None, 241, {'buttons': [b1, b2],
+        ll = [[None, None, 241, {'buttons': [b2],
                                  'alignright':True,
                                  'noexpand': True}, ],
               ["File(.brep)", None, 45, {'wildcard': wc,}],

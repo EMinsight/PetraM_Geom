@@ -2365,7 +2365,9 @@ class Geometry(object):
         return list(objs), newkeys
 
     def BrepImport_build_geom(self, objs, *args):
-        cad_file, use_fix, use_fix_param, use_fix_tol, highestDimOnly = args
+        cad_file, use_fix, use_fix_param, use_fix_tol, use_fix_rescale, highestDimOnly = args
+        print(type(use_fix_rescale))
+        assert float(use_fix_rescale) == 1.0, "rescale is not supported in GMSH geometry"
 
         PTs = self.factory.importShapes(cad_file,
                                         highestDimOnly=highestDimOnly)
