@@ -114,6 +114,7 @@ class OCCGeom(GmshGeom):
                                                  SplitByPlane, Copy, Remove, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale, WorkPlane,
                                                  WorkPlaneByPoints, WPParallelToPlane,
+                                                 WPNormalToPlane,
                                                  healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
@@ -130,9 +131,10 @@ class OCCGeom(GmshGeom):
                 Intersection, Difference, Fragments, SplitByPlane, Copy, Remove,
                 Remove2, RemoveFaces, Move, Rotate,
                 Flip, Scale, WorkPlane, WorkPlaneByPoints, WPParallelToPlane,
+                WPNormalToPlane,
                 healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ArrayPath,                
+                ArrayPath,     
                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine]
 
     def get_possible_child_menu(self):
@@ -149,6 +151,7 @@ class OCCGeom(GmshGeom):
                                                  SplitByPlane, Copy, Remove, Remove2, RemoveFaces,
                                                  Move, Rotate, Flip, Scale,
                                                  WorkPlane, WorkPlaneByPoints, WPParallelToPlane,
+                                                 WPNormalToPlane,
                                                  healCAD, CADImport, BrepImport,
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
@@ -179,7 +182,8 @@ class OCCGeom(GmshGeom):
                 ("!", ArrayPath), 
                 ("Boolean...", Union), ("", MergeFace), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
-                ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints), ("!", WPParallelToPlane),
+                ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints),
+                ("", WPParallelToPlane), ("!", WPNormalToPlane),
                 ("Import...", BrepImport), ("!", CADImport)
                 ]
 

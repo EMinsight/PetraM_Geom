@@ -1044,7 +1044,7 @@ class Geometry(object):
         return list(objs), [newkey]
 
     def CreateSurface_build_geom(self, objs, *args):
-        pts, isFilling = args
+        pts, points, isFilling = args
         pts = [x.strip() for x in pts.split(',')]
 
         ptx = get_target1(objs, pts, 'l')

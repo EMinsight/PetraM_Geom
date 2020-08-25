@@ -90,6 +90,7 @@ try:
                              GC_MakeSegment,
                              GC_MakeCircle)
     from OCC.Core.BOPTools import BOPTools_AlgoTools3D
+    from OCC.Core.BOPAlgo import BOPAlgo_Splitter
 
     from OCC.Core.GProp import GProp_GProps
     from OCC.Core.BRepGProp import (brepgprop_LinearProperties,

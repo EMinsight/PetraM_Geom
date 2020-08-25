@@ -8,7 +8,6 @@ class VtableElement_Direction(VtableElement):
     def add_attribute(self, v):
         v = VtableElement.add_attribute(self, v)
         v['use_normal'] = False
-        v['use_normal_wp'] = False        
         v['use_fromto_points'] = False
         v['fromto_points_txt1'] = ''
         v['fromto_points_txt2'] = ''
@@ -402,6 +401,133 @@ class VtableElement_Plane(VtableElement):
             ret = ['by_abc', ret]
         return ret
 
+
+class VtableElement_Normal(VtableElement):
+    def add_attribute(self, v):
+        v = VtableElement.add_attribute(self, v)
+        v['use_normal'] = False
+        v['use_fromto_points'] = False
+        v['fromto_points_txt1'] = ''
+        v['fromto_points_txt2'] = ''
+        v['reverse_dir_normal'] = False
+        v['reverse_dir_fromto'] = False
+        v['radial_point_txt'] = '0, 0, 0'
+        v['radial_axis_txt'] = '0, 0, 1'
+        v['polar_center_txt'] = '0, 0, 0'
+        v['use_radial'] = False
+        v['use_polar'] = False
+        v['normal_wp'] = ''                
+        v['reverse_dir_polar'] = False
+        v['reverse_dir_radial'] = False
+
+        return v
+
+    def panel_param(self, obj, validator=None):
+        ret = VtableElement.panel_param(self, obj, validator=validator)
+        ret[3] = list(ret[3])
+        ret[3][0]['choices'].append('By two points')
+        ret[3][0]['choices'].append('Normal')
+        ret[3][0]['choices'].append('Radial')
+        ret[3][0]['choices'].append('Polar')
+        elp3 = [["Point(from)",  None, 0,  {}],
+                ["Point(to)",    None, 0,  {}],
+                [None, True, 3,  {"text": "Reverse direction"}], ]
+        elp4 = [["WP/Plane",    None, 0,  {}],
+                [None, True, 3,  {"text": "Reverse direction"}],
+                [None,  "(Note) Face must be flat-plane or use WP", 2,  {}], ]
+        elp6 = [["Axis Dir.", None, 0, {}],
+                ["Point on axis", None, 0, {}],
+                [None, True, 3, {"text": "Reverse direction"}], ]
+        elp7 = [["Center",    None, 0,  {}],
+                [None, True, 3,  {"text": "Reverse direction"}], ]
+
+        ret[3].append({'elp': elp3})
+        ret[3].append({'elp': elp4})
+        ret[3].append({"elp": elp6})
+        ret[3].append({"elp": elp7})
+
+        return ret
+
+    def get_panel_value(self, obj):
+        ret = VtableElement.get_panel_value(self, obj)
+        if obj.use_normal:
+            ret[0] = 'Normal'
+        elif obj.use_fromto_points:
+            ret[0] = 'By two points'
+        elif obj.use_radial:
+            ret[0] = 'Radial'
+        elif obj.use_polar:
+            ret[0] = 'Polar'
+        else:
+            pass
+
+        ret.append([obj.fromto_points_txt1,
+                    obj.fromto_points_txt2,
+                    obj.reverse_dir_fromto])
+        ret.append([obj.normal_wp,
+                    obj.reverse_dir_normal,
+                    '(Note) Face must be flat-plane', ])
+        ret.append([obj.radial_axis_txt,
+                    obj.radial_point_txt,
+                    obj.reverse_dir_radial, ])
+        ret.append([obj.polar_center_txt,
+                    obj.reverse_dir_polar, ])
+
+        return ret
+
+    def import_panel_value(self, obj, v):
+        obj.use_normal = False
+        obj.use_normalp = False
+        obj.use_radial = False
+        obj.use_polar = False
+        obj.use_fromto_points = False
+
+        if v[0] == 'Normal':
+            setattr(obj, 'use_m_'+self.name, False)
+            obj.use_normal = True
+            obj.normal_wp = v[4][0]                
+            obj.reverse_dir_normal = v[4][1]
+        elif v[0] == 'By two points':
+            setattr(obj, 'use_m_'+self.name, False)
+            obj.use_fromto_points = True
+            obj.fromto_points_txt1 = v[3][0]
+            obj.fromto_points_txt2 = v[3][1]
+            obj.reverse_dir_fromto = v[3][2]
+        elif v[0] == 'Radial':
+            setattr(obj, 'use_m_'+self.name, False)
+            obj.use_radial = True
+            obj.radial_axis_txt = v[5][0]
+            obj.radial_point_txt = v[5][1]
+            obj.reverse_dir_radial = v[5][2]
+        elif v[0] == 'Polar':
+            setattr(obj, 'use_m_'+self.name, False)
+            obj.use_polar = True
+            obj.polar_center_txt = v[6][0]
+            obj.reverse_dir_polar = v[6][1]
+        else:
+            VtableElement.import_panel_value(self, obj, v)
+
+    def make_value_or_expression(self, obj):
+        ret = VtableElement.make_value_or_expression(self, obj)
+        if obj.use_normal:
+            ret = ['normal', obj.normal_wp, obj.reverse_dir_normal]
+        elif obj.use_fromto_points:
+            ret = ['fromto_points',
+                   obj.fromto_points_txt1,
+                   obj.fromto_points_txt2,
+                   obj.reverse_dir_normal]
+        elif obj.use_radial:
+            ret = ['radial',
+                   obj.radial_axis_txt,
+                   obj.radial_point_txt,
+                   obj.reverse_dir_radial]
+        elif obj.use_polar:
+            ret = ['polar',
+                   obj.polar_center_txt,
+                   obj.reverse_dir_polar]
+        else:
+            pass
+        return ret
 
 class VtableElement_ToPoint(VtableElement):
     pass

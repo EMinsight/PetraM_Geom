@@ -1949,7 +1949,125 @@ class Geometry():
             break
             ex.Next()
         '''
-    def process_plane_parameters(self, args, objs):
+    def process_normal_parameters(self, norm_param, c1, objs)
+        if tax[0] == 'normal':
+            for length in lengths:
+                trans2 = []
+                for gid in gids:
+                    if tax[1] == '':
+                        assert isinstance(gid, SurfaceID), "target must be surface"
+                        n1, p0 = self.get_face_normal(gid, check_flat=False)
+                    else:
+                        wp = objs['wp'+tax[1]]
+                        n1 = wp.get_norm()
+                        p0 = wp.get_center()                        
+                    if tax[2]:
+                        tt = -n1 * length
+                    else:
+                        tt = n1 * length
+                    trans2.append(trans_delta(tt))
+                trans.append(trans2)
+
+        elif tax[0] == 'normalp':
+            assert len(lengths) == 1, "length should have one element"
+            if tax[2] == '':
+                assert isinstance(gids[0], SurfaceID), "target must be surface"
+                n1, p0 = self.get_face_normal(gids[0], check_flat=False)
+            else:
+                wp = objs['wp'+tax[2]]
+                n1 = wp.get_norm()
+                p0 = wp.get_center()                        
+
+            dests = [x.strip() for x in tax[1].split(',')]
+            gid_dests = self.get_target1(objs, dests, 'p')
+            length = lengths[0]
+            for gid_dest in gid_dests:
+                p1 = self.get_point_coord(gid_dest)
+                if tax[3]:
+                    tt = -n1 * np.sum((p1 - p0) * n1) * length
+                else:
+                    tt = n1 * np.sum((p1 - p0) * n1) * length
+                trans.append(trans_delta(tt))
+
+        elif tax[0] == 'fromto_points':
+            dests1 = [x.strip() for x in tax[1].split(',')]
+            dests2 = [x.strip() for x in tax[2].split(',')]
+
+            gid_dests1 = self.get_target1(objs, dests1, 'p')
+            gid_dests2 = self.get_target1(objs, dests2, 'p')
+
+            assert len(gid_dests1) == 1, "Incorrect destination setting"
+            assert len(gid_dests2) == 1, "Incorrect destination setting"
+
+            p1 = self.get_point_coord(gid_dests1[0])
+            p2 = self.get_point_coord(gid_dests2[0])
+
+            n1 = p2 - p1
+            if not tax[3]:
+                n1 /= np.sqrt(np.sum(n1**2))
+            if tax[4]:
+                n1 *= -1
+
+            for length in lengths:
+                trans.append(trans_delta(length * n1))
+        elif tax[0] == 'radial':
+            axis = np.array(eval(tax[1]))
+            axis = axis / np.sqrt(np.sum(axis**2))
+            point_on_axis = np.array(eval(tax[2]))
+
+            for length in lengths:
+                trans2 = []
+                for gid in gids:
+                    if isinstance(gid, SurfaceID):
+                        n1, p0 = self.get_face_normal(gid, check_flat=False)
+                    elif isinstance(gid, LineID):
+                        p0 = self.get_line_center(gid)
+                    elif isinstance(gid, VertexID):
+                        p0 = self.get_point_coord(gid)
+                    else:
+                        assert False, "unsupported input (polar extrude)"
+
+                    n1 = p0 - axis * np.sum((p0 - point_on_axis) * axis)
+                    n1 = n1 / np.sqrt(np.sum(n1**2))
+                    if tax[3]:
+                        tt = -n1 * length
+                    else:
+                        tt = n1 * length
+                    trans2.append(trans_delta(tt))
+                trans.append(trans2)
+        elif tax[0] == 'polar':
+            center = np.array(eval(tax[1]))
+            for length in lengths:
+                trans2 = []
+                for gid in gids:
+                    if isinstance(gid, SurfaceID):
+                        n1, p0 = self.get_face_normal(gid, check_flat=False)
+                    elif isinstance(gid, LineID):
+                        p0 = self.get_line_center(gid)
+                    elif isinstance(gid, VertexID):
+                        p0 = self.get_point_coord(gid)
+                    else:
+                        assert False, "unsupported input (polar extrude)"
+                    n1 = p0 - center
+                    n1 = n1 / np.sqrt(np.sum(n1**2))
+                    if tax[2]:
+                        tt = -n1 * length
+                    else:
+                        tt = n1 * length
+                    trans2.append(trans_delta(tt))
+                trans.append(trans2)
+
+        else:
+            tax = np.array(tax).flatten()
+            tax = tax / np.sqrt(np.sum(np.array(tax)**2))
+            for length in lengths:
+                trans.append(trans_delta(length * tax))
+
+    
+    def process_plane_parameters(self, args, objs, gids):
+        comp = self.new_compound(gids)
+        xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
+        
         if args[0] == '3_points':
             # args[1] = ['3_points', '1', '7', '8']
 
@@ -2481,7 +2599,7 @@ class Geometry():
         return list(objs), [newkey]
 
     def CreateSurface_build_geom(self, objs, *args):
-        pts, isFilling = args
+        pts, points, isFilling = args
         pts = [x.strip() for x in pts.split(',')]
 
         gids_edge = self.get_target1(objs, pts, 'l')
@@ -3043,7 +3161,7 @@ class Geometry():
         
         gids = self.get_target2(objs, targets)
 
-        cptx, normal = self.process_plane_parameters(plane_param, objs)
+        cptx, normal = self.process_plane_parameters(plane_param, objs, gids)
 
         d = -np.sum(normal*cptx)
         abcd = (normal[0], normal[1], normal[2], d)
@@ -3569,6 +3687,11 @@ class Geometry():
 
     # Define 2D version the same as 3D
     Line2D_build_geom = Line_build_geom
+    
+    def NormalLine2D_build_geom(self, objs, *args):
+        lines, u_n, length, reverse = aegs
+        lines = [x.strip() for x in lines.split(',')]
+        gids = self.get_target1(objs, lines, 'l')
 
     def Circle2D_build_geom(self, objs, *args):
         center, ax1, ax2, radius = args
@@ -4058,61 +4181,58 @@ class Geometry():
     def SplitByPlane_build_geom(self, objs, *args):
         targets = [x.strip() for x in args[0].split(',')]
         gids = self.get_target2(objs, targets)
+        
+        cptx, normal = self.process_plane_parameters(args[1], objs, gids)
+        offset = args[-1]
+        if offset != 0:
+            cptx = cptx + normal * offset
 
+        ### splitter alogrithm
+        normal = -normal
+        pnt = gp_Pnt(*cptx)
+        dr = gp_Dir(*normal)
+        pl = Geom_Plane(pnt, dr)
+        maker = BRepBuilderAPI_MakeFace(pl, self.occ_geom_tolerance)
+        maker.Build()
+        if not maker.IsDone():
+            assert False, "Faild to generate plane"
+        plane = maker.Face()
+        operator = BOPAlgo_Splitter()
+
+        sp_objs = TopTools_ListOfShape()
+        sp_tools = TopTools_ListOfShape()
+ 
+        for gid in gids:
+            topolist = self.get_topo_list_for_gid(gid)
+            shape = topolist[gid]
+            sp_objs.Append(shape)
+        sp_tools.Append(plane)
+        
+        operator.SetArguments(sp_objs)
+        operator.SetTools(sp_tools)
+ 
+        operator.Perform();
+        if operator.HasErrors():
+            assert False, "Splitter Algorithm failed"                 
+
+        for gid in gids:
+            self.remove(gid)
+          
+        result = operator.Shape()
+        gids_new = self.register_shaps_balk(result)
+
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'splt'))
+
+        self.synchronize_topo_list()
+        return list(objs), newkeys
+
+        '''
         comp = self.new_compound(gids)
         xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
 
         cptx, normal = self.process_plane_parameters(args[1], objs)
-        '''
-        if args[1][0] == '3_points':
-            # args[1] = ['3_points', '1', '7', '8']
-
-            gid_ptx1 = self.get_target1(objs, [args[1][1], ], 'p')[0]
-            gid_ptx2 = self.get_target1(objs, [args[1][2], ], 'p')[0]
-            gid_ptx3 = self.get_target1(objs, [args[1][3], ], 'p')[0]
-            ptx1 = self.get_point_coord(gid_ptx1)
-            ptx2 = self.get_point_coord(gid_ptx2)
-            ptx3 = self.get_point_coord(gid_ptx3)
-
-            n = np.cross(ptx1 - ptx2, ptx1 - ptx3)
-            if np.sum(n**2) == 0:
-                assert False, "three points does not span a surface."
-            normal = n / np.sqrt(np.sum(n**2))
-            cptx = (ptx1 + ptx2 + ptx3) / 3.0
-
-        elif args[1][0] == 'by_abc':
-            data = np.array(args[1][1]).flatten()
-            normal = data[:3]
-            xx = np.array(
-                [(xmin + xmax) / 2, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0])
-            s = data[-1] - np.sum(normal * xx)
-            cptx = xx + s * normal
-
-        elif args[1][0] == 'face_parallel':
-            gid_face = self.get_target1(objs, [args[1][1], ], 'f')[0]
-            gid_ptx = self.get_target1(objs, [args[1][2], ], 'p')[0]
-            cptx = self.get_point_coord(gid_ptx)
-            normal, _void = self.get_face_normal(gid_face, check_flat=True)
-
-        elif args[1][0] == 'face_normal':
-            gid_face = self.get_target1(objs, [args[1][1], ], 'f')[0]
-            tmp = [x.strip() for x in args[1][2].split(',')]
-            gid_ptx = self.get_target1(objs, tmp, 'p')
-            ptx1 = self.get_point_coord(gid_ptx[0])
-            ptx2 = self.get_point_coord(gid_ptx[1])
-
-            cptx = ptx1
-
-            n1, _void = self.get_face_normal(gid_face, check_flat=True)
-            n2 = ptx2 - ptx1
-            n2 = n2 / np.sqrt(np.sum(n2**2))
-
-            normal = np.cross(n1, n2)
-
-        else:
-            assert False, "unknown option:" + args
-        '''
-
         offset = args[-1]
         if offset != 0:
             cptx = cptx + normal * offset
@@ -4139,7 +4259,7 @@ class Geometry():
                 del objs[x]
 
         return list(objs), newkeys
-
+        '''
     def ProjectOnWP_build_geom(self, objs, *args):
         targets = args[0]
         targets = [x.strip() for x in targets.split(',')]
@@ -4263,6 +4383,35 @@ class Geometry():
         self._last_wp_param = c1, d1, d2
         return objs, []
     
+    def WPNormalToPlaneStart_build_geom(self, objs, *args):
+        norm_param, c1, p1, flip1, flip2, offset = args
+
+        c1, p1 = self.get_target1(objs, [c1, p1], 'p')
+        newkeys = []
+
+        cgroup = self.vertices.current_group()
+        self.set_topolist_group(0)
+
+        n1, c1 = self.process_normal_parameters(norm_param, c1, objs)
+        p1 = self.get_point_coord(p1)
+
+        self.set_topolist_group(cgroup)
+        print(n1, c1, p1)
+        d1 = np.array(p1) - np.array(c1)
+        d1 = d1 / np.sqrt(np.sum(d1**2))
+
+
+        d2 = np.cross(n1, d1)
+        d1 = np.cross(d2, n1)
+        if flip1:
+            d1 = -d1
+        if flip2:
+            d2 = -d2
+
+        c1 = c1 + n1 * offset
+        self._last_wp_param = c1, d1, d2
+        return objs, []
+
     def select_highest_dim(self, shape):
         comp = TopoDS_Compound()
         b = self.builder

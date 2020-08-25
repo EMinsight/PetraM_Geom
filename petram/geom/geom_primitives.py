@@ -673,12 +673,40 @@ class ExtendedLine(GeomPB):
     
     @classmethod    
     def fancy_menu_name(self):
-        return 'by Existing Lines'
+        return 'from Existing Lines'
 
     @classmethod
     def fancy_tree_name(self):
         return 'Line'
 
+ldata = (('line', VtableElement('lines', type='string',
+                                 guilabel='Lines',
+                                 default="",
+                                 tip="lines to be extended")),
+         ('u_n', VtableElement('u_n', type='array',
+                                 guilabel='U_n',
+                                 default='0.0',
+                                 tip="Normalized position (based on U)")),
+         ('length', VtableElement('num_resample', type='float',
+                                 guilabel='length',
+                                 default='1.0',
+                                 tip="Length of line")),)
+         ('rev_dir', VtableElement('rev_dir', type='bool',
+                                 guilabel='Reverse',
+                                 default=False,
+                                 tip="reverse direction ")), )
+
+class NormalLine2D(GeomPB):
+    vt = Vtable(ldata)
+    
+    @classmethod    
+    def fancy_menu_name(self):
+        return 'Normal to Existing Lines'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Line'
+    
 
 ldata = (('points', VtableElement('pts', type='string',
                                   guilabel='Points',
@@ -756,8 +784,12 @@ ldata = (('lines', VtableElement('lines', type='string',
                                  guilabel='Lines',
                                  default="",
                                  tip="lines to be connected")),
+         ('points', VtableElement('points', type='string',         
+                        guilabel='Points on surface',
+                                 default="",
+                                 tip="points as constraints")),         
          ('isplane', VtableElement('isplane_org', type='bool',
-                                   guilabel='Use surface filling',
+                                   guilabel='Use surface filling (points c',
                                    default=False,
                                    tip="Surface filling")), )
 
@@ -1914,7 +1946,7 @@ class WPBase(GeomPB):
     isWP = True
 
     def get_possible_child(self):
-        return [Point2D, PointCircleCenter, Line2D,
+        return [Point2D, PointCircleCenter, Line2D, NormalLine2D,
                 Circle2D, CircleBy3Points, Circle2DCenterOnePoint,
                 Circle2DByDiameter, Circle2DRadiusTwoTangentCurve,
                 Arc2D, Arc2DBy3Points, Arc2DBy2PointsAngle,
@@ -1927,7 +1959,8 @@ class WPBase(GeomPB):
     def get_possible_child_menu(self):
         return [("Add Point...", Point2D), ("", PointCenter), ("", PointOnEdge),
                 ("!", PointCircleCenter),
-                ("Add Line/Arc", Line2D), ("", Arc2D), ("", Arc2DBy3Points),
+                ("Add Line/Arc", Line2D), ("", NormalLine2D),
+                ("", Arc2D), ("", Arc2DBy3Points),
                 ("!", Arc2DBy2PointsAngle),
                 ("Add Rect", Rect2D), ("!", Rect2DByCorners),
                 ("Add Circle...", Circle2D), ("", CircleBy3Points),
@@ -2040,7 +2073,44 @@ class WPParallelToPlane(WPBase):
     @classmethod
     def fancy_tree_name(self):
         return 'WorkPlane'
+    
+data0 = (('wp_normal', VtableElement_Normal('wp_normal', type='float',
+                                           guilabel='normal',
+                                           suffix=('x', 'y', 'z'),
+                                           default=[0, 0, 1],
+                                           tip="wp_normal")),
+        ('center', VtableElement('pts1', type='string',
+                                  guilabel='Center point',
+                                  default="",
+                                  tip="center of WP")),
+        ('ax1', VtableElement('ax1', type='string',
+                               guilabel='Point on 1st axis',
+                               default="",
+                               tip="point on 1st axis")),
+         ('flip1', VtableElement('flip1', type='bool',
+                                 guilabel='Flip 1st axis',
+                                 default=False,
+                                 tip="flip 1st axis")),
+         ('flip2', VtableElement('flip2', type='bool',
+                                 guilabel='Flip 2nd axis',
+                                 default=False,
+                                 tip="flip 2nd axis")),
+         ('offset', VtableElement('offset', type='float',
+                                  guilabel='Offset',
+                                  default=0.0,
+                                  tip="offset in normal direction")), )
 
+class WPNormalToPlane(WPBase):
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Normal to Plane'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'WorkPlane'
+    
 
 cad_fix_cb = [None, None, 36, {"col": 4,
                                "labels": ["Degenerated",
