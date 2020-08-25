@@ -683,14 +683,14 @@ ldata = (('line', VtableElement('lines', type='string',
                                  guilabel='Lines',
                                  default="",
                                  tip="lines to be extended")),
-         ('u_n', VtableElement('u_n', type='array',
+         ('u_n', VtableElement('u_n', type='float',
                                  guilabel='U_n',
                                  default='0.0',
                                  tip="Normalized position (based on U)")),
-         ('length', VtableElement('num_resample', type='float',
+         ('length', VtableElement('num_resample', type='array',
                                  guilabel='length',
                                  default='1.0',
-                                 tip="Length of line")),)
+                                 tip="Length of line")),
          ('rev_dir', VtableElement('rev_dir', type='bool',
                                  guilabel='Reverse',
                                  default=False,
@@ -826,7 +826,30 @@ class CreateVolume(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'Volume'
+    
+ldata = (('volume', VtableElement('volume', type='string',
+                                 guilabel='Volume',
+                                 default="",
+                                 tip="Volume to generate shell")), )
+         ('opening', VtableElement('opening', type='string',
+                                 guilabel='OpeningFaces',
+                                 default="",
+                                 tip="Shell opening")), 
+         ('thickness', VtableElement('thikcness', type='float',
+                                 guilabel='Thickness',
+                                 default='1.0',
+                                 tip="Shell thickness")),)
+         
+class CreateShell(GeomPB):
+    vt = Vtable(ldata)
 
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Volume'
+    
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Volume'
 
 ldata = (('target', VtableElement('target', type='string',
                                   guilabel='Volume',

@@ -119,7 +119,8 @@ class OCCGeom(GmshGeom):
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ArrayPath,
-                                                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
+                                                 ThruSection, CreateShell,
+                                                 RotateCenterPoints, MoveByPoints, ExtendedLine)
         return [PointOCC, LineOCC, CircleOCC, Polygon2,
                 Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
@@ -135,7 +136,7 @@ class OCCGeom(GmshGeom):
                 healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                 ArrayPath,     
-                ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine]
+                ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine]
 
     def get_possible_child_menu(self):
         from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
@@ -156,7 +157,8 @@ class OCCGeom(GmshGeom):
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ArrayPath,
-                                                 ThruSection, RotateCenterPoints, MoveByPoints, ExtendedLine)
+                                                 ThruSection, CreateShell,
+                                                 RotateCenterPoints, MoveByPoints, ExtendedLine)
 
         return [("Geometry Element...", None),
                 ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
@@ -172,7 +174,7 @@ class OCCGeom(GmshGeom):
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
                 ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("!", ThruSection), #("", SurfaceLoop),
+                ("", ThruSection), ("!", CreateShell),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
                 ("Fillet/Chamfer", Fillet), ("!", Chamfer),                                
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),

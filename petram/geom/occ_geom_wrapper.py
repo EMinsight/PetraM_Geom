@@ -333,22 +333,41 @@ class Geometry():
         p2 = np.array((pnt2.X(), pnt2.Y(), pnt2.Z(),))
         return (p1 + p2) / 2.0
 
-    def get_line_direction(self, gid):
+    def get_line_direction(self, gid, u_n=None):
         if gid not in self.edges:
             assert False, "can not find edge: " + str(int(gid))
         shape = self.edges[gid]
         curve, first, last = self.bt.Curve(shape)
         pnt1 = gp_Pnt()
         pnt2 = gp_Pnt()
-        curve.D0(first, pnt1)
-        curve.D0(last, pnt2)
-        p1 = np.array((pnt1.X(), pnt1.Y(), pnt1.Z(),))
-        p2 = np.array((pnt2.X(), pnt2.Y(), pnt2.Z(),))
 
-        p = p2 - p1
+        if u_n is None:
+            curve.D0(first, pnt1)
+            curve.D0(last, pnt2)
+            p1 = np.array((pnt1.X(), pnt1.Y(), pnt1.Z(),))
+            p2 = np.array((pnt2.X(), pnt2.Y(), pnt2.Z(),))
+            p = p2 - p1
+        else:
+            uu = first + (last-first)*u_n
+            gvec = gp_Vec()
+            print(uu, type(uu))
+            curve.D1(uu, pnt1, gvec)
+            p = np.array((gvec.X(), gvec.Y(), gvec.Z(),))
         p = p / np.sqrt(np.sum(p**2))
         return p
 
+    def get_line_point(self, gid, u_n):
+        if gid not in self.edges:
+            assert False, "can not find edge: " + str(int(gid))
+        shape = self.edges[gid]
+        curve, first, last = self.bt.Curve(shape)
+        pnt1 = gp_Pnt()
+
+        uu = first + (last-first)*u_n
+        curve.D0(uu, pnt1)
+        p = np.array((pnt1.X(), pnt1.Y(), pnt1.Z(),))
+        return p
+        
     def get_face_normal(self, gid, check_flat=True):
         '''
         return normal vector of flat surface and a representative point on
@@ -1985,7 +2004,6 @@ class Geometry():
         '''
 
     def process_normal_parameters(self, tax, c1, objs):
-        print("here", tax, c1)
         p0 = self.get_point_coord(c1)
 
         if tax[0] == 'normal':
@@ -1995,7 +2013,6 @@ class Geometry():
                 #p0 = wp.get_center()
             else:
                 gid = self.get_target2(objs, [tax[1]])[0]
-                print(gid)
                 n1, _void = self.get_face_normal(gid, check_flat=True)
                 print(n1)
             if tax[2]:
@@ -3669,9 +3686,35 @@ class Geometry():
     Line2D_build_geom = Line_build_geom
 
     def NormalLine2D_build_geom(self, objs, *args):
-        lines, u_n, length, reverse = aegs
+        lines, u_n, length, reverse = args
         lines = [x.strip() for x in lines.split(',')]
         gids = self.get_target1(objs, lines, 'l')
+        
+        newobjs = []
+        for gid in gids:
+            n = self.get_line_direction(gid, u_n=u_n)
+            p0 = self.get_line_point(gid, u_n)
+            if reverse:
+                n = -n
+            # on 2D normal is always (0,0,1)
+            n = np.cross(n, (0, 0, 1))
+
+            if len(length) == 1:
+                p1 = p0
+                p2 = p0 + length[0]*n
+            elif len(length) == 2:               
+                p1 = p0 + length[0]*n
+                p2 = p0 + length[1]*n
+            else:
+                assert False, "Length should have either one or two elements"           
+            p1 = self.add_point(p1)
+            p2 = self.add_point(p2)
+            ln = self.add_line(p1, p2)
+            shape = self.edges[ln]
+            self.builder.Add(self.shape, shape)
+            newobjs.append(objs.addobj(ln, 'ln'))
+            
+        return list(objs), newobjs        
 
     def Circle2D_build_geom(self, objs, *args):
         center, ax1, ax2, radius = args
@@ -4376,7 +4419,7 @@ class Geometry():
         p1 = self.get_point_coord(p1)
 
         self.set_topolist_group(cgroup)
-        print(n1, c1, p1)
+
         d1 = np.array(p1) - np.array(c1)
         d1 = d1 / np.sqrt(np.sum(d1**2))
 
@@ -4945,7 +4988,7 @@ class Geometry():
         if data_wp is not None:
             geom_msh, l, s, v, vcl, esize, ptx, shape, idx = data_wp
             ptx = self.move_wp_points(ptx, *self._last_wp_param)
-            print("l here", l)
+            #print("l here", l)
             data_wp = geom_msh, l, s, v, vcl, esize, ptx, shape, idx
 
         wp_shape = self.shape
