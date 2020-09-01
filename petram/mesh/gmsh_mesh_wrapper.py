@@ -213,6 +213,7 @@ class GMSHMeshWrapper():
         self.use_ho = kwargs.pop("use_ho", False)
         self.ho_order = kwargs.pop("ho_order", 2)        
         self.optimize_ho = kwargs.pop("optimize_ho", 0)
+        self.mapper_tol = kwargs.pop("mapper_tol", 1e-5)
 
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -237,29 +238,6 @@ class GMSHMeshWrapper():
     def name(self):
         return self._name
 
-    '''
-    def add(self, name, *gids, **kwargs):
-        #
-        #add mesh command
-        #
-
-        if name == 'extrude_face':
-            self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
-        elif name == 'revolve_face':
-
-            kwargs['revolve'] = True
-            kwargs['volume_hint'] = gids[0]
-            self.mesh_sequence.append(['copyface', (gids[1], gids[2]), kwargs])
-        else:
-            pass
-        self.mesh_sequence.append([name, gids, kwargs])
-
-    def count_sequence(self):
-        return len(self.mesh_sequence)
-
-    def clear(self):
-        self.mesh_sequence = []
-    '''
     @use_profiler
     def generate(self, brep_input, msh_file, dim=3, finalize=False):
         '''
@@ -308,6 +286,7 @@ class GMSHMeshWrapper():
         self.vertex_geom_size = get_vertex_geom_zie()
 
         # set default vertex mesh size
+        self.cl_data = {}
         sizes = []
         for tag in self.vertex_geom_size.keys():
             size = self.vertex_geom_size[tag]/self.res
@@ -315,7 +294,8 @@ class GMSHMeshWrapper():
                 size = self.clmax
             if size <= self.clmin:
                 size = self.clmin
-            gmsh.model.mesh.setSize(((0, tag),), size)
+                
+            self.setCL(((0, tag),), size)
             sizes.append(size)
             #print("Default Point Size", (0, tag), size)
         if len(sizes) > 0:
@@ -789,6 +769,10 @@ class GMSHMeshWrapper():
 
         return max(d)
 
+    def setCL(self, dimtags, size):
+        for dimtag in dimtags:
+           self.cl_data[dimtag] = size
+        gmsh.model.mesh.setSize(dimtags, size)        
     '''
     Low-level implementation at each mesh dim
     '''
@@ -806,7 +790,8 @@ class GMSHMeshWrapper():
         if len(dimtags) == 0:
             return
         self.show_only(dimtags)
-        gmsh.model.mesh.setSize(dimtags, size)
+        self.setCL(dimtags, size)
+
         for dim, tag in dimtags:
             if not tag in done[0]:
                 done[0].append(tag)
@@ -895,7 +880,7 @@ class GMSHMeshWrapper():
                 size = maxsize
             if size < minsize:
                 size = minsize
-            gmsh.model.mesh.setSize(((0, tag),), size)
+            self.setCL(((0, tag), ), size)                
             print("Volume Set Point Size", (0, tag), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
@@ -1015,7 +1000,7 @@ class GMSHMeshWrapper():
                 size = maxsize
             if size < minsize:
                 size = minsize
-            gmsh.model.mesh.setSize(((0, tag),), size)
+            self.setCL(((0, tag), ), size)
             #print("Face Set Point Size", (0, tag), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
@@ -1095,7 +1080,7 @@ class GMSHMeshWrapper():
                 size = maxsize
             if size <= minsize:
                 size = minsize
-            gmsh.model.mesh.setSize(((0, tag),), size)
+            self.setCL(((0, tag), ), size)                
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
         return done, params
@@ -1286,6 +1271,7 @@ class GMSHMeshWrapper():
         axan = kwargs.pop('axan', None)
         revolve = kwargs.pop('revolve', False)
         volume_hint = kwargs.pop('volume_hint', None)
+        copy_cl = kwargs.pop('copy_cl', True)
         #geom_data = (ptx, l, s, v, mid_points)
         tag1 = [x for dim, x in dimtags]
         tag2 = [x for dim, x in dimtags2]
@@ -1307,23 +1293,31 @@ class GMSHMeshWrapper():
                 ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface(
                     tag1, tag2, self.edge_tss,
                     geom_data=self.geom_info,
-                    axan=axan, mind_eps=geom_size*1e-7)
+                    axan=axan, mind_eps=geom_size*self.mapper_tol)
             else:
                 # copy(revolve) face is perfomed in the preparation of revolve mesh
                 # in this case we use the volume being meshed as a hint
                 #print("using volume hint", volume_hint)
                 vtags = [int(x) for x in volume_hint.split(',')]
+                print("mind_eps", geom_size*self.mapper_tol)
                 ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
                     tag1, tag2, vtags, self.edge_tss,
                     geom_data=self.geom_info,
-                    axan=axan, mind_eps=geom_size*1e-7)
+                    axan=axan, mind_eps=geom_size*self.mapper_tol)
         else:
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                 tag1, tag2, self.edge_tss,
                 geom_data=self.geom_info,
-                axan=axan, mind_eps=geom_size*1e-7)
+                axan=axan, mind_eps=geom_size*self.mapper_tol)
 
         params = (ax, an, px, d, affine, p_pairs, l_pairs, s_pairs)
+
+        print("p_pairs", p_pairs)
+        for p0 in p_pairs:
+            p1 = p_pairs[p0]
+            if (0, p0) in self.cl_data:
+                self.setCL(((0, p1),), self.cl_data[(0, p0)])
+                #print("copying CL from ", p0, "to ", p1, self.cl_data[(0, p0)])
         #print("transformation param", params)
         return done, params
 
@@ -1358,7 +1352,7 @@ class GMSHMeshWrapper():
             if dim != 1:
                 continue
 
-            tag = l_pairs[tag]
+            tag = abs(l_pairs[tag])
 
             if tag in done[1]:
                 print("Line is already meshed (CopyFace1D skip edge): " +
@@ -1396,16 +1390,21 @@ class GMSHMeshWrapper():
             def get_dist(p1, p2):
                 d = np.array(p1) - np.array(p2)
                 return np.sum(d**2)
+            '''
             if get_dist(p1_0, p2_0) > get_dist(p1_0, p2_1):
                 print("reversing Coords for tag :",
                       tag, p1_0, p1_1, p2_0, p2_1)
                 pos = np.array(pos).reshape(-1, 3)
                 pos = np.flip(pos, 0)
                 pos = pos.flatten()
-                #ppos = np.array([abs(1-x) for x in ppos])
+                print(pos, ppos, tmp)
+
                 #print("parametric fixed", pos, ppos)
                 #ntag2 = list(reversed(ntag2))
-
+                #ppos = np.array([abs(1-x) for x in ppos])                
+                #ppos = (tmp[0]-tmp[1])*ppos + tmp[1]                
+            #else:
+            '''
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
 
             for i, j in zip(ntag, ntag2):
@@ -1422,7 +1421,9 @@ class GMSHMeshWrapper():
     @process_text_tags_sd(dim=2)
     def copyface_2D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
         ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
-
+ 
+        print("Entering CopyFace2D", s_pairs)
+        
         mdata = []
         for dim, tag in dimtags:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
@@ -1536,12 +1537,12 @@ class GMSHMeshWrapper():
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
                 tag1, tag2, vtags, self.edge_tss,
                 geom_data=self.geom_info,
-                axan=axan, mind_eps=geom_size*1e-7)
+                axan=axan, mind_eps=geom_size*self.mapper_tol)
         else:
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                 tag1, tag2, self.edge_tss,
                 geom_data=self.geom_info,
-                axan=axan, mind_eps=geom_size*1e-7)
+                axan=axan, mind_eps=geom_size*self.mapper_tol)
         ws = self.prep_workspace()
 
         # ??? Apparently I need to delete a destinaion volume to make space for
@@ -1575,8 +1576,10 @@ class GMSHMeshWrapper():
         #info1 = self.geom_info
         info2 = self.read_geom_info(ret)
 
-        pmap, pmap_r = map_points_in_geom_info(info1, info2, th = geom_size*1e-7)
-        lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r, th = geom_size*1e-6)
+        pmap, pmap_r = map_points_in_geom_info(info1, info2,
+                                               th=geom_size*self.mapper_tol)
+        lmap, lmap_r = map_lines_in_geom_info(info1, info2, pmap_r,
+                                              th=geom_size*self.mapper_tol)
         smap, smap_r = map_surfaces_in_geom_info(info1, info2, lmap_r)
         vmap, vmap_r = map_volumes_in_geom_info(info1, info2, smap_r)
 
