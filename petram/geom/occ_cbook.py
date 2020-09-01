@@ -66,7 +66,9 @@ try:
     from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
                                         BRepOffsetAPI_MakeFilling,
                                         BRepOffsetAPI_ThruSections,
-                                        BRepOffsetAPI_NormalProjection)
+                                        BRepOffsetAPI_NormalProjection,
+                                        BRepOffsetAPI_MakeThickSolid)
+    
     from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_Sewing,
                                          BRepBuilderAPI_Copy,
                                          BRepBuilderAPI_Transform,

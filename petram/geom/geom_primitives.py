@@ -789,7 +789,7 @@ ldata = (('lines', VtableElement('lines', type='string',
                                  default="",
                                  tip="points as constraints")),         
          ('isplane', VtableElement('isplane_org', type='bool',
-                                   guilabel='Use surface filling (points c',
+                                   guilabel='Use surface filling',
                                    default=False,
                                    tip="Surface filling")), )
 
@@ -830,7 +830,7 @@ class CreateVolume(GeomPB):
 ldata = (('volume', VtableElement('volume', type='string',
                                  guilabel='Volume',
                                  default="",
-                                 tip="Volume to generate shell")), )
+                                 tip="Volume to generate shell")), 
          ('opening', VtableElement('opening', type='string',
                                  guilabel='OpeningFaces',
                                  default="",
@@ -838,18 +838,23 @@ ldata = (('volume', VtableElement('volume', type='string',
          ('thickness', VtableElement('thikcness', type='float',
                                  guilabel='Thickness',
                                  default='1.0',
-                                 tip="Shell thickness")),)
+                                 tip="Shell thickness")),
+         ('round_conner', VtableElement('round_conner', type='bool',
+                                   guilabel='Fillet outer edges',
+                                   default=False,
+                                   tip="Surface filling")), )
+
          
 class CreateShell(GeomPB):
     vt = Vtable(ldata)
 
     @classmethod
     def fancy_menu_name(self):
-        return 'Volume'
+        return 'Shell'
     
     @classmethod
     def fancy_tree_name(self):
-        return 'Volume'
+        return 'Shell'
 
 ldata = (('target', VtableElement('target', type='string',
                                   guilabel='Volume',

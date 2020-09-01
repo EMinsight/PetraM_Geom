@@ -2682,6 +2682,60 @@ class Geometry():
         self.synchronize_topo_list(action='both', verbose=False)
         return list(objs), [newobj2]
 
+    def CreateShell_build_geom(self, objs, *args):
+        vols, openings, thick, conner = args
+        vols = [x.strip() for x in vols.split(',')]        
+        vols = self.get_target1(objs, vols, 'v')
+
+        if len(vols) != 1:
+            assert False, "Choose only one volume to make shell"
+
+        solid = self.solids[vols[0]]
+        
+        openings = [x.strip() for x in openings.split(',')]
+        openings = self.get_target1(objs, openings, 'f')
+
+        LCF = TopTools_ListOfShape()
+        for tmp in openings:
+            topolist = self.get_topo_list_for_gid(tmp)
+            shape = topolist[tmp]
+            LCF.Append(shape)
+        from OCC.Core.Precision import precision_Confusion
+        tol = precision_Confusion()
+
+        SolidMaker = BRepOffsetAPI_MakeThickSolid()
+
+        from OCC.Core.GeomAbs import GeomAbs_Arc,GeomAbs_Intersection
+        from OCC.Core.BRepOffset import BRepOffset_Skin
+
+        if conner:
+            jointype = GeomAbs_Intersection
+        else:
+            jointype = GeomAbs_Intersection
+            
+        SolidMaker.MakeThickSolidByJoin(solid,
+                                        LCF,
+                                        thick,
+                                        tol,
+                                        BRepOffset_Skin,
+                                        False,
+                                        False,
+                                        jointype)
+
+        if not SolidMaker.IsDone():
+            assert False, "Faile to make shell"
+
+        result = SolidMaker.Shape()
+        
+        gids_new = self.register_shaps_balk(result)
+
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'sh'))
+
+        self.synchronize_topo_list()
+        return list(objs), newkeys
+
     def Box_build_geom(self, objs, *args):
         c1, e1, e2, e3 = args
         lcar = 0.0
