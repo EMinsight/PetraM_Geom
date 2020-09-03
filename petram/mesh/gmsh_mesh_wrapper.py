@@ -16,7 +16,7 @@ from six.moves.queue import Empty as QueueEmpty
 
 from collections import OrderedDict
 Algorithm2D = OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 5),
-                           ("Frontal", 6), ("BAMG", 7), ("DelQuad", 8),
+                           ("Frontal", 6), ("BAMG", 7), 
                            ("FrrontalQuad", 8), ("Paking of parallelograms", 9),
                            ("default", 2)))
 Algorithm3D = OrderedDict((("Delaunay", 1), 
@@ -1521,6 +1521,7 @@ class GMSHMeshWrapper():
 
         revolve = kwargs.pop('revolve', False)
         nlayers = kwargs.get('nlayers', 5)
+        use_recombine = kwargs.get('use_recombine', False)
         axan = kwargs.pop('axan', None)
 
         ptx, p, l, s, v, mid_points = self.geom_info
@@ -1552,11 +1553,13 @@ class GMSHMeshWrapper():
 
         if (not revolve and an == 0):
             ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
-                                         numElements=[nlayers])
+                                         numElements=[nlayers],
+                                         use_recombine=use_recombine)
         elif (revolve and an != 0):
             ret = gmsh.model.occ.revolve(dimtags, px[0], px[1], px[2],
                                          ax[0], ax[1], ax[2], an,
-                                         numElements=[nlayers])
+                                         numElements=[nlayers],
+                                         recombine=use_recombine)
         else:
             print(revolve, an)
             assert False, "extrude/revolve mesh error. Inconsistent imput"

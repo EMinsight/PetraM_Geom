@@ -537,16 +537,22 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
           ('mapper', VtableElement('mapper', type='string',
                                    guilabel = 'Transform Hint',
                                    default = "", 
-                                   tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),)
+                                   tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),
+          ('use_recombine', VtableElement('use_recombine', type='bool',
+                                      guilabel = 'Recombine(Hex/Prism)',
+                                      default = False,
+                                      tip = "recombine extruded mesh to Hex/Prism")), )
+
     
 class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
         gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
         
         kwargs = process_hint_ex(hint)
-        mesher.add('extrude_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)
+        mesher.add('extrude_face', gid, src_id, dst_id,
+                   nlayers=nlayers, use_recombine=use_recombine, **kwargs)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -563,11 +569,12 @@ class ExtrudeMesh(GmshMeshActionBase):
 class RevolveMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
         gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
         
         kwargs = process_hint_rv(hint)
-        mesher.add('revolve_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)        
+        mesher.add('revolve_face', gid, src_id, dst_id,
+                   nlayers=nlayers, use_recombine=use_recombine, **kwargs)        
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
