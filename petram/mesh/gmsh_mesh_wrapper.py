@@ -23,6 +23,9 @@ Algorithm3D = OrderedDict((("Delaunay", 1),
                            ("Frontal", 4),
                            ("HXT", 10), ("MMG3D", 7),
                            ("R-tree", 9), ("default", 1)))
+AlgorithmR = OrderedDict((("Simple", 0), ("Blossom", 1),
+                          ("SimpleFullQuad", 2), ("BlossomFullQuad", 3),
+                          ("default", 3),))
 HighOrderOptimize = OrderedDict((("none", 0),
                                  ("optimization", 1),
                                  ("elastic+optimization", 2),
@@ -215,6 +218,7 @@ class GMSHMeshWrapper():
         self.optimize_ho = kwargs.pop("optimize_ho", 0)
         self.mapper_tol = kwargs.pop("mapper_tol", 1e-5)
 
+        
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", meshformat)
@@ -231,6 +235,7 @@ class GMSHMeshWrapper():
         self.res = EdgeResolution
         self.algorithm = MeshAlgorithm
         self.algorithm3d = MeshAlgorithm3D
+        self.algorithmr = kwargs.pop("MeshAlgorithmR", "default")
         self.maxthreads = MaxThreads    # general, 1D, 2D, 3D: defualt = 1,1,1,1
         self._new_brep = True
         self._name = "GMSH_Mesher"
@@ -258,6 +263,8 @@ class GMSHMeshWrapper():
                               Algorithm2D[self.algorithm])
         gmsh.option.setNumber("Mesh.Algorithm3D",
                               Algorithm3D[self.algorithm3d])
+        gmsh.option.setNumber("Mesh.RecombinationAlgorithm",
+                              AlgorithmR[self.algorithmr])
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
         
@@ -306,18 +313,20 @@ class GMSHMeshWrapper():
 
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
-        adim = self.check_algorith_dim()
+        #adim, idx_dim = self.check_algorith_dim()
+        #adim  = self.check_algorith_dim()
 
         for mdim in range(maxdim+1):
             for idx, sq in enumerate(self.mesh_sequence):
+                '''
                 if (mdim == adim and
-                        idx == len(self.mesh_sequence)-1 and
-                        self.use_ho):
-                    # turn on high order if it is the last step
+                    idx_dim[mdim] == idx and
+                    self.use_ho):
+                    #print("turn on high order", self.ho_order)
                     gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
                     gmsh.option.setNumber("Mesh.HighOrderOptimize",
                                           HighOrderOptimize[self.optimize_ho])
-                    #gmsh.option.setNumber("Mesh.HighOrderDistCAD", 1)
+                '''
                 proc, args, kwargs = sq
                 f = getattr(self, proc+"_"+str(mdim)+"D")
 
@@ -334,7 +343,14 @@ class GMSHMeshWrapper():
 
             for i in range(mdim+1, 4):
                 done[i] = []
-
+        if self.use_ho:
+            gmsh.option.setNumber("Mesh.HighOrderDistCAD", 1)            
+            gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
+            gmsh.option.setNumber("Mesh.HighOrderOptimize",
+                                   HighOrderOptimize[self.optimize_ho])
+            self.hide_all()
+            gmsh.model.mesh.generate(3)
+            
         gmsh.model.mesh.removeDuplicateNodes()
 
         # somehow add_physical is very slow when there are too many physicals...
@@ -756,7 +772,7 @@ class GMSHMeshWrapper():
                 'transfinite_volume':3,
                 'transfinite_face':2,
                 'transfinite_edge':1,
-                'recombine_surface':2,
+                'recombine_surface':0,
                 'copyface':2,
                 'extrude_face':2,
                 'revolve_face':2,
@@ -1623,8 +1639,10 @@ class GMSHMeshWrapper():
 
         lateral_edge_digtags = [(1, lmap[key]) for key in tobe_meshed_edges]
         self.show_only(lateral_edge_digtags)
+        
         gmsh.model.mesh.generate(1)
-
+        #gmsh.write("debug_1d.msh")
+        
         node_map1 = {info1[1][k]+1: info2[1][pmap[k]]+1 for k in pmap}
         #noffset = max(gmsh.model.mesh.getNodes()[0])+1
         #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
@@ -1668,7 +1686,6 @@ class GMSHMeshWrapper():
             edata = gmsh.model.mesh.getElements(dim, tag)
             mdata.append((dim, tag, ndata, edata))
         '''
-        # gmsh.write("debug_1d.msh")
 
         # send back 1D data
         self.switch_model('main1')
@@ -1764,8 +1781,9 @@ class GMSHMeshWrapper():
         # self.hide(src_dst)
         self.show_only([(2, smap[key]) for key in tobe_meshed_faces])
         # this meshes un-meshed  sides ....
-        gmsh.model.mesh.generate(2)
 
+        gmsh.model.mesh.generate(2)
+        
         ents_1D = gmsh.model.getEntities(1)
         #ents_1D = list(set(gmsh.model.getBoundary(src_dst, combined=False, oriented=False)))
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]

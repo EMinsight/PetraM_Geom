@@ -74,6 +74,7 @@ class MeshSequenceOperator():
                   'EdgeResolution': self.res,
                   'MeshAlgorithm': self.algorithm,
                   'MeshAlgorithm3D': self.algorithm3d,
+                  'MeshAlgorithmR': self.algorithmr,
                   'MaxThreads': self.maxthreads,
                   'use_profiler': self.use_profiler,
                   'use_expert_mode': self.use_expert_mode,

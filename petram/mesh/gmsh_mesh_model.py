@@ -1,4 +1,5 @@
 from __future__ import print_function
+from petram.mfem_config import use_parallel
 from petram.phys.vtable import VtableElement, Vtable, Vtable_mixin
 from petram.mesh.mesh_model import Mesh
 
@@ -14,16 +15,16 @@ import time
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshMeshModel')
 
-from petram.mfem_config import use_parallel
 
 if use_parallel:
-   import mfem.par as mfem
-   from mpi4py import MPI
-   num_proc = MPI.COMM_WORLD.size
-   myid     = MPI.COMM_WORLD.rank
-   from petram.helper.mpi_recipes import *   
+    import mfem.par as mfem
+    from mpi4py import MPI
+    num_proc = MPI.COMM_WORLD.size
+    myid = MPI.COMM_WORLD.rank
+    from petram.helper.mpi_recipes import *
 else:
-   import mfem.ser as mfem
+    import mfem.ser as mfem
+
 
 class GMesh(Mesh):
     def onItemSelChanged(self, evt):
@@ -43,7 +44,7 @@ class GMesh(Mesh):
         viewer = evt.GetEventObject().GetTopLevelParent().GetParent()
         viewer.set_view_mode('mesh', self)
         evt.Skip()
-        
+
     @property
     def geom_timestamp(self):
         return self.parent.geom_timestamp
@@ -102,12 +103,12 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        #b1 = {"label": "S", "func": self.onBuildBefore,
+        # b1 = {"label": "S", "func": self.onBuildBefore,
         #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
 
-        ll = [[None, None, 241, {'buttons': [b2, ], #b2],
+        ll = [[None, None, 241, {'buttons': [b2, ],  # b2],
                                  'alignright':True,
                                  'noexpand': True}, ], ]
         ll.extend(self.vt.panel_param(self))
@@ -143,13 +144,15 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             geom_root.onBuildAll(evt)
 
         try:
-            filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'
+            filename = os.path.join(
+                viewer.model.owndir(),
+                self.name()) + '.msh'
             kwargs['gui_parent'] = dlg
             kwargs['filename'] = filename
 
             count = self.parent.build_mesh(geom_root, **kwargs)
             do_clear = (count == 0)
-        except:
+        except BaseException:
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to generate meshing script',
@@ -232,7 +235,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
             values = list(set([int(x) for x in text.split(',')]))
             values = ','.join([str(x) for x in values])
             return values
-        except:
+        except BaseException:
             pass
 
         # then convert it using namespace
@@ -240,13 +243,13 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         ll = {}
         try:
             values = eval(text, g, ll)
-        except:
+        except BaseException:
             assert False, "can not interpret entity number : " + text
 
         if not isinstance(values, str):
             try:
                 values = ",".join([str(int(x)) for x in values])
-            except:
+            except BaseException:
                 assert False, "entity id field must be text or arrays convertible to text"
 
         return values
@@ -284,55 +287,64 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if hasattr(self, "_mesher_data"):
             return self._mesher_data
         return None
+
     @property
     def mesh_output(self):
         if not hasattr(self, '_mesh_output'):
             return ''
         return self._mesh_output
+
     def attribute_set(self, v):
         v['geom_group'] = 'GmshGeom1'
         v['algorithm'] = 'default'
         v['algorithm3d'] = 'default'
+        v['algorithmr'] = 'default'
         v['gen_all_phys_entity'] = False
         v['use_profiler'] = False
         v['use_expert_mode'] = False
         v['use_ho'] = False
         v['optimize_ho'] = 'none'
         v['ho_order'] = 2
-        
+
         super(GmshMesh, self).attribute_set(v)
         self.vt.attribute_set(v)
         return v
 
     def panel1_param(self):
-        ll = [["Geometry", self.geom_group,  0, {}, ], ]
+        ll = [["Geometry", self.geom_group, 0, {}, ], ]
         ll.extend(self.vt.panel_param(self))
 
-        from petram.mesh.gmsh_mesh_wrapper import Algorithm2D, Algorithm3D, HighOrderOptimize
+        from petram.mesh.gmsh_mesh_wrapper import (Algorithm2D,
+                                                   Algorithm3D,
+                                                   AlgorithmR,
+                                                   HighOrderOptimize)
 
         c1 = list(Algorithm2D)
         c2 = list(Algorithm3D)
         c3 = list(HighOrderOptimize)
+        c4 = list(AlgorithmR)
 
         from wx import CB_READONLY
         setting1 = {"style": CB_READONLY, "choices": c1}
         setting2 = {"style": CB_READONLY, "choices": c2}
-        setting3 = {"style": CB_READONLY, "choices": c3}        
-        ll_ho = [None,  [True, [1, c3[0]]], 27, [{'text':'use high order (in dev, upto order 3, tet only)'},
-                                                {'elp':[["Order", self.ho_order,  400],
-                                                        ["HighOrder optimize", c3[-1], 4, setting3],]}
+        setting3 = {"style": CB_READONLY, "choices": c3}
+        setting4 = {"style": CB_READONLY, "choices": c4}
+        ll_ho = [None, [True, [1, c3[0]]], 27, [{'text': 'use high order (in dev, upto order 3, tet only)'},
+                                                {'elp': [["Order", self.ho_order, 400],
+                                                         ["HighOrder optimize", c3[-1], 4, setting3], ]}
                                                 ]]
 
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
                    ["3D Algorithm", c2[-1], 4, setting2],
-                   [None, self.gen_all_phys_entity == 1,  3,
+                   ["Recombine Alg.", c4[-1], 4, setting4],
+                   [None, self.gen_all_phys_entity == 1, 3,
                     {"text": "Write physical entities for all dimensions."}],
-                   [None, self.use_profiler,  3, {"text": "use profiler"}],
-                   [None, self.use_expert_mode,  3, {
+                   [None, self.use_profiler, 3, {"text": "use profiler"}],
+                   [None, self.use_expert_mode, 3, {
                        "text": "use GMSH expert mode"}],
                    ll_ho,
                    #[None, self.use_2nd_order,  3, {"text": "use 2nd order mesh (in dev order 3, tet only)"}],
-                   #["HighOrder optimize", c3[-1], 4, setting3],                   
+                   #["HighOrder optimize", c3[-1], 4, setting3],
                    [None, None, 341, {"label": "Use default size",
                                       "func": 'onSetDefSize',
                                       "noexpand": True}],
@@ -344,7 +356,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
     def get_panel1_value(self):
         return ([self.geom_group, ] + list(self.vt.get_panel_value(self)) +
-                [self.algorithm, self.algorithm3d, self.gen_all_phys_entity,
+                [self.algorithm,
+                 self.algorithm3d,
+                 self.algorithmr,
+                 self.gen_all_phys_entity,
                  self.use_profiler, self.use_expert_mode,
                  [self.use_ho, [self.ho_order, self.optimize_ho], ],
                  self, self, ])
@@ -358,24 +373,26 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         if self.geom_group != str(v[0]):
             viewer_update = True
         self.geom_group = str(v[0])
-        self.vt.import_panel_value(self, v[1:-8])
+        self.vt.import_panel_value(self, v[1:-9])
 
-        self.algorithm = str(v[-8])
-        self.algorithm3d = str(v[-7])
+        self.algorithm = str(v[-9])
+        self.algorithm3d = str(v[-8])
+        self.algorithmr = str(v[-7])
         self.gen_all_phys_entity = v[-6]
         self.use_profiler = bool(v[-5])
         self.use_expert_mode = bool(v[-4])
         self.use_ho = bool(v[-3][0])
-        self.ho_order = int(v[-3][1][0])        
+        self.ho_order = int(v[-3][1][0])
         self.optimize_ho = str(v[-3][1][1])
 
         return viewer_update
-            
+
     def panel1_tip(self):
         return ([None] +
                 self.vt.panel_tip() +
                 ["Alogirth for 2D mesh",
                  "Algoirthm for 3D mesh",
+                 "Algoirthm for recombine",
                  "Write lower dimensional physical entity. This may take a long time",
                  "Use cProfiler",
                  "Enable GMSH expert mode to suppress some warning",
@@ -388,14 +405,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                                         CopyFace, CopyFaceRotate, RecombineSurface,
                                         ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve,
                                         CompoundSurface)
-        
+
         return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface,
-                CharacteristicLength,  CopyFace, CopyFaceRotate, RecombineSurface,
-                ExtrudeMesh,  RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
+                CharacteristicLength, CopyFace, CopyFaceRotate, RecombineSurface,
+                ExtrudeMesh, RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
 
     def get_special_menu(self, evt):
         from petram.geom.gmsh_geom_model import use_gmsh_api
-        
+
         return [('Build all', self.onBuildAll, None),
                 ('Export mesh', self.onExportMsh, None),
                 ('Clear mesh', self.onClearMesh, None),
@@ -410,13 +427,14 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
     def update_after_ELChanged(self, dlg):
         pass
+
     def update_after_ELChanged2(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         viewer = dlg.GetParent()
-        
-        geom_root = self.geom_root        
+
+        geom_root = self.geom_root
         geom_root.update_figure_data(viewer)
-        
+
         self.onItemSelChanged(evt)
 
     def onSetDefSize(self, evt):
@@ -433,17 +451,16 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         src = self.mesh_output
         if src == '':
-           return
-       
+            return
+
         ext = src.split('.')[-1]
-        
+
         from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         dst = write(parent,
-                    defaultfile='Untitled.'+ext,
+                    defaultfile='Untitled.' + ext,
                     message='Enter mesh file name')
 
-        
         if dst == '':
             return
         try:
@@ -452,7 +469,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             if dext != ext:
                 dst = dst + '.' + ext
             shutil.copyfile(src, dst)
-        except:
+        except BaseException:
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to export msh file',
@@ -468,7 +485,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         elif self.mesher_data is None:
             viewer.del_figure_data('mesh', self.name())
         else:
-            print("number of meshed face/line",  len(self._mesh_fface), len(self._mesh_fline))
+            print("number of meshed face/line",
+                  len(self._mesh_fface), len(self._mesh_fline))
             viewer.set_figure_data('mesh', self.name(), self.mesher_data)
 
         if 'geom' in viewer._s_v_loop:
@@ -491,7 +509,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             count = self.build_mesh(geom_root, nochild=True,
                                     gui_parent=dlg)
             do_clear = (count == 0)
-        except:
+        except BaseException:
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to generate meshing script',
@@ -537,11 +555,13 @@ class GmshMesh(GMeshTop, Vtable_mixin):
 
         do_clear = True
         try:
-            filename = os.path.join(viewer.model.owndir(), self.name())+'.msh'
+            filename = os.path.join(
+                viewer.model.owndir(),
+                self.name()) + '.msh'
             count = self.build_mesh(geom_root, finalize=True, filename=filename,
                                     gui_parent=dlg)
             do_clear = count == 0
-        except:
+        except BaseException:
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to generate mesh script',
@@ -609,7 +629,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             # set None since mesher may die...
             self._mesher_data = None
 
-            L = mso.count_sequence()*4 + 3
+            L = mso.count_sequence() * 4 + 3
 
             if gui_parent is not None:
                 import wx
@@ -624,7 +644,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             else:
                 pgb = None
 
-            ### collect edge tesselation from geometry
+            # collect edge tesselation from geometry
             ptx = self.geom_root.geom_data[0]
             idx = self.geom_root.geom_data[1]['line']
             a, b = np.unique(idx, return_inverse=True)
@@ -638,6 +658,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                       'EdgeResolution': 3,
                       'MeshAlgorithm': self.algorithm,
                       'MeshAlgorithm3D': self.algorithm3d,
+                      'MeshAlgorithmR': self.algorithmr,
                       'use_profiler': self.use_profiler,
                       'use_expert_mode': self.use_expert_mode,
                       'use_ho': self.use_ho,
@@ -646,13 +667,13 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                       'trash': trash,
                       'gen_all_phys_entity': self.gen_all_phys_entity,
                       'meshformat': 2.2,
-                      'MaxThreads': [1,1,1,1],
+                      'MaxThreads': [1, 1, 1, 1],
                       'edge_tss': edge_tss}
 
             if self.mesh_output != '':
                 if os.path.exists(self.mesh_output):
                     os.remove(self.mesh_output)
-            
+
             max_mdim, done, data, msh_output = mso.run_generater(geom_root.geom_brep,
                                                                  filename,
                                                                  kwargs,
@@ -662,8 +683,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             self._max_mdim = max_mdim
             if finalize:
                 if self.use_ho:
-                    fname = msh_output[:-3]+'mesh'
-                    
+                    fname = msh_output[:-3] + 'mesh'
+
                     from petram.mesh.gmsh2mfem import Translator
                     t = Translator(msh_output, verbose=True)
                     t.write(fname)
@@ -692,10 +713,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         dprint1("Generating Mesh in " + cwd)
         self._mesh_output = ''
 
-        myid = MPI.COMM_WORLD.rank                
+        myid = MPI.COMM_WORLD.rank
         if myid == 0:
             geom_root = self.geom_root
-            filename = os.path.join(cwd, self.name())+'.msh'
+            filename = os.path.join(cwd, self.name()) + '.msh'
 
             # reset this value so that it does not delete a
             # file in parametric scan
@@ -716,7 +737,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             self._mesh_output = MPI.COMM_WORLD.bcast(self._mesh_output)
 
         dprint1("Generating Mesh ... Done")
-        
+
     def load_gui_figure_data(self, viewer):
         return 'mesh', self.name(), None
 
@@ -726,7 +747,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
     def figure_data_name(self):
         try:
             geom_root = self.geom_root
-        except:
+        except BaseException:
             return
         if geom_root.is_finalized:
             return self.name(), self.geom_group.strip()
