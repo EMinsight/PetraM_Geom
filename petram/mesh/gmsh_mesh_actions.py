@@ -151,16 +151,62 @@ class FreeVolume(GmshMeshActionBase):
                    minsize = clmin,
                    resolution = res,
                    embed_s = embed_s,                   
-                   embed_l=embed_l, embed_p=embed_p)
+                   embed_l=embed_l,
+                   embed_p=embed_p,
+                   alg2d = self.alg_2d,
+                   alg3d = self.alg_3d)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        values = self.vt.make_value_or_expression(self)
+        gid = self.eval_enitity_id(values[0])
         try:
-            ret['volume'] = [int(x) for x in self.geom_id.split(',')]
+            ret['volume'] = [int(x) for x in self.gid.split(',')]
         except:
             pass
         return ret, 'volume'
+    
+    def attribute_set(self, v):
+        v = super(FreeVolume, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["alg_2d"] = "default"
+        v["alg_3d"] = "default"
+        return v
+
+    def panel1_param(self):
+        from petram.mesh.gmsh_mesh_wrapper import Algorithm2D, Algorithm3D
+
+        c1 = list(Algorithm2D)
+        c2 = list(Algorithm3D)
+        
+        from wx import CB_READONLY
+        setting1 = {"style": CB_READONLY, "choices": c1}
+        setting2 = {"style": CB_READONLY, "choices": c2}
+        
+        ll = super(FreeVolume, self).panel1_param()
+        ll.extend([["2D Algorithm", c1[-1], 4, setting1],
+                   ["3D Algorithm", c2[-1], 4, setting2],])
+        return ll
+
+    def get_panel1_value(self):
+        v = super(FreeVolume, self).get_panel1_value()
+        return v + [self.alg_2d, self.alg_3d]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        super(FreeVolume, self).import_panel1_value(v[:-2])
+        self.alg_2d = v[-2]
+        self.alg_3d = v[-1]
+
+    def panel1_tip(self):
+        tip = super(FreeVolume, self).panel1_tip()
+        return tip + ['mesh algorithm for surface',
+                      'mesh algorithm for volume']
+
     
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Element#',
@@ -197,7 +243,9 @@ class FreeFace(GmshMeshActionBase):
                    maxsize = clmax,
                    minsize = clmin,
                    resolution = res,
-                   embed_l=embed_l, embed_p=embed_p)
+                   embed_l=embed_l,
+                   embed_p=embed_p,
+                   alg2d = self.alg_2d)
         
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -214,7 +262,41 @@ class FreeFace(GmshMeshActionBase):
         pp = [str(x) for x in embed_p.split(',')]                
         return [], ll, pp
             
+    def attribute_set(self, v):
+        v = super(FreeFace, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["alg_2d"] = "default"
+        return v
 
+    def panel1_param(self):
+        from petram.mesh.gmsh_mesh_wrapper import Algorithm2D
+
+        c1 = list(Algorithm2D)
+        
+        from wx import CB_READONLY
+        setting1 = {"style": CB_READONLY, "choices": c1}
+        
+        ll = super(FreeFace, self).panel1_param()
+        ll.extend([["2D Algorithm", c1[-1], 4, setting1],])
+
+        return ll
+
+    def get_panel1_value(self):
+        v = super(FreeFace, self).get_panel1_value()
+        return v + [self.alg_2d, ]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        super(FreeFace, self).import_panel1_value(v[:-1])
+        self.alg_2d = v[-1]
+
+    def panel1_tip(self):
+        tip = super(FreeFace, self).panel1_tip()
+        return tip + ['mesh algorithm for surface']
+    
 data = (('geom_id', VtableElement('geom_id', type='string',
                                    guilabel = 'Line#',
                                    default = "remaining", 
@@ -455,16 +537,22 @@ edata =  (('ex_target', VtableElement('ex_target', type='string',
           ('mapper', VtableElement('mapper', type='string',
                                    guilabel = 'Transform Hint',
                                    default = "", 
-                                   tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),)
+                                   tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),
+          ('use_recombine', VtableElement('use_recombine', type='bool',
+                                      guilabel = 'Recombine(Hex/Prism)',
+                                      default = False,
+                                      tip = "recombine extruded mesh to Hex/Prism")), )
+
     
 class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
         gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
         
         kwargs = process_hint_ex(hint)
-        mesher.add('extrude_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)
+        mesher.add('extrude_face', gid, src_id, dst_id,
+                   nlayers=nlayers, use_recombine=use_recombine, **kwargs)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
@@ -481,11 +569,12 @@ class ExtrudeMesh(GmshMeshActionBase):
 class RevolveMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, nlayers, hint = self.vt.make_value_or_expression(self)
+        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
         gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
         
         kwargs = process_hint_rv(hint)
-        mesher.add('revolve_face', gid, src_id, dst_id, nlayers=nlayers, **kwargs)        
+        mesher.add('revolve_face', gid, src_id, dst_id,
+                   nlayers=nlayers, use_recombine=use_recombine, **kwargs)        
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                

@@ -16,7 +16,7 @@ with open(path.join(here, 'README.md')) as f:
 
 setup(
     name='PetraM_Geom',
-    version='0.9.0',
+    version='1.1.7',
 
     description='PetraM Geometry Package',
     long_description=long_description,
