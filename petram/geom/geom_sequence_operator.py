@@ -100,8 +100,11 @@ class GeomSequenceOperator():
     def create_new_child(self, use_occ, pgb):
         from petram.geom.gmsh_geom_wrapper import (GMSHGeometryGenerator,
                                                    GMSHGeometryGeneratorTH)
-        from petram.geom.occ_geom_wrapper import (OCCGeometryGenerator,
-                                                  OCCGeometryGeneratorTH)
+        try:
+            from petram.geom.occ_geom_wrapper import (OCCGeometryGenerator,
+                                                      OCCGeometryGeneratorTH)
+        except ImportError:
+            print("OCC is not installed")
 
         self.terminate_child()
         if pgb is None or globals()['test_thread']:
