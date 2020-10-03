@@ -322,7 +322,7 @@ def register_shape(shape, topolists):
 
     new_objs = []
     # registor solid
-    for solid in iterd_shape(shape, 'solid'):
+    for solid in iter_shape(shape, 'solid'):
         if seens['solid'].check_shape(solid) == 0:
             solid_id = topolists['solid'].add(solid)
             new_objs.append(solid_id)
