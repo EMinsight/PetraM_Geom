@@ -1570,7 +1570,7 @@ class GMSHMeshWrapper():
         if (not revolve and an == 0):
             ret = gmsh.model.occ.extrude(dimtags, d[0], d[1], d[2],
                                          numElements=[nlayers],
-                                         use_recombine=use_recombine)
+                                         recombine=use_recombine)
         elif (revolve and an != 0):
             ret = gmsh.model.occ.revolve(dimtags, px[0], px[1], px[2],
                                          ax[0], ax[1], ax[2], an,
