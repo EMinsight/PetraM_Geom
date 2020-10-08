@@ -186,7 +186,7 @@ class OCCGeom(GmshGeom):
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints),
                 ("", WPParallelToPlane), ("!", WPNormalToPlane),
-                ("Import...", BrepImport), ("!", CADImport)
+                ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
                 ]
 
     def get_special_menu(self, evt):

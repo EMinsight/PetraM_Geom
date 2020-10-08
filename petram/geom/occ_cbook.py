@@ -186,6 +186,26 @@ def shape_dim(shape):
         return -2
     return -3
 
+def shape_name(shape):
+    if isinstance(shape, TopoDS_Solid):
+        return 'solid'
+    elif isinstance(shape, TopoDS_Face):
+        return 'face'
+    elif isinstance(shape, TopoDS_Edge):
+        return 'edge'
+    elif isinstance(shape, TopoDS_Vertex):
+        return 'vertex'
+    elif isinstance(shape, TopoDS_Shell):
+        return 'shell'
+    elif isinstance(shape, TopoDS_Wire):
+        return 'wire'
+    elif isinstance(shape, TopoDS_CompSolid):
+        return 'compsolid'
+    elif isinstance(shape, TopoDS_Compound):
+        return 'compound'
+    else:
+        assert False, "unknown topoDS:" + str(type(shape))
+        
 def get_mapper(shape, shape_type):
     mapper = TopTools_IndexedMapOfShape()
     topo_abs = __expparam[shape_type][0]
@@ -322,7 +342,7 @@ def register_shape(shape, topolists):
 
     new_objs = []
     # registor solid
-    for solid in iterd_shape(shape, 'solid'):
+    for solid in iter_shape(shape, 'solid'):
         if seens['solid'].check_shape(solid) == 0:
             solid_id = topolists['solid'].add(solid)
             new_objs.append(solid_id)
@@ -907,6 +927,15 @@ class topo_list_solid(topo_list):
         shape = self[val]
         return iter_shape(shape, 'shell')
 
+    def is_toplevel(self, val, compound):
+        mapper = TopTools_IndexedDataMapOfShapeListOfShape()
+        topexp_MapShapesAndAncestors(
+            compound, TopAbs_SOLID, TopAbs_COMPSOLID, mapper)
+        shape = self[val]
+        if mapper.FindFromKey(shape).Size() == 0:
+            return True
+        return False
+    
     def get_mapper(self, shape):
         mapper = TopTools_IndexedMapOfShape()
         topexp_MapShapes(shape, TopAbs_SOLID, mapper)

@@ -2145,7 +2145,7 @@ cad_fix_cb = [None, None, 36, {"col": 4,
                                           "SmallEdges",
                                           "SmallFaces",
                                           "sewFaces",
-                                          "makeSolidb"]}]
+                                          "makeSolid"]}]
 cad_fix_tol = ["Tolerance", 1e-8, 300, None]
 cad_fix_rescale = ["Rescale", 1.0, 300, None]
 cad_fix_elp0 = [cad_fix_cb, cad_fix_tol, cad_fix_rescale]
@@ -2186,10 +2186,9 @@ class healCAD(ImportBase):
         ll = [[None, None, 241, {'buttons': [b2, ],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["Entity", "", 0, {}],
-              cad_fix_cb,
-              cad_fix_tol]
-
+              ["Entity (v/f/l/p)", "", 0, {}],]
+        ll.extend(cad_fix_elp0)
+        
         return ll
 
     def attribute_set(self, v):
@@ -2223,7 +2222,10 @@ class healCAD(ImportBase):
 
     @classmethod
     def fancy_menu_name(self):
-        return "healCAD"
+        return "fixCAD"
+    @classmethod
+    def fancy_tree_name(self):
+        return "fixCAD"
 
 # we make BREP import separately so that we can add Brep specific
 # interface later....

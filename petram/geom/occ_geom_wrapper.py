@@ -2444,7 +2444,7 @@ class Geometry():
         a2 = a2 * radius
 
         c = np.array(center)
-
+        print(a1, a2, c)
         if npts == 0:
             edges = [self.add_circle_by_axis_radius(c, dirct, radius)]
         else:
@@ -4304,39 +4304,6 @@ class Geometry():
         self.synchronize_topo_list()
         return list(objs), newkeys
 
-        '''
-        comp = self.new_compound(gids)
-        xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
-
-        cptx, normal = self.process_plane_parameters(args[1], objs)
-        offset = args[-1]
-        if offset != 0:
-            cptx = cptx + normal * offset
-
-        points = box_containing_bbox(normal, cptx, xmin, ymin, zmin,
-                                     xmax, ymax, zmax)
-        v = self.add_box(points)
-
-        ret1 = self.difference(gids, (v,), remove_obj=False, remove_tool=True,
-                               keep_highest=True)
-
-        v = self.add_box(points)
-        ret2 = self.intersection(gids, (v,), remove_obj=True, remove_tool=True,
-                                 keep_highest=True)
-
-        self.synchronize_topo_list()
-
-        newkeys = []
-        for rr in ret1 + ret2:
-            newkeys.append(objs.addobj(rr, 'splt'))
-
-        for x in targets:
-            if x in objs:
-                del objs[x]
-
-        return list(objs), newkeys
-        '''
-
     def ProjectOnWP_build_geom(self, objs, *args):
         targets = args[0]
         targets = [x.strip() for x in targets.split(',')]
@@ -4676,6 +4643,36 @@ class Geometry():
 
         return list(objs), newkeys
 
+    def healCAD_build_geom(self, objs, *args):
+        fix_entity, fix_param, fix_tol, fix_rescale = args
+
+        fix_param = (fix_param, fix_tol, fix_rescale,)
+        
+        targets = fix_entity
+        targets = [x.strip() for x in targets.split(',')]
+        gids = self.get_target2(objs, targets)
+
+        all_newkeys = []
+        for gid in gids:
+            topolist = self.get_topo_list_for_gid(gid)
+            shape = topolist[gid]
+            
+            is_toplevel = topolist.is_toplevel(gid, self.shape)
+            if not is_toplevel:
+                assert False, "CAD heal should be applied to a top-level entity"
+                
+            names, newkeys = self.importShape_common(shape, True, fix_param, objs)
+
+            print("names, newkeys", names, newkeys)
+            self.builder.Remove(self.shape, shape)            
+            all_newkeys.extend(newkeys)
+            if gid in objs:
+                del objs[t]
+                
+        self.synchronize_topo_list()
+        
+        return list(objs), all_newkeys        
+        
     def BrepImport_build_geom(self, objs, *args):
         cad_file, use_fix, use_fix_param, use_fix_tol, use_fix_rescale, highestDimOnly = args
 
