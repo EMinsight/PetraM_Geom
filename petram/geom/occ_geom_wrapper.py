@@ -534,63 +534,6 @@ class Geometry():
             dprint1("--------- Shape inspection ---------")
         return all_maps
 
-    def check_if_subshape(self, shape, parent_shape=None):
-        if parent_shape is None:
-            parent_shape = self.shape
-        maps = prep_maps(shape)
-
-        if return_all:
-            names = ['solid', 'shell', 'face', 'wire', 'edge', 'vertex']
-            #all_maps = solidMap, shellMap, faceMap, wireMap, edgeMap, vertMap
-        else:
-            names = ['solid', 'face', 'edge', 'vertex']
-            #all_maps = solidMap, faceMap, edgeMap, vertMap
-
-        all_maps = [maps[x] for x in names]
-
-        if not verbose:
-            return all_maps
-
-        usolids = topo_seen(mapping=maps['solid'])
-        ufaces = topo_seen(mapping=maps['face'])
-        uedges = topo_seen(mapping=maps['edge'])
-        uvertices = topo_seen(mapping=maps['vertex'])
-
-        ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
-        while ex1.More():
-            s = topods_Solid(ex1.Current())
-            if usolids.not_seen(s):
-                dprint1(s)
-            ex1.Next()
-        ex1 = TopExp_Explorer(shape, TopAbs_FACE)
-        while ex1.More():
-            s = topods_Face(ex1.Current())
-            if ufaces.not_seen(s):
-                surf = self.bt.Surface(s)
-                surf, kind = downcast(surf)
-                dprint1("Surface", kind)
-            ex1.Next()
-        ex1 = TopExp_Explorer(shape, TopAbs_EDGE)
-        while ex1.More():
-            s = topods_Edge(ex1.Current())
-            if uedges.not_seen(s):
-                curve, first, last = self.bt.Curve(s)
-                curve, kind = downcast_curve(curve)
-                dprint1("Curve", kind)
-            ex1.Next()
-        ex1 = TopExp_Explorer(shape, TopAbs_VERTEX)
-        while ex1.More():
-            s = topods_Vertex(ex1.Current())
-            if uvertices.not_seen(s):
-                pnt = self.bt.Pnt(s)
-                dprint1("Point", pnt.X(), pnt.Y(), pnt.Z())
-            ex1.Next()
-
-        if verbose:
-            dprint1("--------- Shape inspection ---------")
-        return all_maps
-    
-
     def synchronize_topo_list(self, **kwargs):
         maps = prep_maps(self.shape)
         self.solids.synchronize(maps['solid'], **kwargs)
@@ -4709,18 +4652,26 @@ class Geometry():
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
 
+        all_newkeys = []
         for gid in gids:
             topolist = self.get_topo_list_for_gid(gid)
             shape = topolist[gid]
+            
+            is_toplevel = topolist.is_toplevel(gid, self.shape)
+            if not is_toplevel:
+                assert False, "CAD heal should be applied to a top-level entity"
+                
+            names, newkeys = self.importShape_common(shape, True, fix_param, objs)
 
-            # check the shape is toplevel
-            breptools_Clean(shape)
-            self.importShape_common(shape, True, fix_param, objs)
+            print("names, newkeys", names, newkeys)
+            self.builder.Remove(self.shape, shape)            
+            all_newkeys.extend(newkeys)
+            if gid in objs:
+                del objs[t]
+                
+        self.synchronize_topo_list()
         
-
-        newkeys = []
-        return list(objs), newkeys        
-
+        return list(objs), all_newkeys        
         
     def BrepImport_build_geom(self, objs, *args):
         cad_file, use_fix, use_fix_param, use_fix_tol, use_fix_rescale, highestDimOnly = args

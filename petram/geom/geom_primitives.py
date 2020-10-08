@@ -2186,10 +2186,9 @@ class healCAD(ImportBase):
         ll = [[None, None, 241, {'buttons': [b2, ],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["Entity (v/f/l/p)", "", 0, {}],
-              cad_fix_cb,
-              cad_fix_tol]
-
+              ["Entity (v/f/l/p)", "", 0, {}],]
+        ll.extend(cad_fix_elp0)
+        
         return ll
 
     def attribute_set(self, v):
