@@ -44,7 +44,7 @@ class Translator():
         if msh is None:
             msh = self.msh
 
-        sdim = 3
+        sdim = msh.nodes.shape[-1]
         for i in (3, 2, 1, 0):
             if len(self.msh.elems[i]) != 0:
                 elems = self.msh.elems[i]
@@ -131,7 +131,7 @@ class Translator():
 
     def move_nodal(self, mesh, kind, elems, kelem, verbose=True):
         msh = self.msh
-
+       
         nodes = mesh.GetNodes()
         sdim = mesh.SpaceDimension()
         fes = mesh._nodal
@@ -231,8 +231,10 @@ class Translator():
             for kk in range(len(mapper)):
                 kkv = verts[mapper[kk]]-1
                 nodes[dof_idx[kk][0]] = msh.nodes[kkv][0]
-                nodes[dof_idx[kk][1]] = msh.nodes[kkv][1]
-                nodes[dof_idx[kk][2]] = msh.nodes[kkv][2]
+                if sdim > 1:                
+                    nodes[dof_idx[kk][1]] = msh.nodes[kkv][1]
+                if sdim > 2:
+                    nodes[dof_idx[kk][2]] = msh.nodes[kkv][2]
             kelem = kelem+1
 
         return kelem
@@ -282,8 +284,13 @@ class GmshFile():
             self.nodes[i, :] = np.array([float(x) for x in tmp[1:]])
             i = i + 1
 
+        if np.all(self.nodes[:, 2] == 0):
+            print("mesh is flat on the x-y plane")
+            self.nodes = self.nodes[:, :2]
         if verbose:
             print("Size of node array: ", self.nodes.shape)
+
+            
 
     def load_Elements(self, fid, verbose):
         num_elem = int(fid.readline())
