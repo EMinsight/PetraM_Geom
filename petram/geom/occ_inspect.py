@@ -98,7 +98,7 @@ def shape_property_txt(bt, shape):
 
     return '\n'.join(txt)
 
-def find_sameface(bt, shape, face, tol):
+def find_sameface(bt, shape, faces, tol):
     '''
     find faces which has same kind,
     same area, edges with same length
@@ -113,38 +113,48 @@ def find_sameface(bt, shape, face, tol):
             lens.append(system.Mass())
             k = k + 1
         return k, np.sort(lens)
-    surf = bt.Surface(face)
-    surf, kind = downcast_surface(surf)
 
-    brepgprop_SurfaceProperties(face, system)
-    area = system.Mass()
-    nedges, lengths = count_edges(face)
+    dataset = []
+    for f1 in faces:
+        surf = bt.Surface(f1)
+        surf, kind = downcast_surface(surf)
+        brepgprop_SurfaceProperties(f1, system)
+        area = system.Mass()
+        nedges, lengths = count_edges(f1)
+        dataset.append((kind, area, nedges, lengths))
 
     samefaces = []
     for f2 in iter_shape_once(shape, 'face'):
         surf2 = bt.Surface(f2)
         surf2, kind2 = downcast_surface(surf2)
-        if kind != kind2:
+
+        subset = [x for x in dataset if x[0] == kind2]
+        if len(subset) == 0:
             continue
+
         brepgprop_SurfaceProperties(f2, system)
         area2 = system.Mass()
-        if abs(area - area2)/(area + area2) > tol:
+
+        subset = [x for x in subset
+                  if abs(x[1] - area2)/(x[1] + area2) < tol]
+        if len(subset) == 0:
             continue
-        nedges2, lengths2 = count_edges(face)
-        if nedges != nedges2:
+
+        nedges2, lengths2 = count_edges(f2)
+        subset = [x for x in subset if x[2] == nedges2]
+        if len(subset) == 0:
             continue
-        flag = False
-        for l1, l2 in zip(lengths, lengths2):
-            if abs(l1 - l2)/(l1 + l2) > tol:
-                flag = True
-                break
-        if flag:
+
+        subset = [x for x in subset
+                  if np.all([abs(l1 - l2)/(l1 + l2) < tol for l1, l2 in zip(x[3], lengths2)])]
+                  
+        if len(subset) == 0:
             continue
         samefaces.append(f2)
 
     return samefaces
 
-def find_sameedge(bt, shape, edge, tol):
+def find_sameedge(bt, shape, edges, tol):
     '''
     find edges which has same kind and length
     '''
@@ -154,14 +164,16 @@ def find_sameedge(bt, shape, edge, tol):
         brepgprop_LinearProperties(edge, system)
         return system.Mass()
 
-    l1 = measure_len(edge)
-    params = bt.Curve(edge)
-    if len(params) == 2:
-        ## null handle case
-        return []
-    
-    curve = params[0]
-    curve, kind = downcast_curve(curve)
+    dataset = []
+    for edge in edges:
+        l1 = measure_len(edge)
+        params = bt.Curve(edge)
+        if len(params) == 2:
+           ## null handle case
+           continue
+        curve = params[0]
+        curve, kind = downcast_curve(curve)
+        dataset.append((kind, l1))
 
     sameedges = []
 
@@ -173,11 +185,14 @@ def find_sameedge(bt, shape, edge, tol):
         curve2 = params[0]
         curve2, kind2 = downcast_curve(curve2)
 
-        if kind != kind2:
+        subset = [x for x in dataset if x[0] == kind2]
+        if len(subset) == 0:
             continue
+                  
         l2 = measure_len(e2)
-
-        if abs(l1 - l2)/(l1 + l2) > tol:
+        subset = [x for x in subset
+                  if abs(x[1] - l2)/(x[1] + l2) < tol]
+        if len(subset) == 0:
             continue
 
         sameedges.append(e2)
@@ -317,17 +332,18 @@ def shape_inspector(shape, inspect_type, shapes):
         assert nface > 0 or nedge > 0, "Specify either faces or edges"
         assert nface == 0 or nedge == 0, "Specify either faces or edges"
 
-        for s in  shapes:
-            if isinstance(s, TopoDS_Face):
-                samefaces = find_sameface(bt, shape, s, tol)
-                gidsf = [facelist.find_gid(f) for f in samefaces]
-                gids.extend(gidsf)
-            elif isinstance(s, TopoDS_Edge):
-                sameedges = find_sameedge(bt, shape, s, tol)
-                gidse = [edgelist.find_gid(e) for e in sameedges]
-                gids.extend(gidse)
-            else:
-                assert False, "finesame support only face and edge"
+        faces = [s for s in shapes if isinstance(s, TopoDS_Face)]
+        edges = [s for s in shapes if isinstance(s, TopoDS_Edge)]
+
+        if len(faces) > 0:
+            samefaces = find_sameface(bt, shape, faces, tol)
+            gidsf = [facelist.find_gid(f) for f in samefaces]
+            gids.extend(gidsf)
+        if len(edges) > 0:
+            sameedges = find_sameedge(bt, shape, edges, tol)
+            gidse = [edgelist.find_gid(e) for e in sameedges]
+            gids.extend(gidse)
+
         gids_int = np.unique([int(x) for x in gids])
         if nface > 0:
             gids = [SurfaceID(int(x)) for x in gids_int]

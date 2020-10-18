@@ -897,7 +897,7 @@ class GMSHMeshWrapper():
             if size < minsize:
                 size = minsize
             self.setCL(((0, tag), ), size)                
-            print("Volume Set Point Size", (0, tag), size)
+            #print("Volume Set Point Size", (0, tag), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
         return done, params
@@ -1166,7 +1166,7 @@ class GMSHMeshWrapper():
     def transfinite_surface_1D(self, done, params, dimtags, *args, **kwargs):
         arrangement = kwargs.get('arrangement', 'Left')
         cornerTags = kwargs.get('corner', [])
-        print('Corner', cornerTags)
+        #print('Corner', cornerTags)
 
         # for now, we don't do anything
         # we could add a step to try trasnsfinite remaining (not-yet-meshed)
@@ -1315,7 +1315,7 @@ class GMSHMeshWrapper():
                 # in this case we use the volume being meshed as a hint
                 #print("using volume hint", volume_hint)
                 vtags = [int(x) for x in volume_hint.split(',')]
-                print("mind_eps", geom_size*self.mapper_tol)
+                #print("mind_eps", geom_size*self.mapper_tol)
                 ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_rotation_between_surface2(
                     tag1, tag2, vtags, self.edge_tss,
                     geom_data=self.geom_info,
@@ -1328,7 +1328,7 @@ class GMSHMeshWrapper():
 
         params = (ax, an, px, d, affine, p_pairs, l_pairs, s_pairs)
 
-        print("p_pairs", p_pairs)
+        #print("p_pairs", p_pairs)
         for p0 in p_pairs:
             p1 = p_pairs[p0]
             if (0, p0) in self.cl_data:
@@ -1345,7 +1345,7 @@ class GMSHMeshWrapper():
         gmsh.model.mesh.rebuildNodeCache()
         ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
 
-        print("Entering CopyFace1D", l_pairs)
+        #print("Entering CopyFace1D", l_pairs)
 
         ents = list(set(gmsh.model.getBoundary(
             dimtags, combined=False, oriented=False)))
@@ -1438,7 +1438,7 @@ class GMSHMeshWrapper():
     def copyface_2D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
         ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
  
-        print("Entering CopyFace2D", s_pairs)
+        #print("Entering CopyFace2D", s_pairs)
         
         mdata = []
         for dim, tag in dimtags:
