@@ -220,7 +220,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     def get_embed(self):
         return [], [], []
 
-    def _eval_enitity_id(self, text):
+    def _eval_entity_id(self, text):
         '''
         "remaining" -> "remaining"
         "all" -> "all"
@@ -254,11 +254,11 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
         return values
 
-    def eval_enitity_id(self, *text):
+    def eval_entity_id(self, *text):
         if len(text) == 1:
-            return self._eval_enitity_id(text[0])
+            return self._eval_entity_id(text[0])
 
-        return [self._eval_enitity_id(x) for x in text]
+        return [self._eval_entity_id(x) for x in text]
 
 
 data = (('clmax', VtableElement('clmax', type='float',

@@ -29,7 +29,7 @@ class TransfiniteLine(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(gid)
+        gid = self.eval_entity_id(gid)
         
         mesher.add('transfinite_edge', gid, nseg=nseg,
                    progression = p,  bump = b)
@@ -37,8 +37,9 @@ class TransfiniteLine(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)        
         try:
-            ret['edge'] = [int(x) for x in self.geom_id.split(',')]
+            ret['edge'] = [int(x) for x in gid.split(',')]
         except:
             pass
         return ret, 'edge'
@@ -67,7 +68,7 @@ class TransfiniteSurface(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, e1, e2, e3, e4 = self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(gid)
+        gid = self.eval_entity_id(gid)
         
         c = [int(x)  for x in (e1,e2,e3,e4) if x.strip()!= '']
         mesher.add('transfinite_surface', gid, corner = c)
@@ -75,8 +76,9 @@ class TransfiniteSurface(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)        
         try:
-            ret['face'] = [int(x) for x in self.geom_id.split(',')]
+            ret['face'] = [int(x) for x in gid.split(',')]
         except:
             pass
         return ret, 'face'
@@ -94,14 +96,15 @@ class CharacteristicLength(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, cl= self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(gid)        
+        gid = self.eval_entity_id(gid)        
         mesher.add('cl', gid, cl)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)                
         try:
-            ret['point'] = [int(x) for x in self.geom_id.split(',')]
+            ret['point'] = [int(x) for x in gid.split(',')]
         except:
             pass
         return ret, 'point'
@@ -144,7 +147,7 @@ class FreeVolume(GmshMeshActionBase):
     def add_meshcommand(self, mesher):
         values = self.vt.make_value_or_expression(self)
         gid, clmax, clmin, res, embed_s, embed_l, embed_p = values
-        gid, embed_s, embed_l, embed_p = self.eval_enitity_id(gid, embed_s, embed_l, embed_p)
+        gid, embed_s, embed_l, embed_p = self.eval_entity_id(gid, embed_s, embed_l, embed_p)
         
         mesher.add('freevolume', gid,
                    maxsize = clmax,
@@ -159,10 +162,9 @@ class FreeVolume(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
-        values = self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(values[0])
+        gid  = self.eval_entity_id(self.geom_id)        
         try:
-            ret['volume'] = [int(x) for x in self.gid.split(',')]
+            ret['volume'] = [int(x) for x in gid.split(',')]
         except:
             pass
         return ret, 'volume'
@@ -238,7 +240,7 @@ class FreeFace(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, clmax, clmin, res, embed_l, embed_p= self.vt.make_value_or_expression(self)
-        gid, embed_l, embed_p = self.eval_enitity_id(gid, embed_l, embed_p)        
+        gid, embed_l, embed_p = self.eval_entity_id(gid, embed_l, embed_p)        
         mesher.add('freeface', gid,
                    maxsize = clmax,
                    minsize = clmin,
@@ -250,8 +252,9 @@ class FreeFace(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)                
         try:
-            ret['face'] = [int(x) for x in self.geom_id.split(',')]
+            ret['face'] = [int(x) for x in gid.split(',')]
         except:
             pass
         return ret, 'face'
@@ -320,7 +323,7 @@ class FreeEdge(GmshMeshActionBase):
     vt = Vtable(data)    
     def add_meshcommand(self, mesher):
         gid, clmax, clmin, res = self.vt.make_value_or_expression(self)
-        gid  = self.eval_enitity_id(gid)
+        gid  = self.eval_entity_id(gid)
         
         mesher.add('freeedge', gid,
                    maxsize = clmax,
@@ -330,8 +333,9 @@ class FreeEdge(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)        
         try:
-            ret['edge'] = [int(x) for x in self.geom_id.split(',')]
+            ret['edge'] = [int(x) for x in gid.split(',')]
         except:
             pass
         return ret, 'edge'
@@ -390,7 +394,7 @@ class CopyFace(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
         gid, src_id, hint, cp_cl = self.vt.make_value_or_expression(self)
-        gid  = self.eval_enitity_id(gid)
+        gid  = self.eval_entity_id(gid)
        
         kwargs = process_hint_ex(hint)
         kwargs['copy_cl'] = cp_cl
@@ -401,9 +405,11 @@ class CopyFace(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)
+        sid  = self.eval_entity_id(self.src_id)                
         try:
-            dest = [int(x) for x in self.geom_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in gid.split(',')]
+            src  = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
         except:
             pass
@@ -413,7 +419,7 @@ class CopyFaceRotate(GmshMeshActionBase):
     vt = Vtable(data)        
     def add_meshcommand(self, mesher):
         gid, src_id, hint, cp_cl = self.vt.make_value_or_expression(self)
-        gid  = self.eval_enitity_id(gid)
+        gid  = self.eval_entity_id(gid)
                     
         kwargs = process_hint_rv(hint)
         kwargs['copy_cl'] = cp_cl
@@ -425,9 +431,12 @@ class CopyFaceRotate(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        gid  = self.eval_entity_id(self.geom_id)
+        sid  = self.eval_entity_id(self.src_id)                
+        
         try:
-            dest = [int(x) for x in self.geom_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in gid.split(',')]
+            src  = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
         except:
             pass
@@ -479,7 +488,7 @@ class CompoundSurface(GmshMeshActionBase):
     vt = Vtable(data)
     def add_meshcommand(self, mesher):
         gid = self.vt.make_value_or_expression(self)[0]        
-        gid  = self.eval_enitity_id(gid)
+        gid  = self.eval_entity_id(gid)
 
         # generate something like... Compound Surface{1, 5, 10};
         text = "Compound Surface{ " + gid + "};"        
@@ -494,7 +503,7 @@ class CompoundCurve(GmshMeshActionBase):
     vt = Vtable(data)
     def add_meshcommand(self, mesher):
         gid = self.vt.make_value_or_expression(self)[0]                
-        gid  = self.eval_enitity_id(gid)
+        gid  = self.eval_entity_id(gid)
 
         # generate something like... Compound Curve{1, 5, 10};        
         text = "Compound Curve{ " + gid + "};"
@@ -514,7 +523,7 @@ class RecombineSurface(GmshMeshActionBase):
     vt = Vtable(rsdata)
     def add_meshcommand(self, mesher):
         gid = self.vt.make_value_or_expression(self)[0]
-        gid  = self.eval_enitity_id(gid)
+        gid  = self.eval_entity_id(gid)
         
         mesher.add('recombine_surface', gid)
 
@@ -548,7 +557,7 @@ class ExtrudeMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
         gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
-        gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
+        gid, dst_id, src_id  = self.eval_entity_id(gid, dst_id, src_id)
         
         kwargs = process_hint_ex(hint)
         mesher.add('extrude_face', gid, src_id, dst_id,
@@ -557,9 +566,12 @@ class ExtrudeMesh(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        did  = self.eval_entity_id(self.dst_id)
+        sid  = self.eval_entity_id(self.src_id)                
+        
         try:
-            dest = [int(x) for x in self.dst_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in did.split(',')]
+            src  = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
         except:
             pass
@@ -570,7 +582,7 @@ class RevolveMesh(GmshMeshActionBase):
     vt = Vtable(edata)
     def add_meshcommand(self, mesher):
         gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
-        gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
+        gid, dst_id, src_id  = self.eval_entity_id(gid, dst_id, src_id)
         
         kwargs = process_hint_rv(hint)
         mesher.add('revolve_face', gid, src_id, dst_id,
@@ -579,9 +591,12 @@ class RevolveMesh(GmshMeshActionBase):
     def get_element_selection(self):
         self.vt.preprocess_params(self)                
         ret, mode = self.element_selection_empty()
+        did  = self.eval_entity_id(self.dst_id)
+        sid  = self.eval_entity_id(self.src_id)                
+        
         try:
-            dest = [int(x) for x in self.dst_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in did.split(',')]
+            src  = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
         except:
             pass

@@ -2066,7 +2066,7 @@ class Geometry():
     def process_plane_parameters(self, args, objs, gids):
         comp = self.new_compound(gids)
         xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
-
+        print("args", args)
         if args[0] == '3_points':
             # args[1] = ['3_points', '1', '7', '8']
 
@@ -2085,7 +2085,8 @@ class Geometry():
 
         elif args[0] == 'by_abc':
             data = np.array(args[1]).flatten()
-            normal = data[:3]
+            normal = np.array(data[:3])
+            normal = normal/np.sqrt(np.sum(normal**2))
             xx = np.array(
                 [(xmin + xmax) / 2, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0])
             s = data[-1] - np.sum(normal * xx)
