@@ -2014,7 +2014,6 @@ class Geometry():
             else:
                 gid = self.get_target2(objs, [tax[1]])[0]
                 n1, _void = self.get_face_normal(gid, check_flat=True)
-                print(n1)
             if tax[2]:
                 tt = -n1
             else:
@@ -2066,7 +2065,7 @@ class Geometry():
     def process_plane_parameters(self, args, objs, gids):
         comp = self.new_compound(gids)
         xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
-        print("args", args)
+
         if args[0] == '3_points':
             # args[1] = ['3_points', '1', '7', '8']
 
@@ -4664,7 +4663,7 @@ class Geometry():
                 
             names, newkeys = self.importShape_common(shape, True, fix_param, objs)
 
-            print("names, newkeys", names, newkeys)
+            #print("names, newkeys", names, newkeys)
             self.builder.Remove(self.shape, shape)            
             all_newkeys.extend(newkeys)
             if gid in objs:
