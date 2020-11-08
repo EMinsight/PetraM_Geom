@@ -363,7 +363,7 @@ class GMSHMeshWrapper():
                 dimTags = [(maxdim, int(x)) for x in self.optimize_dom.split(',')]
 
             #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
-
+            #self.show_all()
             # it is not well-written but I have to include all 
             # boundaries
             # elastic seems to apply for everything anyway ???
@@ -381,10 +381,20 @@ class GMSHMeshWrapper():
                 do_ho = True
             else:
                 do_ho = False
+            #do_ho = (do_ho and HighOrderOptimize[self.optimize_ho] != 0)
+
             if do_ho:
-                gmsh.option.setNumber("Mesh.HighOrderThresholdMax", 3)
-                #gmsh.option.setNumber("Mesh.HighOrderThresholdMin", 0.1)                
-                #gmsh.model.mesh.optimize("Mesh.HighOrderThresholdMin", 0.1)                
+                '''
+                if maxdim == 3:
+                    gmsh.model.mesh.optimize("Relocate3D", dimTags=[])
+                elif maxdim == 2:
+                    gmsh.model.mesh.optimize("Relocate2D", dimTags=[])
+                else:
+                    pass
+                '''
+                gmsh.option.setNumber("Mesh.HighOrderThresholdMax", 2)
+                gmsh.option.setNumber("Mesh.HighOrderThresholdMin", 0.1)
+
                 if HighOrderOptimize[self.optimize_ho] == 1:
                      gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)                
                 elif HighOrderOptimize[self.optimize_ho] == 2:
