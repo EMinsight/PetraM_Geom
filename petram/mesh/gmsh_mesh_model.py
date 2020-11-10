@@ -91,7 +91,8 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
     has_2nd_panel = False
     isGmshMesh = True
-
+    dim = -1
+    
     def attribute_set(self, v):
         v = super(GmshMeshActionBase, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -201,16 +202,16 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     def update_viewer_selection(self, dlg):
         viewer = dlg.GetParent()
         sel, mode = self.get_element_selection()
+            
         if mode == 'volume':
+            viewer.set_toolbar_mode('volume')            
             viewer.highlight_domain(sel["volume"])
             viewer._dom_bdr_sel = (sel["volume"], [], [], [])
             status_txt = 'Volume :' + ','.join([str(x) for x in sel["volume"]])
             viewer.set_status_text(status_txt, timeout=60000)
-            viewer._sel_mode = 'volume'
         else:
+            viewer.set_toolbar_mode(mode)            
             figobjs = viewer.highlight_element(sel)
-            viewer.set_sel_mode(mode)
-            viewer.set_sel_mode()  # update buttons
             if len(figobjs) > 0:
                 import ifigure.events
                 sel = [weakref.ref(x._artists[0]) for x in figobjs]
@@ -219,7 +220,23 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
     def get_embed(self):
         return [], [], []
-
+    
+    def _eval_choices(self, mode):
+        mesh_base = self.parent
+        data = mesh_base.geom_root.geom_data
+        if data is None:
+            return []
+        
+        if mode == 3:
+            choices = list(data[5])
+        elif mode == 2:
+            choices = list(data[4])
+        elif mode == 1:
+            choices = list(data[3])
+        else:
+            choices = list(range(1, len(data[0])+1))
+        return np.array(choices)
+    
     def _eval_entity_id(self, text):
         '''
         "remaining" -> "remaining"
@@ -260,6 +277,36 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
         return [self._eval_entity_id(x) for x in text]
 
+    def eval_entity_id2(self, text):
+        '''
+        similar to eval_entity_id but hanldes 'all' and 'remainig'
+        used only for GUI. 
+        note all/remaining are handled in mesh_wrapper separately
+        '''
+        if self.dim == -1:
+            self.eval_entity_id(text)
+        modes = ['point', 'edge', 'face', 'volume']
+        mode = modes[self.dim]
+
+        if text == 'all':
+            choices = self._eval_choices(self.dim)
+            choices = ",".join([str(int(x)) for x in choices])
+            return choices
+
+        elif text == 'remaining':
+            choices = self._eval_choices(self.dim)
+            for child in self.parent.get_children():
+                if child.dim == -1:
+                    continue
+                if child == self:
+                    break
+                sel, mode = child.get_element_selection()
+                choices = choices[np.in1d(choices, sel[mode], invert=True)]
+            choices = ",".join([str(int(x)) for x in choices])            
+            return choices
+
+        else:
+            return self.eval_entity_id(text)
 
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel='Max size(def)',

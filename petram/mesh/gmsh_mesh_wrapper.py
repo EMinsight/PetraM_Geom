@@ -430,6 +430,7 @@ class GMSHMeshWrapper():
 
                 print("generating final mesh file", msh_file)
                 self.edit_msh_to_add_sequential_physicals(tmp0, msh_file)
+                self.edit_msh_to_add_sequential_physicals(tmp0, msh_file+'2.msh')
         else:
             print("creating temporary mesh file")
             tmp0 = os.path.join(self.trash, 'tmp0.msh')
