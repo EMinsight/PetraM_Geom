@@ -47,11 +47,13 @@ def dprint2(*args):
         print(*args)
 
 
-def get_vertex_geom_zie():
+def get_vertex_geom_size(default_value):
     from collections import defaultdict
 
     lcar = defaultdict(lambda: np.inf)
-
+    for dim, tag in gmsh.model.getEntities(0):
+        lcar[tag] = default_value
+        
     for dim, tag in gmsh.model.getEntities(1):
         x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
         s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
@@ -290,7 +292,7 @@ class GMSHMeshWrapper():
                                  gmsh.model.getEntities(0))
         self.target_entities = gmsh.model.getEntities()
         #
-        self.vertex_geom_size = get_vertex_geom_zie()
+        self.vertex_geom_size = get_vertex_geom_size((self.clmin+self.clmax)/2.0)
 
         # set default vertex mesh size
         self.cl_data = {}
@@ -1066,7 +1068,8 @@ class GMSHMeshWrapper():
         dimtags.extend([(1, x) for x in embedl])
         dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim=0)
-
+        print(dimtags)
+        print(self.vertex_geom_size)
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
         for dim, tag in dimtags:
