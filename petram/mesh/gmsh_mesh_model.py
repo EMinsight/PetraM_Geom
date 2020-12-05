@@ -162,16 +162,17 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         dlg.OnRefreshTree()
         self.parent.update_meshview(dlg, viewer, clear=do_clear)
 
-    def onBuildBefore(self, evt):
-        dlg = evt.GetEventObject().GetTopLevelParent()
-
-        mm = dlg.get_selected_mm()
-        self._onBuildThis(evt, stop1=mm)
-        evt.Skip()
+    #def onBuildBefore(self, evt):
+    #    dlg = evt.GetEventObject().GetTopLevelParent()
+    #
+    #    mm = dlg.get_selected_mm()
+    #    self._onBuildThis(evt, stop1=mm)
+    #    evt.Skip()
 
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
-
+        _ = dlg.import_selected_panel_value()
+        
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop2=mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
