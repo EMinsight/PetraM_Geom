@@ -350,7 +350,7 @@ class Geometry():
         else:
             uu = first + (last-first)*u_n
             gvec = gp_Vec()
-            print(uu, type(uu))
+            #print(uu, type(uu))
             curve.D1(uu, pnt1, gvec)
             p = np.array((gvec.X(), gvec.Y(), gvec.Z(),))
         p = p / np.sqrt(np.sum(p**2))
