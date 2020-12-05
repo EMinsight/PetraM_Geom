@@ -350,7 +350,7 @@ class Geometry():
         else:
             uu = first + (last-first)*u_n
             gvec = gp_Vec()
-            print(uu, type(uu))
+            #print(uu, type(uu))
             curve.D1(uu, pnt1, gvec)
             p = np.array((gvec.X(), gvec.Y(), gvec.Z(),))
         p = p / np.sqrt(np.sum(p**2))
@@ -2014,7 +2014,6 @@ class Geometry():
             else:
                 gid = self.get_target2(objs, [tax[1]])[0]
                 n1, _void = self.get_face_normal(gid, check_flat=True)
-                print(n1)
             if tax[2]:
                 tt = -n1
             else:
@@ -2085,7 +2084,8 @@ class Geometry():
 
         elif args[0] == 'by_abc':
             data = np.array(args[1]).flatten()
-            normal = data[:3]
+            normal = np.array(data[:3])
+            normal = normal/np.sqrt(np.sum(normal**2))
             xx = np.array(
                 [(xmin + xmax) / 2, (ymin + ymax) / 2.0, (zmin + zmax) / 2.0])
             s = data[-1] - np.sum(normal * xx)
@@ -4663,7 +4663,7 @@ class Geometry():
                 
             names, newkeys = self.importShape_common(shape, True, fix_param, objs)
 
-            print("names, newkeys", names, newkeys)
+            #print("names, newkeys", names, newkeys)
             self.builder.Remove(self.shape, shape)            
             all_newkeys.extend(newkeys)
             if gid in objs:

@@ -216,8 +216,8 @@ class GMSHMeshWrapper():
         self.use_ho = kwargs.pop("use_ho", False)
         self.ho_order = kwargs.pop("ho_order", 2)        
         self.optimize_ho = kwargs.pop("optimize_ho", 0)
+        self.optimize_dom = kwargs.pop("optimize_dom", "all")        
         self.mapper_tol = kwargs.pop("mapper_tol", 1e-5)
-
         
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
@@ -343,13 +343,70 @@ class GMSHMeshWrapper():
 
             for i in range(mdim+1, 4):
                 done[i] = []
+                
         if self.use_ho:
-            gmsh.option.setNumber("Mesh.HighOrderDistCAD", 1)            
+            # using this option makes "computing connectivity and bad
+            # elements very slow"
+            gmsh.option.setNumber("Mesh.HighOrderDistCAD", 0)            
             gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
-            gmsh.option.setNumber("Mesh.HighOrderOptimize",
-                                   HighOrderOptimize[self.optimize_ho])
+            #gmsh.option.setNumber("Mesh.HighOrderOptimize",
+            #                       HighOrderOptimize[self.optimize_ho])
             self.hide_all()
             gmsh.model.mesh.generate(3)
+
+            #
+            #self.show_all()
+            maxdim = max([x for x, tag in gmsh.model.getEntities()])
+            if self.optimize_dom.lower() == 'all':
+                dimTags = gmsh.model.getEntities(maxdim)
+            else:
+                dimTags = [(maxdim, int(x)) for x in self.optimize_dom.split(',')]
+
+            #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
+            #self.show_all()
+            # it is not well-written but I have to include all 
+            # boundaries
+            # elastic seems to apply for everything anyway ???
+            self.show_only(dimTags, recursive=True)            
+            if maxdim == 3:
+                dimTags1 = gmsh.model.getBoundary(dimTags)
+                dimTags2 = gmsh.model.getBoundary(dimTags1)
+                dimTags3 = gmsh.model.getBoundary(dimTags2)
+                dimTags = list(set(dimTags + dimTags1 + dimTags2 + dimTags3))
+                do_ho = True
+            elif maxdim == 2:
+                dimTags1 = gmsh.model.getBoundary(dimTags)
+                dimTags2 = gmsh.model.getBoundary(dimTags1)
+                dimTags = list(set(dimTags + dimTags1 + dimTags2))
+                do_ho = True
+            else:
+                do_ho = False
+            #do_ho = (do_ho and HighOrderOptimize[self.optimize_ho] != 0)
+
+            if do_ho:
+                '''
+                if maxdim == 3:
+                    gmsh.model.mesh.optimize("Relocate3D", dimTags=[])
+                elif maxdim == 2:
+                    gmsh.model.mesh.optimize("Relocate2D", dimTags=[])
+                else:
+                    pass
+                '''
+                gmsh.option.setNumber("Mesh.HighOrderThresholdMax", 2)
+                gmsh.option.setNumber("Mesh.HighOrderThresholdMin", 0.1)
+
+                if HighOrderOptimize[self.optimize_ho] == 1:
+                     gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)                
+                elif HighOrderOptimize[self.optimize_ho] == 2:
+                     gmsh.model.mesh.optimize("HighOrderElastic", dimTags=dimTags)                
+                     gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)                
+                elif HighOrderOptimize[self.optimize_ho] == 3:
+                     gmsh.model.mesh.optimize("HighOrderElastic", dimTags=dimTags)
+                elif HighOrderOptimize[self.optimize_ho] == 4:
+                     gmsh.model.mesh.optimize("HighOrderFastCurving", dimTags=dimTags)
+                else:
+                    pass
+
             
         gmsh.model.mesh.removeDuplicateNodes()
 
@@ -373,6 +430,8 @@ class GMSHMeshWrapper():
 
                 print("generating final mesh file", msh_file)
                 self.edit_msh_to_add_sequential_physicals(tmp0, msh_file)
+                # this is to debug intermediate file
+                #self.edit_msh_to_add_sequential_physicals(tmp0, msh_file+'2.msh')
         else:
             print("creating temporary mesh file")
             tmp0 = os.path.join(self.trash, 'tmp0.msh')

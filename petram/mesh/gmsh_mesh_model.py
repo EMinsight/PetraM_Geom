@@ -91,7 +91,8 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     hide_ns_menu = True
     has_2nd_panel = False
     isGmshMesh = True
-
+    dim = -1
+    
     def attribute_set(self, v):
         v = super(GmshMeshActionBase, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -161,16 +162,17 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         dlg.OnRefreshTree()
         self.parent.update_meshview(dlg, viewer, clear=do_clear)
 
-    def onBuildBefore(self, evt):
-        dlg = evt.GetEventObject().GetTopLevelParent()
-
-        mm = dlg.get_selected_mm()
-        self._onBuildThis(evt, stop1=mm)
-        evt.Skip()
+    #def onBuildBefore(self, evt):
+    #    dlg = evt.GetEventObject().GetTopLevelParent()
+    #
+    #    mm = dlg.get_selected_mm()
+    #    self._onBuildThis(evt, stop1=mm)
+    #    evt.Skip()
 
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
-
+        _ = dlg.import_selected_panel_value()
+        
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop2=mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -201,16 +203,16 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     def update_viewer_selection(self, dlg):
         viewer = dlg.GetParent()
         sel, mode = self.get_element_selection()
+            
         if mode == 'volume':
+            viewer.set_toolbar_mode('volume')            
             viewer.highlight_domain(sel["volume"])
             viewer._dom_bdr_sel = (sel["volume"], [], [], [])
             status_txt = 'Volume :' + ','.join([str(x) for x in sel["volume"]])
             viewer.set_status_text(status_txt, timeout=60000)
-            viewer._sel_mode = 'volume'
         else:
+            viewer.set_toolbar_mode(mode)            
             figobjs = viewer.highlight_element(sel)
-            viewer.set_sel_mode(mode)
-            viewer.set_sel_mode()  # update buttons
             if len(figobjs) > 0:
                 import ifigure.events
                 sel = [weakref.ref(x._artists[0]) for x in figobjs]
@@ -219,8 +221,24 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
     def get_embed(self):
         return [], [], []
-
-    def _eval_enitity_id(self, text):
+    
+    def _eval_choices(self, mode):
+        mesh_base = self.parent
+        data = mesh_base.geom_root.geom_data
+        if data is None:
+            return []
+        
+        if mode == 3:
+            choices = list(data[5])
+        elif mode == 2:
+            choices = list(data[4])
+        elif mode == 1:
+            choices = list(data[3])
+        else:
+            choices = list(range(1, len(data[0])+1))
+        return np.array(choices)
+    
+    def _eval_entity_id(self, text):
         '''
         "remaining" -> "remaining"
         "all" -> "all"
@@ -254,12 +272,42 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
         return values
 
-    def eval_enitity_id(self, *text):
+    def eval_entity_id(self, *text):
         if len(text) == 1:
-            return self._eval_enitity_id(text[0])
+            return self._eval_entity_id(text[0])
 
-        return [self._eval_enitity_id(x) for x in text]
+        return [self._eval_entity_id(x) for x in text]
 
+    def eval_entity_id2(self, text):
+        '''
+        similar to eval_entity_id but hanldes 'all' and 'remainig'
+        used only for GUI. 
+        note all/remaining are handled in mesh_wrapper separately
+        '''
+        if self.dim == -1:
+            self.eval_entity_id(text)
+        modes = ['point', 'edge', 'face', 'volume']
+        mode = modes[self.dim]
+
+        if text == 'all':
+            choices = self._eval_choices(self.dim)
+            choices = ",".join([str(int(x)) for x in choices])
+            return choices
+
+        elif text == 'remaining':
+            choices = self._eval_choices(self.dim)
+            for child in self.parent.get_children():
+                if child.dim == -1:
+                    continue
+                if child == self:
+                    break
+                sel, mode = child.get_element_selection()
+                choices = choices[np.in1d(choices, sel[mode], invert=True)]
+            choices = ",".join([str(int(x)) for x in choices])            
+            return choices
+
+        else:
+            return self.eval_entity_id(text)
 
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel='Max size(def)',
@@ -304,6 +352,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         v['use_expert_mode'] = False
         v['use_ho'] = False
         v['optimize_ho'] = 'none'
+        v['optimize_dom'] = 'all'
         v['ho_order'] = 2
 
         super(GmshMesh, self).attribute_set(v)
@@ -329,9 +378,11 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         setting2 = {"style": CB_READONLY, "choices": c2}
         setting3 = {"style": CB_READONLY, "choices": c3}
         setting4 = {"style": CB_READONLY, "choices": c4}
-        ll_ho = [None, [True, [1, c3[0]]], 27, [{'text': 'use high order (in dev, upto order 3, tet only)'},
+        ll_ho = [None, [True, [1, c3[0], 'all']],
+                 27, [{'text': 'use high order (in dev, upto order 3, tet only)'},
                                                 {'elp': [["Order", self.ho_order, 400],
-                                                         ["HighOrder optimize", c3[-1], 4, setting3], ]}
+                                                         ["HighOrder optimize", c3[-1], 4, setting3],
+                                                         ["Optimize domain", 'all', 0, None], ]}
                                                 ]]
 
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
@@ -361,7 +412,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  self.algorithmr,
                  self.gen_all_phys_entity,
                  self.use_profiler, self.use_expert_mode,
-                 [self.use_ho, [self.ho_order, self.optimize_ho], ],
+                 [self.use_ho, [self.ho_order, self.optimize_ho, self.optimize_dom], ],
                  self, self, ])
 
     def preprocess_params(self, engine):
@@ -384,6 +435,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         self.use_ho = bool(v[-3][0])
         self.ho_order = int(v[-3][1][0])
         self.optimize_ho = str(v[-3][1][1])
+        self.optimize_dom = str(v[-3][1][2])
 
         return viewer_update
 
@@ -664,6 +716,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                       'use_ho': self.use_ho,
                       'ho_order': self.ho_order,
                       'optimize_ho': self.optimize_ho,
+                      'optimize_dom': self.optimize_dom,
                       'trash': trash,
                       'gen_all_phys_entity': self.gen_all_phys_entity,
                       'meshformat': 2.2,

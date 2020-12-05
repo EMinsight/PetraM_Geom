@@ -1,172 +1,187 @@
+from petram.mesh.gmsh_mesh_model import GmshMeshActionBase
+from petram.phys.vtable import VtableElement, Vtable
 import numpy as np
 
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshMeshActions')
 
-from petram.phys.vtable import VtableElement, Vtable
-from petram.mesh.gmsh_mesh_model import GmshMeshActionBase
 
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Line#',
-                                   default = "remaining",
-                                   tip = "Line ID" )),
+                                  guilabel='Line#',
+                                  default="remaining",
+                                  tip="Line ID")),
         ('num_seg', VtableElement('num_seg', type='int',
-                                   guilabel = 'Number of segments',
-                                   default = 5, 
-                                   tip = "Number of segments" )),
+                                  guilabel='Number of segments',
+                                  default=5,
+                                  tip="Number of segments")),
         ('progression', VtableElement('progression', type='float',
-                                   guilabel = 'Progression',
-                                   default = 1.0, 
-                                   tip = "Progression" )),
+                                      guilabel='Progression',
+                                      default=1.0,
+                                      tip="Progression")),
         ('bump', VtableElement('bump', type='float',
-                                   guilabel = 'Bump',
-                                   default = 1.0, 
-                                   tip = "Bump" )),)
+                               guilabel='Bump',
+                               default=1.0,
+                               tip="Bump")),)
 
-        
-    
+
 class TransfiniteLine(GmshMeshActionBase):
-    vt = Vtable(data)    
+    dim = 1
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
         gid, nseg, p, b = self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(gid)
-        
+        gid = self.eval_entity_id(gid)
+
         mesher.add('transfinite_edge', gid, nseg=nseg,
-                   progression = p,  bump = b)
+                   progression=p, bump=b)
 
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
         try:
-            ret['edge'] = [int(x) for x in self.geom_id.split(',')]
-        except:
+            ret['edge'] = [int(x) for x in gid.split(',')]
+        except BaseException:
             pass
         return ret, 'edge'
-    
+
+
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Surface#',
-                                   default = "",
-                                   tip = "Surface ID" )),
+                                  guilabel='Surface#',
+                                  default="",
+                                  tip="Surface ID")),
         ('edge1', VtableElement('edge1', type='string',
-                                 guilabel = '1st corner',
-                                 default = "", 
-                                 tip = "1st Edge" )),
+                                guilabel='1st corner',
+                                default="",
+                                tip="1st Edge")),
         ('edge2', VtableElement('edge2', type='string',
-                                 guilabel = '2nd corner',
-                                 default = "", 
-                                 tip = "2ndp Edge" )),
+                                guilabel='2nd corner',
+                                default="",
+                                tip="2ndp Edge")),
         ('edge3', VtableElement('edge3', type='string',
-                                 guilabel = '3rd corner',
-                                 default = "", 
-                                 tip = "3rd Edge" )),
+                                guilabel='3rd corner',
+                                default="",
+                                tip="3rd Edge")),
         ('edge4', VtableElement('edge4', type='string',
-                                 guilabel = '4th corner',
-                                 default = "", 
-                                 tip = "4th Edge" )),)
+                                guilabel='4th corner',
+                                default="",
+                                tip="4th Edge")),)
+
+
 class TransfiniteSurface(GmshMeshActionBase):
-    vt = Vtable(data)    
+    dim = 2
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
         gid, e1, e2, e3, e4 = self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(gid)
-        
-        c = [int(x)  for x in (e1,e2,e3,e4) if x.strip()!= '']
-        mesher.add('transfinite_surface', gid, corner = c)
+        gid = self.eval_entity_id(gid)
+
+        c = [int(x) for x in (e1, e2, e3, e4) if x.strip() != '']
+        mesher.add('transfinite_surface', gid, corner=c)
 
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
         try:
-            ret['face'] = [int(x) for x in self.geom_id.split(',')]
-        except:
+            ret['face'] = [int(x) for x in gid.split(',')]
+        except BaseException:
             pass
         return ret, 'face'
-    
+
+
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Point#',
-                                   default = "remaining", 
-                                   tip = "Point ID" )),
+                                  guilabel='Point#',
+                                  default="remaining",
+                                  tip="Point ID")),
         ('cl', VtableElement('cl', type='float',
-                                guilabel = 'Size)',
-                                default = 1.0, 
-                                tip = "CharacteristicLength" )))
+                             guilabel='Size)',
+                             default=1.0,
+                             tip="CharacteristicLength")))
+
 
 class CharacteristicLength(GmshMeshActionBase):
-    vt = Vtable(data)    
+    dim = 0
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
-        gid, cl= self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(gid)        
+        gid, cl = self.vt.make_value_or_expression(self)
+        gid = self.eval_entity_id(gid)
         mesher.add('cl', gid, cl)
 
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
         try:
-            ret['point'] = [int(x) for x in self.geom_id.split(',')]
-        except:
+            ret['point'] = [int(x) for x in gid.split(',')]
+        except BaseException:
             pass
         return ret, 'point'
 
 
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Element#',
-                                   default = "remaining", 
-                                   tip = "Element ID" )),
+                                  guilabel='Element#',
+                                  default="remaining",
+                                  tip="Element ID")),
         ('clmax', VtableElement('clmax', type='float',
-                                guilabel = 'Max size)',
-                                default_txt = '',                                 
-                                default = 0.,
-                                tip = "CharacteristicLengthMax" )),
+                                guilabel='Max size)',
+                                default_txt='',
+                                default=0.,
+                                tip="CharacteristicLengthMax")),
         ('clmin', VtableElement('clmin', type='float',
-                                guilabel = 'Min size',
-                                default_txt = '',                                
-                                default = 0.0, 
-                                tip = "CharacteristicLengthMin" )),
+                                guilabel='Min size',
+                                default_txt='',
+                                default=0.0,
+                                tip="CharacteristicLengthMin")),
         ('resolution', VtableElement('resolution', type='int',
-                                guilabel = 'Resolution',
-                                default = 5., 
-                                tip = "Edge Resolution" )),
+                                     guilabel='Resolution',
+                                     default=5.,
+                                     tip="Edge Resolution")),
         ('embed_s', VtableElement('embed_s', type='string',
-                                   guilabel = 'Surface#',
-                                   default = "", 
-                                   tip = "Surface number" )),
+                                  guilabel='Surface#',
+                                  default="",
+                                  tip="Surface number")),
         ('embed_l', VtableElement('embed_l', type='string',
-                                   guilabel = 'Line#',
-                                   default = "", 
-                                   tip = "Line number" )),
+                                  guilabel='Line#',
+                                  default="",
+                                  tip="Line number")),
         ('embed_p', VtableElement('embed_p', type='string',
-                                   guilabel = 'Point#',
-                                   default = "", 
-                                   tip = "Point number" )),)
+                                  guilabel='Point#',
+                                  default="",
+                                  tip="Point number")),)
 
 
 class FreeVolume(GmshMeshActionBase):
-    vt = Vtable(data)    
+    dim = 3
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
         values = self.vt.make_value_or_expression(self)
         gid, clmax, clmin, res, embed_s, embed_l, embed_p = values
-        gid, embed_s, embed_l, embed_p = self.eval_enitity_id(gid, embed_s, embed_l, embed_p)
-        
+        gid, embed_s, embed_l, embed_p = self.eval_entity_id(
+            gid, embed_s, embed_l, embed_p)
+
         mesher.add('freevolume', gid,
-                   maxsize = clmax,
-                   minsize = clmin,
-                   resolution = res,
-                   embed_s = embed_s,                   
+                   maxsize=clmax,
+                   minsize=clmin,
+                   resolution=res,
+                   embed_s=embed_s,
                    embed_l=embed_l,
                    embed_p=embed_p,
-                   alg2d = self.alg_2d,
-                   alg3d = self.alg_3d)
-        
+                   alg2d=self.alg_2d,
+                   alg3d=self.alg_3d)
+
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
-        values = self.vt.make_value_or_expression(self)
-        gid = self.eval_enitity_id(values[0])
+        gid = self.eval_entity_id2(self.geom_id)
         try:
-            ret['volume'] = [int(x) for x in self.gid.split(',')]
-        except:
+            ret['volume'] = [int(x) for x in gid.split(',')]
+        except BaseException:
             pass
         return ret, 'volume'
-    
+
     def attribute_set(self, v):
         v = super(FreeVolume, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -179,14 +194,14 @@ class FreeVolume(GmshMeshActionBase):
 
         c1 = list(Algorithm2D)
         c2 = list(Algorithm3D)
-        
+
         from wx import CB_READONLY
         setting1 = {"style": CB_READONLY, "choices": c1}
         setting2 = {"style": CB_READONLY, "choices": c2}
-        
+
         ll = super(FreeVolume, self).panel1_param()
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
-                   ["3D Algorithm", c2[-1], 4, setting2],])
+                   ["3D Algorithm", c2[-1], 4, setting2], ])
         return ll
 
     def get_panel1_value(self):
@@ -207,61 +222,67 @@ class FreeVolume(GmshMeshActionBase):
         return tip + ['mesh algorithm for surface',
                       'mesh algorithm for volume']
 
-    
+
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Element#',
-                                   default = "remaining", 
-                                   tip = "Element ID" )),
+                                  guilabel='Element#',
+                                  default="remaining",
+                                  tip="Element ID")),
         ('clmax', VtableElement('clmax', type='float',
-                                guilabel = 'Max size)',
-                                default_txt = '',                                 
-                                default = 0.,
-                                tip = "CharacteristicLengthMax" )),
+                                guilabel='Max size)',
+                                default_txt='',
+                                default=0.,
+                                tip="CharacteristicLengthMax")),
         ('clmin', VtableElement('clmin', type='float',
-                                guilabel = 'Min size',
-                                default = 0., 
-                                tip = "CharacteristicLengthMin" )),
+                                guilabel='Min size',
+                                default=0.,
+                                tip="CharacteristicLengthMin")),
         ('resolution', VtableElement('resolution', type='int',
-                                guilabel = 'Resolution',
-                                default = 5., 
-                                tip = "Edge Resolution" )),
+                                     guilabel='Resolution',
+                                     default=5.,
+                                     tip="Edge Resolution")),
         ('embed_l', VtableElement('embed_l', type='string',
-                                   guilabel = 'Line#',
-                                   default = "", 
-                                   tip = "Line number" )),
+                                  guilabel='Line#',
+                                  default="",
+                                  tip="Line number")),
         ('embed_p', VtableElement('embed_p', type='string',
-                                   guilabel = 'Point#',
-                                   default = "", 
-                                   tip = "Point number" )),)
+                                  guilabel='Point#',
+                                  default="",
+                                  tip="Point number")),)
+
 
 class FreeFace(GmshMeshActionBase):
-    vt = Vtable(data)    
+    dim = 2
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
-        gid, clmax, clmin, res, embed_l, embed_p= self.vt.make_value_or_expression(self)
-        gid, embed_l, embed_p = self.eval_enitity_id(gid, embed_l, embed_p)        
+        gid, clmax, clmin, res, embed_l, embed_p = self.vt.make_value_or_expression(
+            self)
+        gid, embed_l, embed_p = self.eval_entity_id(gid, embed_l, embed_p)
         mesher.add('freeface', gid,
-                   maxsize = clmax,
-                   minsize = clmin,
-                   resolution = res,
+                   maxsize=clmax,
+                   minsize=clmin,
+                   resolution=res,
                    embed_l=embed_l,
                    embed_p=embed_p,
-                   alg2d = self.alg_2d)
-        
+                   alg2d=self.alg_2d)
+
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
         try:
-            ret['face'] = [int(x) for x in self.geom_id.split(',')]
-        except:
+            ret['face'] = [int(x) for x in gid.split(',')]
+        except BaseException:
             pass
         return ret, 'face'
-    
+
     def get_embed(self):
-        gid, clmax, clmin, embed_l, embed_p= self.vt.make_value_or_expression(self)
+        gid, clmax, clmin, embed_l, embed_p = self.vt.make_value_or_expression(
+            self)
         ll = [str(x) for x in embed_l.split(',')]
-        pp = [str(x) for x in embed_p.split(',')]                
+        pp = [str(x) for x in embed_p.split(',')]
         return [], ll, pp
-            
+
     def attribute_set(self, v):
         v = super(FreeFace, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -272,12 +293,12 @@ class FreeFace(GmshMeshActionBase):
         from petram.mesh.gmsh_mesh_wrapper import Algorithm2D
 
         c1 = list(Algorithm2D)
-        
+
         from wx import CB_READONLY
         setting1 = {"style": CB_READONLY, "choices": c1}
-        
+
         ll = super(FreeFace, self).panel1_param()
-        ll.extend([["2D Algorithm", c1[-1], 4, setting1],])
+        ll.extend([["2D Algorithm", c1[-1], 4, setting1], ])
 
         return ll
 
@@ -296,165 +317,188 @@ class FreeFace(GmshMeshActionBase):
     def panel1_tip(self):
         tip = super(FreeFace, self).panel1_tip()
         return tip + ['mesh algorithm for surface']
-    
+
+
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Line#',
-                                   default = "remaining", 
-                                   tip = "Line number" )),
+                                  guilabel='Line#',
+                                  default="remaining",
+                                  tip="Line number")),
         ('clmax', VtableElement('clmax', type='float',
-                                guilabel = 'Max size',
-                                default_txt = '',                                 
-                                default = 0.0,
-                                tip = "CharacteristicLengthMax" )),
+                                guilabel='Max size',
+                                default_txt='',
+                                default=0.0,
+                                tip="CharacteristicLengthMax")),
         ('clmin', VtableElement('clmin', type='float',
-                                guilabel = 'Min size',
-                                default_txt = '', default = 0.0,
-                                tip = "CharacteristicLengthMin" )),
+                                guilabel='Min size',
+                                default_txt='', default=0.0,
+                                tip="CharacteristicLengthMin")),
         ('resolution', VtableElement('resolution', type='int',
-                                guilabel = 'Resolution',
-                                default_txt = '5',                                     
-                                default = 5., 
-                                tip = "Edge Resolution" )),)
+                                     guilabel='Resolution',
+                                     default_txt='5',
+                                     default=5.,
+                                     tip="Edge Resolution")),)
+
 
 class FreeEdge(GmshMeshActionBase):
-    vt = Vtable(data)    
+    dim = 1
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
         gid, clmax, clmin, res = self.vt.make_value_or_expression(self)
-        gid  = self.eval_enitity_id(gid)
-        
+        gid = self.eval_entity_id(gid)
+
         mesher.add('freeedge', gid,
-                   maxsize = clmax,
-                   minsize = clmin,
-                   resolution = res)
-        
+                   maxsize=clmax,
+                   minsize=clmin,
+                   resolution=res)
+
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
         try:
-            ret['edge'] = [int(x) for x in self.geom_id.split(',')]
-        except:
+            ret['edge'] = [int(x) for x in gid.split(',')]
+        except BaseException:
             pass
         return ret, 'edge'
 
 # Transform Hint (extrude)
 #    d     : dx, dy, dz : 3 float
 #    l1, l2,,,,: set of edges : end points determines d (N.I.)
+
+
 def process_hint_ex(text):
     try:
         text = str(text)
-        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]        
+        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]
         values = [float(x) for x in values]
         if len(values) == 3:
             return {'axan': (values, 0.0)}
         else:
             assert False, "enter direction of translation"
-    except:
+    except BaseException:
         pass
     return {}
-    
+
 # Transform Hint (revolve)
 #    ax an : ax_x, ax_y, ax_z, angle(deg): 4 float
 #    l1, angle  : l1 direction of axis, angle (deg) (N.I.)
 #    s1, angle  : normal to face s1, angle (deg) (N.I.)
+
+
 def process_hint_rv(text):
     try:
         text = str(text)
-        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]        
+        values = [x.strip() for x in text.split(',') if len(x.strip()) != 0]
         values = [float(x) for x in values]
         if len(values) == 4:
             return {'axan': (values[0:3], values[-1])}
-    except:
+    except BaseException:
         pass
     return {}
 
-data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Surface# (To)',
-                                   default = "", 
-                                   tip = "Surface number" )),
-        ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Source # (From)',
-                                  default = "", 
-                                  tip = "Surface number" )),
-        ('mapper', VtableElement('mapper', type='string',
-                                  guilabel = 'Transform Hint',                                 
-                                  default = "", 
-                                  tip = "Coordinate transformatin " )),
-        ('cp_cl', VtableElement('cp_cl', type='bool',
-                                 guilabel = 'Copy CL',
-                                 default = True,
-                                 tip = "Copy Characteristic Length")), )
 
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                  guilabel='Surface# (To)',
+                                  default="",
+                                  tip="Surface number")),
+        ('src_id', VtableElement('src_id', type='string',
+                                 guilabel='Source # (From)',
+                                 default="",
+                                 tip="Surface number")),
+        ('mapper', VtableElement('mapper', type='string',
+                                 guilabel='Transform Hint',
+                                 default="",
+                                 tip="Coordinate transformatin ")),
+        ('cp_cl', VtableElement('cp_cl', type='bool',
+                                guilabel='Copy CL',
+                                default=True,
+                                tip="Copy Characteristic Length")), )
 
 
 class CopyFace(GmshMeshActionBase):
-    vt = Vtable(data)        
+    dim = 2
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
         gid, src_id, hint, cp_cl = self.vt.make_value_or_expression(self)
-        gid  = self.eval_enitity_id(gid)
-       
+        gid = self.eval_entity_id(gid)
+
         kwargs = process_hint_ex(hint)
         kwargs['copy_cl'] = cp_cl
         print('adding here', src_id, gid,)
         mesher.add('copyface', src_id, gid,
                    **kwargs)
-        
+
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id(self.geom_id)
+        sid = self.eval_entity_id(self.src_id)
         try:
-            dest = [int(x) for x in self.geom_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in gid.split(',')]
+            src = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
-        except:
+        except BaseException:
             pass
         return ret, 'face'
-    
+
+
 class CopyFaceRotate(GmshMeshActionBase):
-    vt = Vtable(data)        
+    dim = 2
+    vt = Vtable(data)
+
     def add_meshcommand(self, mesher):
         gid, src_id, hint, cp_cl = self.vt.make_value_or_expression(self)
-        gid  = self.eval_enitity_id(gid)
-                    
+        gid = self.eval_entity_id(gid)
+
         kwargs = process_hint_rv(hint)
         kwargs['copy_cl'] = cp_cl
         kwargs['revolve'] = True
-                    
+
         mesher.add('copyface', src_id, gid,
                    **kwargs)
-        
+
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id(self.geom_id)
+        sid = self.eval_entity_id(self.src_id)
+
         try:
-            dest = [int(x) for x in self.geom_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in gid.split(',')]
+            src = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
-        except:
+        except BaseException:
             pass
         return ret, 'face'
-    
-merge_loc = [None, None, 36, {"col": 4, 
-                              "labels":["0D","1D","2D","3D"]}]
+
+
+merge_loc = [None, None, 36, {"col": 4,
+                              "labels": ["0D", "1D", "2D", "3D"]}]
+
+
 class MergeText(GmshMeshActionBase):
     vt = Vtable(tuple())
+
     def panel1_param(self):
         ll = super(MergeText, self).panel1_param()
-        
-        ll.extend([["Text", "", 235, {"nlines":15}],
-                    merge_loc,])
+
+        ll.extend([["Text", "", 235, {"nlines": 15}],
+                   merge_loc, ])
 
         return ll
-      
+
     def attribute_set(self, v):
         v = super(MergeText, self).attribute_set(v)
         v["merge_txt"] = ""
-        v["merge_dim"] = [True]+[False]*3
+        v["merge_dim"] = [True] + [False] * 3
         return v
-        
+
     def get_panel1_value(self):
         v = super(MergeText, self).get_panel1_value()
         v.extend([self.merge_txt, self.merge_dim])
-        return  v
+        return v
 
     def preprocess_params(self, engine):
         return
@@ -466,129 +510,148 @@ class MergeText(GmshMeshActionBase):
 
     def panel1_tip(self):
         return [None, None, None, None]
-    
+
     def add_meshcommand(self, mesher):
-        self.vt.preprocess_params(self)                        
-        mesher.add('mergetxt', text = self.merge_txt, dim = self.merge_dim)
+        self.vt.preprocess_params(self)
+        mesher.add('mergetxt', text=self.merge_txt, dim=self.merge_dim)
+
 
 data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Surfaces',
-                                   default = "", 
-                                   tip = "Entity number" )),)
+                                  guilabel='Surfaces',
+                                  default="",
+                                  tip="Entity number")),)
+
+
 class CompoundSurface(GmshMeshActionBase):
+    dim = -1  # this element does not make mesh
     vt = Vtable(data)
-    def add_meshcommand(self, mesher):
-        gid = self.vt.make_value_or_expression(self)[0]        
-        gid  = self.eval_enitity_id(gid)
 
-        # generate something like... Compound Surface{1, 5, 10};
-        text = "Compound Surface{ " + gid + "};"        
-        mesher.add('mergetxt', text = text , dim = [True, False, False, False])
-
-data = (('geom_id', VtableElement('geom_id', type='string',
-                                   guilabel = 'Curves',
-                                   default = "", 
-                                   tip = "Entity number" )),)
-        
-class CompoundCurve(GmshMeshActionBase):
-    vt = Vtable(data)
-    def add_meshcommand(self, mesher):
-        gid = self.vt.make_value_or_expression(self)[0]                
-        gid  = self.eval_enitity_id(gid)
-
-        # generate something like... Compound Curve{1, 5, 10};        
-        text = "Compound Curve{ " + gid + "};"
-        mesher.add('mergetxt', text = text , dim = [True, False, False, False])
-        
-        
-rsdata =  (('geom_id', VtableElement('geom_id', type='string',
-                                    guilabel = 'Surfaces',
-                                    default = "",
-                                    tip = "surfacess to be recombined")), )
-#           ('max_angle', VtableElement('max_angle', type='float',
-#                                guilabel = 'Max size)',
-#                                default = 45, 
-#                                tip = "Maximum differend of angle" )),)
-
-class RecombineSurface(GmshMeshActionBase):
-    vt = Vtable(rsdata)
     def add_meshcommand(self, mesher):
         gid = self.vt.make_value_or_expression(self)[0]
-        gid  = self.eval_enitity_id(gid)
-        
+        gid = self.eval_entity_id(gid)
+
+        # generate something like... Compound Surface{1, 5, 10};
+        text = "Compound Surface{ " + gid + "};"
+        mesher.add('mergetxt', text=text, dim=[True, False, False, False])
+
+
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                  guilabel='Curves',
+                                  default="",
+                                  tip="Entity number")),)
+
+
+class CompoundCurve(GmshMeshActionBase):
+    dim = -1  # this element does not make mesh
+    vt = Vtable(data)
+
+    def add_meshcommand(self, mesher):
+        gid = self.vt.make_value_or_expression(self)[0]
+        gid = self.eval_entity_id(gid)
+
+        # generate something like... Compound Curve{1, 5, 10};
+        text = "Compound Curve{ " + gid + "};"
+        mesher.add('mergetxt', text=text, dim=[True, False, False, False])
+
+
+rsdata = (('geom_id', VtableElement('geom_id', type='string',
+                                    guilabel='Surfaces',
+                                    default="",
+                                    tip="surfacess to be recombined")), )
+#           ('max_angle', VtableElement('max_angle', type='float',
+#                                guilabel = 'Max size)',
+#                                default = 45,
+#                                tip = "Maximum differend of angle" )),)
+
+
+class RecombineSurface(GmshMeshActionBase):
+    dim = -1  # this element does not make mesh
+    vt = Vtable(rsdata)
+
+    def add_meshcommand(self, mesher):
+        gid = self.vt.make_value_or_expression(self)[0]
+        gid = self.eval_entity_id(gid)
+
         mesher.add('recombine_surface', gid)
 
-edata =  (('ex_target', VtableElement('ex_target', type='string',
-                                      guilabel = 'Volume',
-                                      default = "",
-                                      tip = "extrusion target")),
-          ('dst_id', VtableElement('dst_id', type='string',
-                                   guilabel = 'Surface# (To)',
-                                   default = "", 
-                                   tip = "Surface number" )),
-          ('src_id', VtableElement('src_id', type='string',
-                                  guilabel = 'Source # (From)',
-                                  default = "", 
-                                  tip = "Surface number" )),
-          ('nlayer', VtableElement('nlayer', type='int',
-                             guilabel = 'Num. Layers',
-                             default = 5,
-                             tip = "Number of Layers" )),
-          ('mapper', VtableElement('mapper', type='string',
-                                   guilabel = 'Transform Hint',
-                                   default = "", 
-                                   tip = "Coordinate transformatin (ax, an), (dx,dy,dz), ")),
-          ('use_recombine', VtableElement('use_recombine', type='bool',
-                                      guilabel = 'Recombine(Hex/Prism)',
-                                      default = False,
-                                      tip = "recombine extruded mesh to Hex/Prism")), )
 
-    
+edata = (('ex_target', VtableElement('ex_target', type='string',
+                                     guilabel='Volume',
+                                     default="",
+                                     tip="extrusion target")),
+         ('dst_id', VtableElement('dst_id', type='string',
+                                  guilabel='Surface# (To)',
+                                  default="",
+                                  tip="Surface number")),
+         ('src_id', VtableElement('src_id', type='string',
+                                  guilabel='Source # (From)',
+                                  default="",
+                                  tip="Surface number")),
+         ('nlayer', VtableElement('nlayer', type='int',
+                                  guilabel='Num. Layers',
+                                  default=5,
+                                  tip="Number of Layers")),
+         ('mapper', VtableElement('mapper', type='string',
+                                  guilabel='Transform Hint',
+                                  default="",
+                                  tip="Coordinate transformatin (ax, an), (dx,dy,dz), ")),
+         ('use_recombine', VtableElement('use_recombine', type='bool',
+                                         guilabel='Recombine(Hex/Prism)',
+                                         default=False,
+                                         tip="recombine extruded mesh to Hex/Prism")), )
+
+
 class ExtrudeMesh(GmshMeshActionBase):
+    dim = (2, 3)
     vt = Vtable(edata)
+
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
-        gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
-        
+        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(
+            self)
+        gid, dst_id, src_id = self.eval_entity_id(gid, dst_id, src_id)
+
         kwargs = process_hint_ex(hint)
         mesher.add('extrude_face', gid, src_id, dst_id,
                    nlayers=nlayers, use_recombine=use_recombine, **kwargs)
 
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        did = self.eval_entity_id(self.dst_id)
+        sid = self.eval_entity_id(self.src_id)
+
         try:
-            dest = [int(x) for x in self.dst_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in did.split(',')]
+            src = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
-        except:
+        except BaseException:
             pass
         return ret, 'face'
 
-    
+
 class RevolveMesh(GmshMeshActionBase):
+    dim = (2, 3)
     vt = Vtable(edata)
+
     def add_meshcommand(self, mesher):
-        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(self)
-        gid, dst_id, src_id  = self.eval_enitity_id(gid, dst_id, src_id)
-        
+        gid, dst_id, src_id, nlayers, hint, use_recombine = self.vt.make_value_or_expression(
+            self)
+        gid, dst_id, src_id = self.eval_entity_id(gid, dst_id, src_id)
+
         kwargs = process_hint_rv(hint)
         mesher.add('revolve_face', gid, src_id, dst_id,
-                   nlayers=nlayers, use_recombine=use_recombine, **kwargs)        
+                   nlayers=nlayers, use_recombine=use_recombine, **kwargs)
 
     def get_element_selection(self):
-        self.vt.preprocess_params(self)                
+        self.vt.preprocess_params(self)
         ret, mode = self.element_selection_empty()
+        did = self.eval_entity_id(self.dst_id)
+        sid = self.eval_entity_id(self.src_id)
+
         try:
-            dest = [int(x) for x in self.dst_id.split(',')]
-            src  = [int(x) for x in self.src_id.split(',')]
+            dest = [int(x) for x in did.split(',')]
+            src = [int(x) for x in sid.split(',')]
             ret['face'] = dest + src
-        except:
+        except BaseException:
             pass
         return ret, 'face'
-    
-    
-
-
-    
-    
