@@ -4661,10 +4661,13 @@ class Geometry():
             if not is_toplevel:
                 assert False, "CAD heal should be applied to a top-level entity"
                 
+            self.builder.Remove(self.shape, shape)
+            self.synchronize_topo_list()
+            
             names, newkeys = self.importShape_common(shape, True, fix_param, objs)
 
             #print("names, newkeys", names, newkeys)
-            self.builder.Remove(self.shape, shape)            
+
             all_newkeys.extend(newkeys)
             if gid in objs:
                 del objs[t]

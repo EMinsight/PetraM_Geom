@@ -574,6 +574,17 @@ class RecombineSurface(GmshMeshActionBase):
 
         mesher.add('recombine_surface', gid)
 
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)
+        ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id(self.geom_id)
+        try:
+            dest = [int(x) for x in gid.split(',')]
+            ret['face'] = dest
+        except BaseException:
+            pass
+        return ret, 'face'
+
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Volume',
