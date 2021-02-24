@@ -644,7 +644,14 @@ class GMSHMeshWrapper():
         gmsh.model.setCurrent(self.current)
 
     def edit_msh_to_add_sequential_physicals(self, tmp_file, filename, verbose=True):
+        
+        from petram.mesh.gmsh_helper import edit_msh_to_add_sequential_physicals
 
+        edit_msh_to_add_sequential_physicals(tmp_file,
+                                             filename,
+                                             gen_all_phys_entity=self.gen_all_phys_entity,
+                                             verbose=verbose)
+        '''
         from petram.geom.read_gmsh import gmsh_element_type, gmsh_element_dim
 
         lines = OrderedDict()
@@ -755,7 +762,7 @@ class GMSHMeshWrapper():
         fid.close()
         #from shutil import copyfile
         #copyfile(filename, filename+'.bk')
-
+        '''
     def add_sequential_physicals(self, verbose=True):
         '''
         add sequencial physical entity numbers
