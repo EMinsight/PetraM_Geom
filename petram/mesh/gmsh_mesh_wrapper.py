@@ -1000,8 +1000,6 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)
         done[1].extend([x for dim, x in dimtags])
         
-        self.show_only(dimtags)
-
         return done, params
 
     @set_restore_maxmin_cl
