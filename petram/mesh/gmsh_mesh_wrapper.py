@@ -651,118 +651,7 @@ class GMSHMeshWrapper():
                                              filename,
                                              gen_all_phys_entity=self.gen_all_phys_entity,
                                              verbose=verbose)
-        '''
-        from petram.geom.read_gmsh import gmsh_element_type, gmsh_element_dim
-
-        lines = OrderedDict()
-
-        fid = open(tmp_file, 'r')
-
-        def readline1():
-            ret = fid.readline()
-            new_lines1.append(ret)
-
-        l = fid.readline()
-        while l:
-            line = l.strip()
-            if len(line) == 0:
-                l = fid.readline()
-                continue
-
-            if line[:4] == '$End':
-                pass
-            elif line[0] == '$':
-                section = line[1:]
-                lines[section] = []
-            else:
-                lines[section].append(line)
-            l = fid.readline()
-        fid.close()
-        
-        # process element
-        ndims = [defaultdict(int),
-                 defaultdict(int),
-                 defaultdict(int),
-                 defaultdict(int)]
-
-        elines = [[], [], [], []]
-
-        for k, l in enumerate(lines["Elements"][1:]):
-            xx = l.split(' ')
-            el_type = int(xx[1])
-            el_num = int(xx[4])
-            xx[3] = str(el_num)
-            dd = gmsh_element_dim[el_type]
-            ndims[dd][el_num] = ndims[dd][el_num] + 1
-
-            elines[dd].append(' '.join(xx))
-
-        if not self.gen_all_phys_entity and len(ndims[3]) != 0:
-            elines2 = elines[2] + elines[3]
-            nphys = len(ndims[2]) + len(ndims[3])
-            ndims[0] = {}
-            ndims[1] = {}
-            if verbose:
-                print("Adding " + str(len(ndims[2])) + " Surface(s)")
-                print("Adding " + str(len(ndims[3])) + " Volume(s)")
-
-        elif not self.gen_all_phys_entity and len(ndims[2]) != 0:
-            elines2 = elines[1] + elines[2]
-            nphys = len(ndims[1]) + len(ndims[2])
-            ndims[0] = {}
-            if verbose:
-                print("Adding " + str(len(ndims[1])) + " Line(s)")
-                print("Adding " + str(len(ndims[2])) + " Surface(s)")
-
-        else:
-            elines2 = elines[0] + elines[1] + elines[2] + elines[3]
-            nphys = len(ndims[0]) + len(ndims[1]) + \
-                len(ndims[2]) + len(ndims[3])
-            if verbose:
-                print("Adding " + str(len(ndims[0])) + " Point(s)")
-                print("Adding " + str(len(ndims[1])) + " Line(s)")
-                print("Adding " + str(len(ndims[2])) + " Surfac(s)")
-                print("Adding " + str(len(ndims[3])) + " Volume(s)")
-
-        # renumber elements
-        elines3 = []
-        for k, l in enumerate(elines2):
-            xx = l.split(' ')
-            elines3.append(' '.join([str(k+1)] + xx[1:]))
-        elines3 = [str(len(elines3))]+elines3
-        lines["Elements"] = elines3
-
-        phys_names = [str(nphys)]
-        for l in list(ndims[0]):
-            phys_names.append(" ".join(["0", str(l), '"point'+str(l)+'"']))
-        for l in list(ndims[1]):
-            phys_names.append(" ".join(["1", str(l), '"line'+str(l)+'"']))
-        for l in list(ndims[2]):
-            phys_names.append(" ".join(["2", str(l), '"surface'+str(l)+'"']))
-        for l in list(ndims[3]):
-            phys_names.append(" ".join(["3", str(l), '"volume'+str(l)+'"']))
-
-        lines["PhysicalNames"] = phys_names
-
-        def write_section(fid, lines, sec):
-            fid.write("$"+sec+"\n")
-            fid.write("\n".join(lines[sec])+"\n")
-            fid.write("$End"+sec+"\n")
-
-        rest_sec = [x for x in list(lines) if x !=
-                    "MeshFormat" and x != "PhysicalNames"]
-
-        fid = open(filename, "w")
-
-        write_section(fid, lines, "MeshFormat")
-        write_section(fid, lines, "PhysicalNames")
-        for sec in rest_sec:
-            write_section(fid, lines, sec)
-
-        fid.close()
-        #from shutil import copyfile
-        #copyfile(filename, filename+'.bk')
-        '''
+       
     def add_sequential_physicals(self, verbose=True):
         '''
         add sequencial physical entity numbers
@@ -1075,8 +964,7 @@ class GMSHMeshWrapper():
         dimtags.extend([(1, x) for x in embedl])
         dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim=0)
-        print(dimtags)
-        print(self.vertex_geom_size)
+
         dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
         self.show_only(dimtags)
         for dim, tag in dimtags:
@@ -1111,6 +999,8 @@ class GMSHMeshWrapper():
         gmsh.model.mesh.generate(1)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)
         done[1].extend([x for dim, x in dimtags])
+        
+        self.show_only(dimtags)
 
         return done, params
 
@@ -1445,11 +1335,27 @@ class GMSHMeshWrapper():
                 continue
 
             ntag, pos, ppos = ndata
-            #print("parametric copyied", ppos)
             etypes, etags, nodes = edata
-            ntag2 = range(noffset, noffset+len(ntag)-2)
+            
+            # check if points are reversed
+            mdata_dest = get_nodes_elements([(1,tag)], normalize=True)
+            nodes_org = mdata_dest[0][2][0][-2:] # this is start and end points
+            if (node_map2[ndata[0][-2]] == nodes_org[1] and
+                node_map2[ndata[0][-1]] == nodes_org[0]):
+                do_flip = True
+                #print("flipping point order", tag)
+                tmp  = np.array(pos).reshape(-1, 3)
+                pos =  np.vstack([tmp[:-2][::-1], tmp[-1], tmp[-2]]).flatten()
+                ntag = np.hstack([ntag[:-2][::-1], ntag[-1], ntag[-2]])
+                ppos = (1 - ppos)[::-1]
+                #etags = etags[::-1]
+                nodes = [np.hstack([x[-1], x[1:-1][::-1], x[0]]) for x in nodes]
+            else:
+                do_flip = False 
+
+            ntag2 = list(range(noffset, noffset+len(ntag)-2))
             noffset = noffset+len(ntag)-2
-            etags2 = [range(eoffset, eoffset+len(etags[0]))]
+            etags2 = [list(range(eoffset, eoffset+len(etags[0])))]
             eoffset = eoffset+len(etags[0])
 
             pos = np.array(pos).reshape(-1, 3).transpose()
@@ -1491,14 +1397,14 @@ class GMSHMeshWrapper():
             #else:
             '''
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
-
+            
             for i, j in zip(ntag, ntag2):
                 node_map2[i] = j
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
-
+            
             gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, ppos)
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
-
+            
             done[1].append(tag)
 
         return done, params
