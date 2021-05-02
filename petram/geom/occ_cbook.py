@@ -84,7 +84,7 @@ try:
                                       BRepAlgoAPI_Common,
                                       BRepAlgoAPI_BuilderAlgo,
                                       BRepAlgoAPI_Defeaturing)
-    from OCC.Core.gp import (gp_Ax1, gp_Ax2, gp_Pnt,
+    from OCC.Core.gp import (gp_Ax1, gp_Ax2, gp_Pnt, gp_Circ,
                              gp_Dir, gp_Pnt2d, gp_Trsf, gp_Vec2d,
                              gp_Vec, gp_XYZ, gp_GTrsf, gp_Mat,
                              gp_Lin2d, gp_Dir2d)

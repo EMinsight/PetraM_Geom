@@ -239,7 +239,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
         if success:
             dlg = evt.GetEventObject().GetTopLevelParent()
-            dlg.select_next_enabled()
+            import wx
+            wx.CallAfter(dlg.select_next_enabled)
             
         evt.Skip()
 

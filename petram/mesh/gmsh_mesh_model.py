@@ -176,7 +176,9 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop2=mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
-        dlg.select_next_enabled()
+
+        import wx
+        wx.CallAfter(dlg.select_next_enabled)
         evt.Skip()
 
     def onClearMesh(self, evt):
@@ -735,6 +737,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             self._mesher_data = data
             self._max_mdim = max_mdim
             if finalize:
+                '''
                 if self.use_ho:
                     fname = msh_output[:-3] + 'mesh'
 
@@ -742,10 +745,12 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                     t = Translator(msh_output, verbose=True)
                     t.write(fname)
 
-                    os.remove(msh_output)
+                    #os.remove(msh_output)
                     self._mesh_output = fname
                 else:
                     self._mesh_output = msh_output
+                '''
+                self._mesh_output = msh_output                    
 
             else:
                 self._mesh_output = ''
@@ -817,7 +822,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 dprint1("gmsh file path", path)
                 return path
 
-        ext = '.mesh' if self.use_ho else '.msh'
+        #ext = '.mesh' if self.use_ho else '.msh'
+        ext = '.msh'
 
         path = os.path.join(self.root().get_root_path(), self.name() + ext)
         if os.path.exists(path):
