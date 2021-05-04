@@ -24,7 +24,7 @@ if use_parallel:
     from petram.helper.mpi_recipes import *
 else:
     import mfem.ser as mfem
-
+    myid = 0
 
 class GMesh(Mesh):
     def onItemSelChanged(self, evt):
@@ -771,7 +771,6 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         dprint1("Generating Mesh in " + cwd)
         self._mesh_output = ''
 
-        myid = MPI.COMM_WORLD.rank
         if myid == 0:
             geom_root = self.geom_root
             filename = os.path.join(cwd, self.name()) + '.msh'

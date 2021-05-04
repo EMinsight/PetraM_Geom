@@ -22,11 +22,13 @@ class OCCGeom(GmshGeom):
         return v
 
     def build_geom4(self, stop1=None, stop2=None, filename=None,
-                    finalize=False, no_mesh=False, gui_parent=None):
+                    finalize=False, no_mesh=False, gui_parent=None,
+                    cwd=None):
 
         self.use_occ_preview = True
         self.do_build_geom4(stop1=stop1, stop2=stop2, filename=filename,
-                         finalize=finalize, no_mesh=no_mesh, gui_parent=gui_parent)
+                            finalize=finalize, no_mesh=no_mesh, gui_parent=gui_parent,
+                            cwd=cwd)
 
     def inspect_geom(self, inspect_type, params):
         '''
