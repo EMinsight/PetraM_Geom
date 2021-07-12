@@ -167,7 +167,7 @@ pdata = (('cpoint', VtableElement('cpoint', type='string',
                                  guilabel='Point on circle',
                                  default="",
                                  tip="point on circle")),
-         ('fill_circle', VtableElement('fill circle', type='bool',
+         ('fill_circle', VtableElement('fill_circle', type='bool',
                                        guilabel='Fill circle',
                                        default=True,
                                        tip="Make surface ")), )
