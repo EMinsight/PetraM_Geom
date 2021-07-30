@@ -122,19 +122,27 @@ class Translator():
         fec_type = mfem.H1_FECollection
         fe_coll = fec_type(order, sdim, mfem.BasisType.ClosedUniform)
         nodal_fes = mfem.FiniteElementSpace(mesh, fe_coll, sdim)
-        mesh.SetNodalFESpace(nodal_fes)
-        mesh._nodal= nodal_fes
+        nodes = mfem.GridFunction(nodal_fes)
+        #mesh.SetNodalFESpace(nodal_fes)
+        #mesh._nodal= nodal_fes
 
         kelem = 0
         for kind in elems:
-            kelem = self.move_nodal(mesh, kind, elems[kind], kelem, verbose)
-
-    def move_nodal(self, mesh, kind, elems, kelem, verbose=True):
+            kelem = self.move_nodal(mesh, nodes, nodal_fes,
+                                    kind, elems[kind], kelem, verbose)
+            
+        #gf = mesh.GetNodes()
+        
+        mesh.SetCurvature(order, False, sdim, mfem.Ordering.byVDIM)
+        node_coef = mfem.VectorGridFunctionCoefficient(nodes)
+        mesh.GetNodes().ProjectCoefficient(node_coef)
+        
+    def move_nodal(self, mesh, nodes, fes, kind, elems, kelem, verbose=True):
         msh = self.msh
        
-        nodes = mesh.GetNodes()
+        #nodes = mesh.GetNodes()
         sdim = mesh.SpaceDimension()
-        fes = mesh._nodal
+        #fes = mesh._nodal
 
         n_nodes = num_nodes_per_cell[kind]
         n_verts = num_verts_per_cell[kind]

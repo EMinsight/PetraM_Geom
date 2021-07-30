@@ -672,21 +672,54 @@ class Geometry():
         edge = edgeMaker.Edge()
         return self.edges.add(edge)
 
-    def add_circle_by_axis_radius(self, center, dirct, radius):
+    def add_circle_by_axis_radius(self, center, dirct, radius, npts=0,
+                                  pts=None):
         x, y, z = center
         dx, dy, dz = dirct
         pnt = gp_Pnt(x, y, z)
         vec = gp_Dir(dx, dy, dz)
         axis = gp_Ax1(pnt, vec)
 
-        cl = GC_MakeCircle(axis, radius)
-        edgeMaker = BRepBuilderAPI_MakeEdge(cl.Value())
-        edgeMaker.Build()
-        if not edgeMaker.IsDone():
-            assert False, "Can not make circle"
-        edge = edgeMaker.Edge()
+        if npts == 0 or npts == 1:
+            cl = GC_MakeCircle(axis, radius)
+            edgeMaker = BRepBuilderAPI_MakeEdge(cl.Value())
+            edgeMaker.Build()
+            if not edgeMaker.IsDone():
+                assert False, "Can not make circle"
+            edge = edgeMaker.Edge()
+            if npts == 0:
+                return self.edges.add(edge)
+            else:
+                return [self.edges.add(edge)]
+        else:
+            cir = gp_Circ()
+            cir.SetAxis(axis)
+            cir.SetRadius(radius)
 
-        return self.edges.add(edge)
+            ret = []
+            for i in range(npts):
+            #for i in range(1):
+                a1 = np.pi*2/npts*i
+                a2 = np.pi*2/npts*(i+1)                
+                if pts is None:
+                    arc = GC_MakeArcOfCircle(cir, a1, a2, True)
+                else:
+                    e1 = pts-center
+                    e2 = np.cross(dirct, e1)
+                    e1 = e1/np.linalg.norm(e1)
+                    e2 = e2/np.linalg.norm(e2)                    
+                    p1 = (np.cos(a1)*e1 + np.sin(a1)*e2)*radius + center
+                    p2 = (np.cos(a2)*e1 + np.sin(a2)*e2)*radius + center
+                    p1 = gp_Pnt(*[x for x in p1])
+                    p2 = gp_Pnt(*[x for x in p2])                    
+                    arc = GC_MakeArcOfCircle(cir, p1, p2, True)
+                edgeMaker = BRepBuilderAPI_MakeEdge(arc.Value())
+                edgeMaker.Build()
+                if not edgeMaker.IsDone():
+                    assert False, "Can not make circle arc"
+                edge = edgeMaker.Edge()
+                ret.append(self.edges.add(edge))
+            return ret
 
     def add_circle_by_3points(self, p1, p2, p3):
         bt = self.bt
@@ -2488,7 +2521,7 @@ class Geometry():
         return self.Circle_build_geom(objs, *args)
 
     def CircleByAxisPoint_build_geom(self, objs, *args):
-        pts, pt_on_cl, make_face = args
+        pts, pt_on_cl, npts, make_face = args
 
         pts = [x.strip() for x in pts.split(',')]
         gids_vert = self.get_target1(objs, pts, 'p')
@@ -2508,24 +2541,29 @@ class Geometry():
         center = np.array(ptx1) + np.sum(d * dirct) * dirct
         radius = np.sqrt(np.sum(d**2) - np.sum(d * dirct)**2)
 
-        edge = self.add_circle_by_axis_radius(center, dirct, radius)
+        edges = self.add_circle_by_axis_radius(center,
+                                               dirct,
+                                               radius,
+                                               npts=npts,
+                                               pts=ptx3)
 
         if make_face:
-            ll1 = self.add_line_loop([edge])
+            ll1 = self.add_line_loop(edges)
             ps1 = self.add_plane_surface(ll1)
             shape = self.faces[ps1]
             self.builder.Add(self.shape, shape)
             newkey = objs.addobj(ps1, 'ps')
         else:
-            shape = self.edges[edge]
-            self.builder.Add(self.shape, shape)
-            newkey = objs.addobj(edge, 'cl')
+            for edge in edges:
+                shape = self.edges[edge]
+                self.builder.Add(self.shape, shape)
+                newkey = objs.addobj(edge, 'cl')
 
         self.synchronize_topo_list(action='both')
         return list(objs), [newkey]
 
     def CircleByAxisCenterRadius_build_geom(self, objs, *args):
-        ax, pt_on_cl, radius, make_face = args
+        ax, pt_on_cl, radius, npts, make_face = args
 
         pt_on_cl = [x.strip() for x in pt_on_cl.split(',')]
         ax = [x.strip() for x in ax.split(',')]
@@ -2554,21 +2592,23 @@ class Geometry():
         if len(radius) == 1:
             radius = radius * len(centers)
 
-        edges = [self.add_circle_by_axis_radius(c, dirct, r)
+        edges = [self.add_circle_by_axis_radius(c, dirct, r, npts=npts)
                  for c, r in zip(centers, radius)]
+        print(edges)
 
         newkeys = []
         for e in edges:
             if make_face:
-                ll1 = self.add_line_loop([e])
+                ll1 = self.add_line_loop(e)
                 ps1 = self.add_plane_surface(ll1)
                 shape = self.faces[ps1]
                 self.builder.Add(self.shape, shape)
                 newkey = objs.addobj(ps1, 'ps')
             else:
-                shape = self.edges[e]
-                self.builder.Add(self.shape, shape)
-                newkey = objs.addobj(e, 'cl')
+                for ee in e:
+                    shape = self.edges[ee]
+                    self.builder.Add(self.shape, shape)
+                    newkey = objs.addobj(e, 'cl')
             newkeys.append(newkey)
 
         self.synchronize_topo_list(action='both')
@@ -2576,7 +2616,7 @@ class Geometry():
         return list(objs), newkeys
 
     def CircleBy3Points_build_geom(self, objs, *args):
-        pts, make_face = args
+        pts,  make_face = args
         pts = [x.strip() for x in pts.split(',')]
         gids_vertex = self.get_target1(objs, pts, 'p')
 

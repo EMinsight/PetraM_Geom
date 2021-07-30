@@ -239,7 +239,8 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
         if success:
             dlg = evt.GetEventObject().GetTopLevelParent()
-            dlg.select_next_enabled()
+            import wx
+            wx.CallAfter(dlg.select_next_enabled)
             
         evt.Skip()
 
@@ -606,7 +607,8 @@ class GmshGeom(GeomTopBase):
         self._objs = objs
 
     def do_build_geom4(self, stop1=None, stop2=None, filename=None,
-                    finalize=False, no_mesh=False, gui_parent=None):
+                       finalize=False, no_mesh=False, gui_parent=None,
+                       cwd=None):
 
         if not hasattr(self, "_gmsh4_data"):
             self._gmsh4_data = None
@@ -672,11 +674,13 @@ class GmshGeom(GeomTopBase):
         return
  
     def build_geom4(self, stop1=None, stop2=None, filename=None,
-                    finalize=False, no_mesh=False, gui_parent=None):
+                    finalize=False, no_mesh=False, gui_parent=None,
+                    cwd=None):
         
         self.use_occ_preview = False
         self.do_build_geom4(stop1=stop1, stop2=stop2, filename=filename,
-                         finalize=finalize, no_mesh=no_mesh, gui_parent=gui_parent)
+                            finalize=finalize, no_mesh=no_mesh,
+                            gui_parent=gui_parent, cwd=cwd)
 
         
     def onTerminateChild(self, evt):
@@ -688,7 +692,7 @@ class GmshGeom(GeomTopBase):
         dprint1("Generating Geometry in " + cwd)
         bk = self.use_1d_preview
         self.use_1d_preview = True
-        self.build_geom4(finalize=True, gui_parent=None)
+        self.build_geom4(finalize=True, gui_parent=None, cwd=cwd)
         self.use_1d_preview = bk
         self.geom_finalized = True
         self.geom_timestamp = time.ctime()
