@@ -122,7 +122,8 @@ class OCCGeom(GmshGeom):
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ArrayPath,
                                                  ThruSection, CreateShell,
-                                                 RotateCenterPoints, MoveByPoints, ExtendedLine)
+                                                 RotateCenterPoints, MoveByPoints, ExtendedLine,
+                                                 CreateOffset, CreateOffsetFace)
         return [PointOCC, LineOCC, CircleOCC, Polygon2,
                 Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
@@ -137,8 +138,9 @@ class OCCGeom(GmshGeom):
                 WPNormalToPlane,
                 healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ArrayPath,     
-                ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine]
+                ArrayPath,  
+                ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine,
+                CreateOffset, CreateOffsetFace]
 
     def get_possible_child_menu(self):
         from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
@@ -160,7 +162,8 @@ class OCCGeom(GmshGeom):
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ArrayPath,
                                                  ThruSection, CreateShell,
-                                                 RotateCenterPoints, MoveByPoints, ExtendedLine)
+                                                 RotateCenterPoints, MoveByPoints, ExtendedLine,
+                                                 CreateOffset, CreateOffsetFace)
 
         return [("Geometry Element...", None),
                 ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
@@ -176,7 +179,7 @@ class OCCGeom(GmshGeom):
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
                 ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("", ThruSection), ("!", CreateShell),
+                ("", ThruSection), ("", CreateOffset), ("", CreateOffsetFace), ("!", CreateShell),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
                 ("Fillet/Chamfer", Fillet), ("!", Chamfer),                                
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),

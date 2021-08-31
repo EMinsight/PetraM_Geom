@@ -64,6 +64,8 @@ try:
     from OCC.Core.BRepFilletAPI import (BRepFilletAPI_MakeFillet,
                                         BRepFilletAPI_MakeChamfer)
     from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
+                                        BRepOffsetAPI_MakeOffsetShape,
+                                        BRepOffsetAPI_MakeOffset,
                                         BRepOffsetAPI_MakeFilling,
                                         BRepOffsetAPI_ThruSections,
                                         BRepOffsetAPI_NormalProjection,

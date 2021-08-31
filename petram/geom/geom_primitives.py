@@ -850,7 +850,7 @@ ldata = (('volume', VtableElement('volume', type='string',
          ('round_conner', VtableElement('round_conner', type='bool',
                                    guilabel='Fillet outer edges',
                                    default=False,
-                                   tip="Surface filling")), )
+                                   tip="Use rounded conner ")), )
 
          
 class CreateShell(GeomPB):
@@ -1918,6 +1918,67 @@ class Scale2D(GeomPB):  # Dilate in gmsh
     def fancy_tree_name(self):
         return 'Scale'
 
+class CreateOffset(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Face/Edges (f/l)',
+                                             default="",
+                                             tip="object from which offset is created")),
+             ('displacements', VtableElement('displacement', type='array',
+                                            guilabel='Displacements',
+                                            tip="displacemnts. ex) 1, 2, 3")),
+             ('altitudes', VtableElement('altitudes', type='array',
+                                            guilabel='Altitudes',
+                                            tip="altitude (displacement normal to plane). scalar or array with the same length of displacements")),
+             ('round_conner', VtableElement('round_conner', type='bool',
+                                             guilabel='Fillet conner',
+                                             default=False,
+                                             tip="Use rounded conner")), 
+             ('close_wire', VtableElement('close_wire', type='bool',
+                                             guilabel='Close lines',
+                                             default=False,
+                                             tip="Close offset lines")), 
+             ('fill_wire', VtableElement('fill_wire', type='bool',
+                                             guilabel='Fill',
+                                             default=False,
+                                             tip="Fill when it is closed wire")), )
+    
+    vt = Vtable(data0)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'OffsetLines'
+    
+    @classmethod
+    def fancy_Tree_name(self):
+        return 'OffsetLines'
+
+class CreateOffsetFace(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Vol/Faces (v/f)',
+                                             default="",
+                                             tip="object from which offset is created")),
+             ('displacements', VtableElement('displacement', type='array',
+                                            guilabel='Displacements',
+                                            tip="displacemnts. ex) 1, 2, 3")),
+             
+             ('round_conner', VtableElement('round_conner', type='bool',
+                                             guilabel='Fillet conner',
+                                             default=False,
+                                             tip="Use rounded conner")), 
+             ('fill_shell', VtableElement('fill_shell', type='bool',
+                                             guilabel='Fill',
+                                             default=False,
+                                             tip="Fill when it is closed shell")), )
+    
+    vt = Vtable(data0)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'OffsetFaces'
+    
+    @classmethod
+    def fancy_Tree_name(self):
+        return 'OffsetFaces'
+    
+
 
 class Array2D(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
@@ -2003,7 +2064,7 @@ class WPBase(GeomPB):
                 ("", Circle2DCenterOnePoint), #("", Circle2DRadiusTwoTangentCurve),
                 ("!", Circle2DByDiameter),
                 ("", Spline2D),
-                ("Create...", CreateLine), ("", CreateSurface), ("!", OCCPolygon),
+                ("Create...", CreateLine), ("", CreateSurface), ("", OCCPolygon), ("!", CreateOffset),
                 ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
                 ("", Flip2D), ("", Scale2D), ("", Array2D), ("!", ProjectOnWP),

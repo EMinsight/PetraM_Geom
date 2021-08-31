@@ -657,11 +657,12 @@ class Geometry():
         new_objs = self.register_shaps_balk(edge)
         return new_objs
 
-    def add_circle_arc(self, p1, p3, p2):
-        bt = self.bt
-        pnt1 = bt.Pnt(self.vertices[p1])
-        pnt2 = bt.Pnt(self.vertices[p2])
-        pnt3 = bt.Pnt(self.vertices[p3])
+    def add_circle_arc(self, pnt1, pnt3, pnt2):
+        if not isinstance(pnt1, gp_Pnt):
+            bt = self.bt
+            pnt1 = bt.Pnt(self.vertices[pnt1])
+            pnt2 = bt.Pnt(self.vertices[pnt2])
+            pnt3 = bt.Pnt(self.vertices[pnt3])
 
         arc = GC_MakeArcOfCircle(pnt1, pnt3, pnt2)
 
@@ -670,6 +671,7 @@ class Geometry():
         if not edgeMaker.IsDone():
             assert False, "Can not make circle arc"
         edge = edgeMaker.Edge()
+
         return self.edges.add(edge)
 
     def add_circle_by_axis_radius(self, center, dirct, radius, npts=0,
@@ -2513,7 +2515,7 @@ class Geometry():
                 newkey1 = objs.addobj(shape, 'cl')
                 newkey.append(newkey1)
 
-        self.synchronize_topo_list(action='both', verbose=True)
+        self.synchronize_topo_list(action='both')
 
         return list(objs), newkey
 
@@ -2749,7 +2751,7 @@ class Geometry():
         from OCC.Core.BRepOffset import BRepOffset_Skin
 
         if conner:
-            jointype = GeomAbs_Intersection
+            jointype = GeomAbs_Arc
         else:
             jointype = GeomAbs_Intersection
             
@@ -2776,6 +2778,156 @@ class Geometry():
         self.synchronize_topo_list()
         return list(objs), newkeys
 
+    def CreateOffsetFace_build_geom(self, objs, *args):
+        v_l, offsets, conner, fill = args
+        v_l = [x.strip() for x in v_l.split(',')]
+
+        gids = self.get_target2(objs, v_l)
+
+        from OCC.Core.GeomAbs import GeomAbs_Arc,GeomAbs_Intersection
+
+        if v_l[0].startswith('f'):
+            # first sew the surfaces.
+            try:
+               sewingMaker = BRepBuilderAPI_Sewing()
+               for t in gids:
+                   face = self.faces[t]
+                   sewingMaker.Add(face)
+               sewingMaker.Perform()
+               target = sewingMaker.SewedShape()
+            except BaseException:
+               assert False, "Failed to sew faces"
+        elif v_l[0].startswith('v'):
+            target = self.solids[gids[0]]
+        else:
+            assert False, "input must be eihter volume or faces"
+            
+        if conner:
+            jointype = GeomAbs_Arc
+        else:
+            jointype = GeomAbs_Intersection
+
+        from OCC.Core.BRepOffset import BRepOffset_Skin            
+        from OCC.Core.Precision import precision_Confusion
+        tol = precision_Confusion()
+
+        OM = BRepOffsetAPI_MakeOffsetShape()
+
+        #OM.PerformBySimple(target, offsets[0])
+
+        intersection = False
+        selfinter = False
+        removeintedge = False
+
+        results = []
+        for offset in offsets:
+            OM.PerformByJoin(target, offset, tol, BRepOffset_Skin,
+                             intersection,
+                             selfinter,
+                             jointype,
+                             removeintedge,)
+            if not OM.IsDone():
+                assert False, "Faile to make offset"
+            result = OM.Shape()
+            shells = [p for p in iter_shape_once(result, 'shell')]
+            
+            if fill:
+                for shell in shells:
+                    solidMaker = BRepBuilderAPI_MakeSolid()                    
+                    solidMaker.Add(shell)
+                    result = solidMaker.Solid()
+                    if not solidMaker.IsDone():
+                        assert False, "Failed to make solid"
+
+                    fixer = ShapeFix_Solid(result)
+                    fixer.Perform()
+                    result = topods_Solid(fixer.Solid())
+                    results.append(result)
+            else:
+                results.extend(shells)
+            
+        newkeys = []
+        for r in results:
+            gids_new = self.register_shaps_balk(r)
+            for gid in gids_new:
+                newkeys.append(objs.addobj(gid, 'ofst'))
+        
+        return list(objs), newkeys
+            
+    def CreateOffset_build_geom(self, objs, *args):
+        f_l, offsets, altitudes, conner, close, fill = args
+
+        if len(altitudes) == 1:
+            altitudes = np.array([altitudes[0]]*len(offsets))
+            
+        f_l = [x.strip() for x in f_l.split(',')]
+        gids = self.get_target2(objs, f_l)
+
+        from OCC.Core.GeomAbs import GeomAbs_Arc,GeomAbs_Intersection
+        
+        if conner:
+            jointype = GeomAbs_Arc
+        else:
+            jointype = GeomAbs_Intersection
+        
+        mode = ''
+        if f_l[0].startswith('l'):
+            mode = 'wire'
+            wireMaker = BRepBuilderAPI_MakeWire()
+            for e in gids:
+                wireMaker.Add(self.edges[e])
+            wireMaker.Build()
+            if not wireMaker.IsDone():
+                assert False, "Failed to make wire"
+            target = wireMaker.Wire()
+        elif f_l[0].startswith('f'):
+            mode = 'face'
+            target = self.faces[gids[0]]
+
+        else:
+            assert False, "input must be edges or face"
+
+        isopen = not close
+        if fill: isopen = False
+        OM = BRepOffsetAPI_MakeOffset(target, jointype, isopen)
+        
+        results = []
+
+        for offset, altitude in zip(offsets, altitudes):
+            print(offset)
+            OM.Perform(offset, altitude)
+            if not OM.IsDone():
+                assert False, "Faile to make offset"
+
+            result = OM.Shape()
+            results.append(result)
+            
+            wires = [p for p in iter_shape_once(result, 'wire')]
+
+            if fill:
+                for wire in wires:
+                    faceMaker = BRepBuilderAPI_MakeFace(wire)
+                    faceMaker.Build()
+
+                    if not faceMaker.IsDone():
+                        assert False, "can not create face"
+
+                    face = faceMaker.Face()
+                    fixer = ShapeFix_Face(face)
+                    fixer.Perform()
+                    face = fixer.Face()
+                    results.append(face)
+            else:
+                results.extend(wires)
+            
+        newkeys = []
+        for r in results:
+            gids_new = self.register_shaps_balk(r)
+            for gid in gids_new:
+                newkeys.append(objs.addobj(gid, 'ofst'))
+        
+        return list(objs), newkeys
+    
     def Box_build_geom(self, objs, *args):
         c1, e1, e2, e3 = args
         lcar = 0.0
@@ -3995,9 +4147,13 @@ class Geometry():
         pt3 = a1 * np.cos(an3 * np.pi / 180.) + a2 * np.sin(an3 * np.pi / 180.)
 
         c = np.array(center + [0])
-        p1 = self.add_point(c + pt1)
-        p2 = self.add_point(c + pt2)
-        p3 = self.add_point(c + pt3)
+        #p1 = self.add_point(c + pt1)
+        #p2 = self.add_point(c + pt2)
+        #p3 = self.add_point(c + pt3)
+        p1 = gp_Pnt(*(c + pt1))
+        p2 = gp_Pnt(*(c + pt2))
+        p3 = gp_Pnt(*(c + pt3))        
+        
         ca1 = self.add_circle_arc(p1, p3, p2)
 
         if not do_fill:
@@ -5202,7 +5358,9 @@ class Geometry():
                     raise
 
         #capcheName = "" if isWP else gui_name
+        
         self.synchronize_topo_list(action='both')
+
         return gui_data, self.objs
 
     def inspect_geom(self, inspect_type, args):
