@@ -596,8 +596,12 @@ class Geometry():
         return ret
 
     def add_line(self, p1, p2):
-        edgeMaker = BRepBuilderAPI_MakeEdge(
-            self.vertices[p1], self.vertices[p2])
+        if not isinstance(p1, gp_Pnt):
+            p1 = self.vertices[p1]
+            p2 = self.vertices[p2]
+
+        edgeMaker = BRepBuilderAPI_MakeEdge(p1, p2)
+#            self.vertices[p1], self.vertices[p2])
         edgeMaker.Build()
         if not edgeMaker.IsDone():
             assert False, "Can not make line"
