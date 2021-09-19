@@ -96,6 +96,29 @@ class GeomSequenceOperator():
             except QueueEmpty:
                 if not p.is_alive():
                     self.clean_queue()
+
+    def export_shapes_step(self, selection, path):
+        if (not hasattr(self, "_p") or
+                not self._p.is_alive()):
+            return
+
+        p = self._p
+        task_q = self._p.task_q
+        q = self._p.q
+
+        task_q.put((4, (selection, path)))
+
+        while True:
+            try:
+                ret = q.get(True, 1)
+                if ret[1][0] == 'fail':
+                    print(ret[1][1])
+                break
+
+            except QueueEmpty:
+                if not p.is_alive():
+                    self.clean_queue()
+                    
         
     def create_new_child(self, use_occ, pgb):
         from petram.geom.gmsh_geom_wrapper import (GMSHGeometryGenerator,

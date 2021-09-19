@@ -410,6 +410,24 @@ def register_shape(shape, topolists):
                   topods_Vertex, topods_Edge,self.vertices, dim=0)
     '''
 
+def read_interface_value(name, R=False, I=False, C=False, verbose=True):
+    from OCC.Core.Interface import (Interface_Static_CVal,
+                                    Interface_Static_RVal,
+                                    Interface_Static_IVal)
+
+    if R:
+       rp = Interface_Static_RVal(name)
+    if I:
+       rp = Interface_Static_IVal(name)
+    if C:
+       rp = Interface_Static_CVal(name)
+
+    if verbose:       
+       print(name, rp)
+       
+    return rp
+           
+    
 def display_shape(shape):
     ### show shape on python-occ display for debug.
     from OCC.Display.SimpleGui import init_display
