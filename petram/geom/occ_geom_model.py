@@ -39,6 +39,57 @@ class OCCGeom(GmshGeom):
         command = (inspect_type, params)
         return self._gso.inspect_geom(command)
 
+    def _do_onexportstep(self, evt, make_selection=False,
+                         extname='STEP', ext='.stp'):
+        if not hasattr(self, '_gso'):
+            return None
+        
+        if make_selection:
+            dlg = evt.GetEventObject().GetTopLevelParent()
+            viewer = dlg.GetParent()
+
+            selection = viewer.dom_bdr_sel
+            kind = viewer.get_sel_mode()
+            if kind == 'volume':
+                selection = selection[0], [], [], []
+            elif kind == 'face':
+                selection = [], selection[1], [], []
+            elif kind == 'edge':
+                selection = [], [], selection[2], []
+            elif kind == 'point':
+                selection = [], [], [], selection[3]
+            else:
+                return None
+        else:
+            selection = None
+            
+        from ifigure.widgets.dialog import write
+        parent = evt.GetEventObject()
+        path = write(parent,
+                     message='Enter ' + extname + ' filename',
+                     wildcard='*'+ext)
+        if path != '':
+            if not path.endswith(ext):
+                path = path + ext
+            return self._gso.export_shapes_step(selection, path)
+        
+    def onExportSelectedSTEP(self, evt):
+        self._do_onexportstep(evt, make_selection=True)
+        evt.Skip()            
+        
+    def onExportSTEP(self, evt):
+        self._do_onexportstep(evt)
+        evt.Skip()
+
+    def onExportSelectedSTL(self, evt):
+        self._do_onexportstep(evt, make_selection=True,
+                              extname='STL', ext='.stl')
+        evt.Skip()
+        
+    def onExportSTL(self, evt):
+        self._do_onexportstep(evt, extname='STL', ext='.stl')
+        evt.Skip()                        
+
     def onExportSelectedBrep(self, evt):
         if not hasattr(self, '_gso'):
             return None
@@ -205,12 +256,23 @@ class OCCGeom(GmshGeom):
 
         if np.sum([len(x) for x in selection]) == 0:
             menu = [('Build All', self.onBuildAll, None),
-                    ('Export Brep', self.onExportBrep, None)]
+                    ('+Export...', None, None),
+                    ('Brep', self.onExportBrep, None),
+                    ('STEP', self.onExportSTEP, None),
+                    ('STL', self.onExportSTL, None),
+                    ('!', None, None)]
         else:
             menu = [('Build All', self.onBuildAll, None),
-                    ('Export Selected Entity',
-                     self.onExportSelectedBrep, None),
-                    ('Export Brep', self.onExportBrep, None)]
+                    ('+Export Selection...', None, None),                    
+                    ('as Brep', self.onExportSelectedBrep, None),
+                    ('as STEP', self.onExportSelectedSTEP, None),
+                    ('as STL', self.onExportSelectedSTL, None),
+                    ('!', None, None),
+                    ('+Export...', None, None),
+                    ('Brep', self.onExportBrep, None),
+                    ('STEP', self.onExportSTEP, None),
+                    ('STL', self.onExportSTL, None),
+                    ('!', None, None)]
 
         if self._gso.child_alive():
             m2 = [('---', None, None),

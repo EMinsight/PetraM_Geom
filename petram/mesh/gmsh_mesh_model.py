@@ -468,7 +468,10 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         from petram.geom.gmsh_geom_model import use_gmsh_api
 
         return [('Build all', self.onBuildAll, None),
-                ('Export mesh', self.onExportMsh, None),
+                ('+Export', None, None),
+                ('Msh', self.onExportMsh, None),
+                ('STL', self.onExportSTL, None),
+                ('!', None, None),                                
                 ('Clear mesh', self.onClearMesh, None),
                 ('Clear mesh sequense...', self.onClearMeshSq, None)]
 
@@ -529,7 +532,44 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                                  txt='Failed to export msh file',
                                  title='Error',
                                  traceback=traceback.format_exc())
+            
+    def onExportSTL(self, evt):
+        src = self.mesh_output
 
+        if src == '':
+            import wx
+            trash = wx.GetApp().GetTopWindow().proj.get_trash()
+            src = os.path.join(trash, 'tmp0.msh')
+            
+        if not os.path.exists(src):
+            import ifigure.widgets.dialog as dialog            
+            ret = dialog.message(parent=dlg,
+                                 message='Mesh must be created first',
+                                 title='Can not export STL.',
+                                 style=0)
+            return
+
+        from ifigure.widgets.dialog import write
+        parent = evt.GetEventObject()
+        dst = write(parent,
+                    defaultfile='Untitled.stl',
+                    message='Enter STL file name')
+        if dst == '':
+            return
+        if not dst.endswith('.stl'):
+            dst = dst + '.dst'
+        try:
+            import gmsh
+            gmsh.open(src)
+            gmsh.write(dst)
+
+        except BaseException:
+            import ifigure.widgets.dialog as dialog
+            dialog.showtraceback(parent=dlg,
+                                 txt='Failed to export STL file',
+                                 title='Error',
+                                 traceback=traceback.format_exc())
+            
     def update_meshview(self, dlg, viewer, clear=False):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops

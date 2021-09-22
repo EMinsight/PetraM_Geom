@@ -5416,6 +5416,81 @@ class Geometry():
 
         self.write_brep(filename, shape=comp)
 
+    def export_shapes_step(self, selection, filename):
+        '''
+        export shapes in STEP and STL format
+        '''
+        
+        stlmode = filename.endswith('.stl')
+        
+        if selection is None:
+            comp = self.shape
+        else:
+            gids = []
+            for i in selection[0]:
+                gids.append(VolumeID(i))
+            for i in selection[1]:
+                gids.append(SurfaceID(i))
+            for i in selection[2]:
+                gids.append(LineID(i))
+            for i in selection[3]:
+                gids.append(VertexID(i))
+
+            shapes = [self.get_shape_for_gid(gid) for gid in gids]
+
+            comp = TopoDS_Compound()
+            b = self.builder
+            b.MakeCompound(comp)
+            for s in shapes:
+                b.Add(comp, s)
+
+        from OCC.Core.STEPControl import (STEPControl_Writer,
+                                          STEPControl_AsIs,
+                                          STEPControl_ManifoldSolidBrep,
+                                          STEPControl_FacetedBrep,
+                                          STEPControl_ShellBasedSurfaceModel,
+                                          STEPControl_GeometricCurveSet,)
+        from OCC.Core.IFSelect import IFSelect_RetDone, IFSelect_ItemsByEntity
+        from OCC.Core.Interface import (Interface_Static_SetCVal,
+                                        Interface_Static_SetRVal)
+
+        if not stlmode:
+            writer = STEPControl_Writer()
+            print("### Exporting Step file", filename)
+            read_interface_value("write.precision.mode", I=True)        
+            read_interface_value("write.precision.val", R=True)
+            read_interface_value("write.step.asembly", I=True)
+            read_interface_value("write.step.schema", C=True)
+            read_interface_value("write.surfacecurve.mode", I=True)
+            read_interface_value("write.step.unit", C=True)
+            read_interface_value("write.step.vertex.mode", I=True)                                        
+
+            writer.Transfer(comp, STEPControl_AsIs)
+            status = writer.Write(filename)
+            if status != IFSelect_RetDone:
+                assert False, "failed to write step file"
+        else:
+            '''
+            this is based on 
+               from OCC.Extend.DataExchange import write_stl_file            
+
+               we don't use it as it is, since I suppose we don't need to 
+               mesh it
+            '''
+            from OCC.Core.StlAPI import StlAPI_Writer            
+            stl_exporter = StlAPI_Writer()
+
+            mode = 'ascii'
+            if mode == "ascii":
+                 print("### Exporting STL file (ascii)", filename)
+                 stl_exporter.SetASCIIMode(True)
+            else:  # binary, just set the ASCII flag to False
+                 print("### Exporting STL file (binary)", filename)
+                 stl_exporter.SetASCIIMode(False)
+            stl_exporter.Write(comp, filename)
+
+            if not os.path.isfile(filename):
+                raise IOError("File not written to disk.")            
 
 class OCCGeometryGeneratorBase():
     def __init__(self, q, task_q):
@@ -5452,6 +5527,15 @@ class OCCGeometryGeneratorBase():
                 try:
                     print("exporting", task[1])
                     ret = self.mw.export_shapes(*task[1])
+                    self.q.put((True, ('success', ret)))
+                except BaseException:
+                    txt = traceback.format_exc()
+                    self.q.put((True, ('fail', txt)))
+
+            if task[0] == 4:
+                try:
+                    print("exporting (STEP/STL)", task[1])
+                    ret = self.mw.export_shapes_step(*task[1])
                     self.q.put((True, ('success', ret)))
                 except BaseException:
                     txt = traceback.format_exc()
