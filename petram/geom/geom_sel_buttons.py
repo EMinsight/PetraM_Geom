@@ -108,9 +108,11 @@ def hide_elem(evt, inverse=False):
         from petram.mesh.mesh_utils import line2surf        
         hidden_face = sum([o.hidden_component for o in Fobjs], [])
         l2s = line2surf(s2l)
-        
+
         dd = defaultdict(int)
         for f in hidden_face:
+            if f not in s2l:
+                continue
             for x in s2l[f]:
                 dd[x] = dd[x]+1
         dd = dict(dd)
