@@ -316,7 +316,7 @@ class VtableElement_Plane(VtableElement):
                 ["Point 2", None, 0, {}],
                 ["Point 3", None, 0, {}], ]
         elp4 = [["Face", None, 0, {}],
-                ["Point", None, 0, {}], ]
+                ["Point (optional)", None, 0, {}], ]
         elp5 = [["Face", None, 0, {}],
                 ["Points", None, 0, {}], ]
         elp6 = [["WP", None, 0, {}],]
