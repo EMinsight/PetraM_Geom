@@ -174,7 +174,7 @@ class OCCGeom(GmshGeom):
                                                  ArrayPath,
                                                  ThruSection, CreateShell,
                                                  RotateCenterPoints, MoveByPoints, ExtendedLine,
-                                                 CreateOffset, CreateOffsetFace)
+                                                 CreateOffset, CreateOffsetFace, CreateProjection)
         return [PointOCC, LineOCC, CircleOCC, Polygon2,
                 Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
@@ -191,7 +191,7 @@ class OCCGeom(GmshGeom):
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                 ArrayPath,  
                 ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine,
-                CreateOffset, CreateOffsetFace]
+                CreateOffset, CreateOffsetFace, CreateProjection]
 
     def get_possible_child_menu(self):
         from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
@@ -214,7 +214,7 @@ class OCCGeom(GmshGeom):
                                                  ArrayPath,
                                                  ThruSection, CreateShell,
                                                  RotateCenterPoints, MoveByPoints, ExtendedLine,
-                                                 CreateOffset, CreateOffsetFace)
+                                                 CreateOffset, CreateOffsetFace, CreateProjection)
 
         return [("Geometry Element...", None),
                 ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
@@ -230,7 +230,8 @@ class OCCGeom(GmshGeom):
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
                 ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("", ThruSection), ("", CreateOffset), ("", CreateOffsetFace), ("!", CreateShell),
+                ("", ThruSection), ("", CreateOffset), ("", CreateOffsetFace), ("", CreateShell),
+                ("!", CreateProjection),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
                 ("Fillet/Chamfer", Fillet), ("!", Chamfer),                                
                 ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),

@@ -81,6 +81,9 @@ try:
                                          BRepBuilderAPI_MakeWire,
                                          BRepBuilderAPI_MakeEdge,
                                          BRepBuilderAPI_MakeVertex)
+    
+    from OCC.Core.BRepAlgo import BRepAlgo_NormalProjection
+    
     from OCC.Core.BRepAlgoAPI import (BRepAlgoAPI_Fuse,
                                       BRepAlgoAPI_Cut,
                                       BRepAlgoAPI_Common,
