@@ -1978,7 +1978,34 @@ class CreateOffsetFace(GeomPB):
     def fancy_Tree_name(self):
         return 'OffsetFaces'
     
-
+class CreateProjection(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Faces/Edges',
+                                             default="",
+                                             tip="edges to be projected")),
+             ('taxis', VtableElement_Plane('taxis', type='float',
+                                       guilabel='cut plane',
+                                       suffix=('a', 'b', 'c', 'd'),
+                                       default=[1, 0, 0, 0],
+                                       tip="Cutting Plane")),
+             ('offset', VtableElement('offset', type='float',
+                                  guilabel='offset',
+                                  default=0.0,
+                                  tip="offset in normal direction")), 
+             ('fill_edges', VtableElement('fill_edges', type='bool',
+                                             guilabel='Fill',
+                                             default=False,
+                                             tip="Create surface")), )
+    
+    vt = Vtable(data0)
+    @classmethod
+    def fancy_menu_name(self):
+        return 'EdgeProjection'
+    
+    @classmethod
+    def fancy_Tree_name(self):
+        return 'Projection (Edge)'
+    
 
 class Array2D(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',

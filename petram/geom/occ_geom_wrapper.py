@@ -408,6 +408,17 @@ class Geometry():
 
         return np.array(n1), np.array(ptx)
 
+    def get_point_on_face(self, gid):
+        if gid not in self.faces:
+            assert False, "can not find surface: " + str(int(gid))
+
+        face = self.faces[gid]
+        for x in iter_shape(face, 'vertex'):
+            break
+        pnt = self.bt.Pnt(x)
+        return np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+
+            
     def get_circle_center(self, gid):
 
         from OCC.Core.GeomLProp import GeomLProp_CLProps
@@ -2101,8 +2112,8 @@ class Geometry():
 
         return n1, p0
 
-    def process_plane_parameters(self, args, objs, gids):
-        comp = self.new_compound(gids)
+    def process_plane_parameters(self, args, objs, gids=None):
+        comp = None if gids is None else self.new_compound(gids)
         xmin, ymin, zmin, xmax, ymax, zmax = self.bounding_box(comp)
 
         if args[0] == '3_points':
@@ -2132,8 +2143,13 @@ class Geometry():
 
         elif args[0] == 'face_parallel':
             gid_face = self.get_target1(objs, [args[1], ], 'f')[0]
-            gid_ptx = self.get_target1(objs, [args[2], ], 'p')[0]
-            cptx = self.get_point_coord(gid_ptx)
+
+            if args[2].strip() != '': 
+                gid_ptx = self.get_target1(objs, [args[2], ], 'p')[0]
+                cptx = self.get_point_coord(gid_ptx)                
+            else:
+                cptx = self.get_point_on_face(gid_face)
+
             normal, _void = self.get_face_normal(gid_face, check_flat=True)
 
         elif args[0] == 'face_normal':
@@ -2899,7 +2915,7 @@ class Geometry():
 
         for offset, altitude in zip(offsets, altitudes):
             print(offset)
-            OM.Perform(offset, altitude)
+            OM.Perform(float(offset), float(altitude))
             if not OM.IsDone():
                 assert False, "Faile to make offset"
 
@@ -2932,6 +2948,79 @@ class Geometry():
         
         return list(objs), newkeys
     
+    def CreateProjection_build_geom(self, objs, *args):
+        targets, plane_params, offset, fill = args
+        targets = [x.strip() for x in targets.split(',')]        
+        targets = self.get_target2(objs, targets)
+
+        print(targets)
+        cptx, normal = self.process_plane_parameters(plane_params, objs)
+        if offset != 0:
+            cptx = cptx + normal * offset
+
+        print(cptx, offset,  normal)
+        # splitter alogrithm
+        normal = -normal
+        pnt = gp_Pnt(*cptx)
+        dr = gp_Dir(*normal)
+        pl = Geom_Plane(pnt, dr)
+        maker = BRepBuilderAPI_MakeFace(pl, self.occ_geom_tolerance)
+        maker.Build()
+        if not maker.IsDone():
+            assert False, "Faild to generate plane"
+        plane = maker.Face()
+
+        newkeys = []                
+
+        for item in targets:
+            p = BRepAlgo_NormalProjection(plane)
+            make_fill = False
+            
+            if isinstance(item, LineID):
+               p.SetDefaultParams()
+               p.Add(self.edges[item])
+            elif isinstance(item, SurfaceID):
+               for x in iter_shape(self.faces[item], 'edge'):
+                   p.Add(x)
+               if fill:
+                   make_fill = True
+            else:
+                assert False, "Item must be either edge or face"
+
+            p.Build()                
+            if not p.IsDone():
+                assert False, "Can not create projection"
+
+            if make_fill:
+                res = p.Projection()
+                wireMaker = BRepBuilderAPI_MakeWire()
+                for x in iter_shape(res, 'edge'):                
+                   wireMaker.Add(x)
+                wireMaker.Build()
+                if not wireMaker.IsDone():
+                    assert False, "Failed to make wire"
+                wire = wireMaker.Wire()
+                
+                faceMaker = BRepBuilderAPI_MakeFace(wire)
+                faceMaker.Build()
+
+                if not faceMaker.IsDone():
+                    assert False, "can not create face"
+                    
+                face = faceMaker.Face()
+                fixer = ShapeFix_Face(face)
+                fixer.Perform()
+                res = fixer.Face()
+            else:
+                res = p.Projection()            
+
+            gids_new = self.register_shaps_balk(res)
+        
+            for gid in gids_new:
+                newkeys.append(objs.addobj(gid, 'prj'))
+        
+        return list(objs), newkeys
+        
     def Box_build_geom(self, objs, *args):
         c1, e1, e2, e3 = args
         lcar = 0.0
@@ -5452,14 +5541,18 @@ class Geometry():
                                           STEPControl_GeometricCurveSet,)
         from OCC.Core.IFSelect import IFSelect_RetDone, IFSelect_ItemsByEntity
         from OCC.Core.Interface import (Interface_Static_SetCVal,
-                                        Interface_Static_SetRVal)
+                                        Interface_Static_SetIVal,
+                                        Interface_Static_SetRVal)        
 
         if not stlmode:
             writer = STEPControl_Writer()
+            
+            check = Interface_Static_SetIVal("write.step.assembly", 1)
+            
             print("### Exporting Step file", filename)
             read_interface_value("write.precision.mode", I=True)        
             read_interface_value("write.precision.val", R=True)
-            read_interface_value("write.step.asembly", I=True)
+            read_interface_value("write.step.assembly", I=True)
             read_interface_value("write.step.schema", C=True)
             read_interface_value("write.surfacecurve.mode", I=True)
             read_interface_value("write.step.unit", C=True)
