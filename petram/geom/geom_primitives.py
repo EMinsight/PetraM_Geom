@@ -1535,14 +1535,24 @@ class Fragments(GeomPB_Bool):
 
 
 pdata = (('objp', VtableElement("obj1p", type='string',
-                                guilabel='Edges/Points (l/p)',
+                                guilabel='Faces/Edges/Points (l/p)',
                                 default="",
-                                tip="objects")),)
-
+                                tip="objects")),
+         ('fill_wire', VtableElement('fill_wire', type='bool',
+                                      guilabel='Fill',
+                                      default=False,
+                                      tip='Fill projected faces')),)
 
 class ProjectOnWP(GeomPB):
     vt = Vtable(pdata)
 
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Projection'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Projection'
 
 pdata = (('xarr', VtableElement('xarr', type='array',
                                 guilabel='X',
@@ -1995,7 +2005,7 @@ class CreateProjection(GeomPB):
              ('fill_edges', VtableElement('fill_edges', type='bool',
                                              guilabel='Fill',
                                              default=False,
-                                             tip="Create surface")), )
+                                             tip="Fill projected faces")), )
     
     vt = Vtable(data0)
     @classmethod
@@ -2091,10 +2101,10 @@ class WPBase(GeomPB):
                 ("", Circle2DCenterOnePoint), #("", Circle2DRadiusTwoTangentCurve),
                 ("!", Circle2DByDiameter),
                 ("", Spline2D),
-                ("Create...", CreateLine), ("", CreateSurface), ("", OCCPolygon), ("!", CreateOffset),
+                ("Create...", CreateLine), ("", CreateSurface), ("", OCCPolygon), ("", CreateOffset), ("!", ProjectOnWP),
                 ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
-                ("", Flip2D), ("", Scale2D), ("", Array2D), ("!", ProjectOnWP),
+                ("", Flip2D), ("", Scale2D), ("!", Array2D),
                 ("Boolean...", Union2D),
                 ("", Intersection), ("", Difference), ("!", Fragments), ]
 

@@ -73,6 +73,7 @@ class Geometry():
 
         self.queue = kwargs.pop("queue", None)
         self.p = None
+        self._shape_bk = None
 
     def process_kwargs(self, kwargs):
         self.geom_prev_res = kwargs.pop('PreviewResolution', 30)
@@ -1934,11 +1935,43 @@ class Geometry():
 
         return new_objs
 
-    def project_shape_on_wp(self, gids, c1, d1, d2, ptol=-1):
+    def project_shape_on_wp(self, gids, c1, n1, ptol=-1, fill=False, base_shape=None):
+        '''
+        Project shapes using Offset_NormalProjection
 
+           1) Collect unique edges and make list of wires which makes surfaces
+           2) Project edges one-by-one so that we can track which edges are projected to where.
+              if project does not create edges. the edge is normal to the projection, and avoid
+              trying to create a face for it.
+           3) Create wire from projected edges and fill inside using MakeFace -> FixShape
+           4) Check if any vertex is missing (for isolatee vertices)
+
+           (note 1) this subroutine is meant to handle the projection of surface.
+           (note 2) if a face is made from several edges and if one of edges are perfectly.
+                  normal to the destination plane. it does not create the surface.
+        '''
         shapes = [self.get_shape_for_gid(gid, group=0) for gid in gids]
 
-        n1 = np.cross(d1, d2)
+        base_shape = self.shape if base_shape is None else base_shape
+
+        mapper = get_mapper(base_shape, 'edge')
+        seen = topo_seen(mapping=mapper)
+
+        unique_edges = []
+        edge_index = {}
+        wires = []
+
+        ### find unique_edges + insolated vertex
+        for s in shapes:
+            wires.append([])
+            for p in iter_shape_once(s, 'edge'):
+               if seen.check_shape(p) == 0:
+                   unique_edges.append(p)
+                   edge_index[seen.index(p)] = len(unique_edges)-1
+               idx = seen.index(p)
+               if isinstance(s, TopoDS_Face):
+                   wires[-1].append(idx)
+
         pnt = gp_Pnt(c1[0], c1[1], c1[2])
         dr = gp_Dir(n1[0], n1[1], n1[2])
 
@@ -1950,13 +1983,51 @@ class Geometry():
             assert False, "Faild to generate plane"
         plane = maker.Face()
 
-        proj = BRepOffsetAPI_NormalProjection(plane)
-        for s in shapes:
+        projected_edges = []
+        result = self.new_compound()
+
+        mapping = [-1]*len(unique_edges)
+
+        for k, s in enumerate(unique_edges):
+            proj = BRepOffsetAPI_NormalProjection(plane)
             proj.Add(s)
-        proj.Build()
-        if not proj.IsDone():
-            assert False, "Failed to perform projection"
-        result = proj.Projection()
+            proj.Build()
+            if not proj.IsDone():
+               assert False, "Failed to perform projection"
+            tmp = proj.Projection()
+            count = 0
+            for p in iter_shape_once(tmp, 'edge'):
+                projected_edges.append(p)
+                self.builder.Add(result, p)
+                count = count + 1
+            if count == 1: mapping[k] = len(projected_edges)-1
+
+        if fill:
+            for wire in wires:
+                if len(wire) == 0: continue
+                if any([mapping[edge_index[w]] == -1 for w in wire]): continue
+
+                idx = [mapping[edge_index[w]] for w in wire]
+
+                wireMaker = BRepBuilderAPI_MakeWire()
+
+                for i in idx:
+                    wireMaker.Add(projected_edges[i])
+                wireMaker.Build()
+                if not wireMaker.IsDone():
+                    assert False, "Failed to make wire"
+                wire = wireMaker.Wire()
+
+                faceMaker = BRepBuilderAPI_MakeFace(wire)
+                faceMaker.Build()
+
+                if not faceMaker.IsDone():
+                    assert False, "can not create face"
+
+                face = faceMaker.Face()
+                fixer = ShapeFix_Face(face)
+                fixer.Perform()
+                self.builder.Add(result, fixer.Face())
 
         ###
         # somehow some points are not projected. we check if all points
@@ -1990,19 +2061,7 @@ class Geometry():
             p = BRepBuilderAPI_MakeVertex(gp_Pnt(x, y, z)).Shape()
             self.builder.Add(result, p)
 
-        #dprint1("projected objects")
-        #self.inspect_shape(result, verbose=True)
-
-        ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, d1, d2)
-        if np.sum(c1**2) != 0.0:
-            result = do_translate(result, -c1)
-        if np.sum(ax2**2) != 0.0 and an2 != 0.0:
-            result = do_rotate(result, ax2, -an2, txt='2nd')
-        if np.sum(ax1**2) != 0.0 and an1 != 0.0:
-            result = do_rotate(result, ax1, -an1, txt='1st')
-
-        gids_new = self.register_shaps_balk(result)
-        return gids_new
+        return result
 
     def apply_fixshape_shell(self, gids):
         for gid in gids:
@@ -2953,71 +3012,20 @@ class Geometry():
         targets = [x.strip() for x in targets.split(',')]        
         targets = self.get_target2(objs, targets)
 
-        print(targets)
         cptx, normal = self.process_plane_parameters(plane_params, objs)
         if offset != 0:
             cptx = cptx + normal * offset
 
-        print(cptx, offset,  normal)
         # splitter alogrithm
         normal = -normal
-        pnt = gp_Pnt(*cptx)
-        dr = gp_Dir(*normal)
-        pl = Geom_Plane(pnt, dr)
-        maker = BRepBuilderAPI_MakeFace(pl, self.occ_geom_tolerance)
-        maker.Build()
-        if not maker.IsDone():
-            assert False, "Faild to generate plane"
-        plane = maker.Face()
 
-        newkeys = []                
+        result = self.project_shape_on_wp(targets, cptx, normal, fill=fill)
 
-        for item in targets:
-            p = BRepAlgo_NormalProjection(plane)
-            make_fill = False
-            
-            if isinstance(item, LineID):
-               p.SetDefaultParams()
-               p.Add(self.edges[item])
-            elif isinstance(item, SurfaceID):
-               for x in iter_shape(self.faces[item], 'edge'):
-                   p.Add(x)
-               if fill:
-                   make_fill = True
-            else:
-                assert False, "Item must be either edge or face"
+        newkeys = []
+        gids_new = self.register_shaps_balk(result)
 
-            p.Build()                
-            if not p.IsDone():
-                assert False, "Can not create projection"
-
-            if make_fill:
-                res = p.Projection()
-                wireMaker = BRepBuilderAPI_MakeWire()
-                for x in iter_shape(res, 'edge'):                
-                   wireMaker.Add(x)
-                wireMaker.Build()
-                if not wireMaker.IsDone():
-                    assert False, "Failed to make wire"
-                wire = wireMaker.Wire()
-                
-                faceMaker = BRepBuilderAPI_MakeFace(wire)
-                faceMaker.Build()
-
-                if not faceMaker.IsDone():
-                    assert False, "can not create face"
-                    
-                face = faceMaker.Face()
-                fixer = ShapeFix_Face(face)
-                fixer.Perform()
-                res = fixer.Face()
-            else:
-                res = p.Projection()            
-
-            gids_new = self.register_shaps_balk(res)
-        
-            for gid in gids_new:
-                newkeys.append(objs.addobj(gid, 'prj'))
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'prj'))
         
         return list(objs), newkeys
         
@@ -4594,12 +4602,25 @@ class Geometry():
         return list(objs), newkeys
 
     def ProjectOnWP_build_geom(self, objs, *args):
-        targets = args[0]
+        targets, fill = args
         targets = [x.strip() for x in targets.split(',')]
         gids = self.get_target2(objs, targets)
 
         c1, d1, d2 = self._last_wp_param
-        gids_new = self.project_shape_on_wp(gids, c1, d1, d2)
+        n1 = np.cross(d1, d2)
+
+        result = self.project_shape_on_wp(gids, c1, n1, fill=fill,
+                                          base_shape = self._shape_bk)
+
+        ax1, an1, ax2, an2, cxyz = calc_wp_projection(c1, d1, d2)
+        if np.sum(c1**2) != 0.0:
+            result = do_translate(result, -c1)
+        if np.sum(ax2**2) != 0.0 and an2 != 0.0:
+            result = do_rotate(result, ax2, -an2, txt='2nd')
+        if np.sum(ax1**2) != 0.0 and an1 != 0.0:
+            result = do_rotate(result, ax1, -an1, txt='1st')
+
+        gids_new = self.register_shaps_balk(result)
 
         self.synchronize_topo_list()
 

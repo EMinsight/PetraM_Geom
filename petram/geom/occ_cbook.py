@@ -662,6 +662,13 @@ class topo_seen(list):
         self.check[i] += 1
         return ret
 
+    def index(self, x):
+        i = self.mapping.FindIndex(x) - 1
+        return i
+
+    def find_from_index(self, i):
+        return self.mapping.FindFromIndex(i)
+
     def seen(self, x):
         return self.check_shape(x) != 0
 
