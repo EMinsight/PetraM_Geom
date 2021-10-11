@@ -1386,6 +1386,7 @@ class Geometry():
         if operation != 'fragments':
             self.update_topo_list_from_history(operator, tools)
 
+        
         if remove_tool:
             for gid in gid_tools:
                 self.remove(gid)
@@ -1394,7 +1395,7 @@ class Geometry():
                 self.remove(gid)
 
         # apparenlty I have to do it just after removing shape...
-        self.synchronize_topo_list()
+        self.synchronize_topo_list(action='both')
 
         if upgrade:
             unifier = ShapeUpgrade_UnifySameDomain(result)
@@ -1410,7 +1411,9 @@ class Geometry():
                 "!!!!! after boolean " +
                 str(nsmall) +
                 " faces are found too small")
-        new_objs = self.register_shaps_balk(result)
+
+            
+        new_objs = self.register_shaps_balk(result, check_this=self.shape)
 
         return new_objs
 
@@ -1931,7 +1934,7 @@ class Geometry():
         self.remove(gid)
 
         result = self.select_highest_dim(result)
-        new_objs = self.register_shaps_balk(result)
+        new_objs = self.register_shaps_balk(result, check_this=self.shape)
 
         return new_objs
 
@@ -3844,7 +3847,7 @@ class Geometry():
 
         for gid in gids:
             self.remove(gid, recursive=recursive)
-        self.synchronize_topo_list()
+        self.synchronize_topo_list(action='both')
 
         for t in targets:
             if t in objs:
@@ -4791,7 +4794,15 @@ class Geometry():
             ex1.Next()
         return comp
 
-    def register_shaps_balk(self, shape):
+    def register_shaps_balk(self, shape, check_this = None):
+        '''
+          register a shape to topo_list. 
+          check_this : a shape.
+              if this is given, we don't register an entity which is already
+              contained in this shape. Usually self.shape
+
+
+        '''
         maps = prep_maps(shape)
         solidMap = maps['solid']
         shellMap = maps['shell']
@@ -4807,32 +4818,47 @@ class Geometry():
         uedges = topo_seen(mapping=edgeMap)
         uvertices = topo_seen(mapping=vertMap)
 
+        if check_this is not None:
+            maps2 = prep_maps(check_this)
+            do_check = True
+        else:
+            maps2 = None
+            do_check = False            
+
         new_objs = []
         # registor solid
         ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
         while ex1.More():
             solid = topods_Solid(ex1.Current())
-            if usolids.check_shape(solid) == 0:
+            if (not (do_check and maps2['solid'].Contains(solid)) and
+                usolids.check_shape(solid) == 0):
                 solid_id = self.solids.add(solid)
                 new_objs.append(solid_id)
             ex1.Next()
 
         def register_topo(shape, ucounter, topabs, topabs_p, topods, topods_p,
-                          topo_list, dim=-1):
+                          topo_list, dim=-1, map2_name=None):
+
+            if maps2 is not None:
+               map2a = maps2[map2_name[0]]
+               map2b = maps2[map2_name[1]]
+            
             ex1 = TopExp_Explorer(shape, topabs_p)
             while ex1.More():
                 topo_p = topods_p(ex1.Current())
                 ex2 = TopExp_Explorer(topo_p, topabs)
                 while ex2.More():
                     topo = topods(ex2.Current())
-                    if ucounter.check_shape(topo) == 0:
+                    if (not (do_check and map2a.Contains(topo)) and
+                        ucounter.check_shape(topo) == 0):
                         topo_id = topo_list.add(topo)
                     ex2.Next()
                 ex1.Next()
             ex1.Init(shape, topabs, topabs_p)
             while ex1.More():
                 topo = topods(ex1.Current())
-                if ucounter.check_shape(topo) == 0:
+                if (not (do_check and map2b.Contains(topo)) and
+                    ucounter.check_shape(topo) == 0):
                     topo_id = topo_list.add(topo)
                     if dim != -1:
                         new_objs.append(topo_id)
@@ -4845,7 +4871,8 @@ class Geometry():
             TopAbs_SOLID,
             topods_Shell,
             topods_Solid,
-            self.shells)
+            self.shells,
+            map2_name=('shell', 'solid'))
         register_topo(
             shape,
             ufaces,
@@ -4854,7 +4881,9 @@ class Geometry():
             topods_Face,
             topods_Shell,
             self.faces,
-            dim=2)
+            dim=2,
+            map2_name=('face', 'shell'))            
+
         register_topo(
             shape,
             uwires,
@@ -4862,7 +4891,9 @@ class Geometry():
             TopAbs_FACE,
             topods_Wire,
             topods_Face,
-            self.wires)
+            self.wires,
+            map2_name=('wire', 'face'))                        
+
         register_topo(
             shape,
             uedges,
@@ -4871,9 +4902,18 @@ class Geometry():
             topods_Edge,
             topods_Wire,
             self.edges,
-            dim=1)
-        register_topo(shape, uvertices, TopAbs_VERTEX, TopAbs_EDGE,
-                      topods_Vertex, topods_Edge, self.vertices, dim=0)
+            dim=1,
+            map2_name=('edge', 'wire'))                                    
+
+        register_topo(shape,
+                      uvertices,
+                      TopAbs_VERTEX,
+                      TopAbs_EDGE,
+                      topods_Vertex,
+                      topods_Edge,
+                      self.vertices,
+                      dim=0,
+                      map2_name=('vertex', 'edge'))
 
         b = self.builder
         comp = self.shape
@@ -5139,6 +5179,7 @@ class Geometry():
 
             if facing is None:
                 num_failedface.increment(1)
+                print('tesselation of face is missing, iface=', iface)                
                 return
             else:
                 tab = facing.Nodes()
