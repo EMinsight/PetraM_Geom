@@ -17,7 +17,6 @@ from petram.geom.gmsh_geom_model import GmshPrimitiveBase as GeomPB
 from petram.phys.vtable import VtableElement, Vtable
 
 
-
 import petram.debug as debug
 dprint1, dprint2, dprint3 = debug.init_dprints('GmshPrimitives')
 
@@ -50,10 +49,11 @@ class Point(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Point'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Point'
+
 
 class PointOCC(Point):
     vt = Vtable(pdata)
@@ -61,7 +61,7 @@ class PointOCC(Point):
     @classmethod
     def fancy_menu_name(self):
         return 'by XYZ'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Point'
@@ -120,9 +120,9 @@ pdata = (('edge', VtableElement('edge', type='string',
                                 default="",
                                 tip="Edge to find center")),
          ('use_focus', VtableElement('use_focus', type='bool',
-                                guilabel='Use focus (ellipse/hyperbola/parabola)',
-                                default=False,
-                                tip="Plcae point on focus (ellipse/hyperbola/parabola) ")), )
+                                     guilabel='Use focus (ellipse/hyperbola/parabola)',
+                                     default=False,
+                                     tip="Plcae point on focus (ellipse/hyperbola/parabola) ")), )
 
 
 class PointCircleCenter(GeomPB):
@@ -183,7 +183,8 @@ class Circle2DCenterOnePoint(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return "Circle"
-    
+
+
 pdata = (('tlines', VtableElement('tlines', type='string',
                                   guilabel='Tangent lines',
                                   default="",
@@ -197,6 +198,7 @@ pdata = (('tlines', VtableElement('tlines', type='string',
                                        default=False,
                                        tip="Make surface ")), )
 
+
 class Circle2DRadiusTwoTangentCurve(GeomPB):
     vt = Vtable(pdata)
 
@@ -207,7 +209,7 @@ class Circle2DRadiusTwoTangentCurve(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return "Circle"
-    
+
 
 pdata = (('points', VtableElement('points', type='string',
                                   guilabel='Ends of diameter',
@@ -267,7 +269,7 @@ class Circle(GeomPB):
     def fancy_tree_name(self):
         return 'Circle'
 
-    
+
 cdata = (('center', VtableElement('center', type='float',
                                   guilabel='Center',
                                   suffix=('x', 'y', 'z'),
@@ -288,13 +290,15 @@ cdata = (('center', VtableElement('center', type='float',
                                   default=1.0,
                                   tip="radius")),
          ('num_points', VtableElement('num_points', type='int',
-                                  guilabel='#points on circle (>0)',
-                                  default=2,
-                                  tip="numbe of points on circle")),
+                                      guilabel='#points on circle (>0)',
+                                      default=2,
+                                      tip="numbe of points on circle")),
          ('fill_circle', VtableElement('fill_circle', type='bool',
                                        guilabel='Fill circle',
                                        default=True,
                                        tip="Make surface ")), )
+
+
 class CircleOCC(GeomPB):
     vt = Vtable(cdata)
 
@@ -316,9 +320,9 @@ cdata = (('axis_by_points', VtableElement('axis_by_points', type='string',
                                            default="",
                                            tip="Point on circle")),
          ('num_points', VtableElement('num_points', type='int',
-                                  guilabel='#points on circle (>0)',
-                                  default=2,
-                                  tip="numbe of points on circle")),         
+                                      guilabel='#points on circle (>0)',
+                                      default=2,
+                                      tip="numbe of points on circle")),
          ('fill_circle', VtableElement('fill_circle', type='bool',
                                        guilabel='Fill circle',
                                        default=True,
@@ -336,27 +340,29 @@ class CircleByAxisPoint(GeomPB):
     def fancy_tree_name(self):
         return 'Circle'
 
+
 cdata = (('axis_by_points', VtableElement('axis_by_points', type='string',
                                           guilabel='Axis (edge or two points)',
                                           default="",
                                           tip="Points to define axis")),
          ('center', VtableElement('center', type='string',
-                                          guilabel='Center point',
-                                          default="",
-                                          tip="Points to define axis")),         
+                                  guilabel='Center point',
+                                  default="",
+                                          tip="Points to define axis")),
          ('radius', VtableElement('point_on_circle', type='string',
-                                           guilabel='Raidus',
-                                           default="1.0",
-                                           tip="Radius")),
+                                  guilabel='Raidus',
+                                  default="1.0",
+                                  tip="Radius")),
          ('num_points', VtableElement('num_points', type='int',
-                                  guilabel='#points on circle (>0)',
-                                  default=2,
-                                  tip="numbe of points on circle")),         
+                                      guilabel='#points on circle (>0)',
+                                      default=2,
+                                      tip="numbe of points on circle")),
          ('fill_circle', VtableElement('fill_circle', type='bool',
                                        guilabel='Fill circle',
                                        default=True,
                                        tip="Make surface ")), )
-    
+
+
 class CircleByAxisCenterRadius(GeomPB):
     vt = Vtable(cdata)
 
@@ -596,7 +602,7 @@ class Line(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'Line'
-    
+
     def attribute_set(self, v):
         v = super(GeomPB, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -641,26 +647,32 @@ class Line(GeomPB):
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
+
 class LineOCC(Line):
     @classmethod
     def fancy_menu_name(self):
         return 'by XYZ'
-    @classmethod    
+
+    @classmethod
     def fancy_tree_name(self):
         return 'Line'
 
+
 class Polygon(GeomPB):
     vt = Vtable(pdata)
-    
+
+
 class Polygon2(Polygon):
     vt = Vtable(pdata)
-    
+
     @classmethod
     def fancy_menu_name(self):
         return 'by XYZ'
+
     @classmethod
     def fancy_tree_name(self):
         return 'Polygon'
+
 
 ldata = (('lines', VtableElement('lines', type='string',
                                  guilabel='Lines',
@@ -671,15 +683,15 @@ ldata = (('lines', VtableElement('lines', type='string',
                                  default='0.1, 0.1',
                                  tip="Normalized ratio (based on U)")),
          ('num_resample', VtableElement('num_resample', type='int',
-                                 guilabel='Resample#',
-                                 default='30',
-                                 tip="Number of resample points on curve")),)
+                                        guilabel='Resample#',
+                                        default='30',
+                                        tip="Number of resample points on curve")),)
 
 
 class ExtendedLine(GeomPB):
     vt = Vtable(ldata)
-    
-    @classmethod    
+
+    @classmethod
     def fancy_menu_name(self):
         return 'from Existing Lines'
 
@@ -687,34 +699,36 @@ class ExtendedLine(GeomPB):
     def fancy_tree_name(self):
         return 'Line'
 
+
 ldata = (('line', VtableElement('lines', type='string',
-                                 guilabel='Lines',
-                                 default="",
-                                 tip="lines to be extended")),
+                                guilabel='Lines',
+                                default="",
+                                tip="lines to be extended")),
          ('u_n', VtableElement('u_n', type='float',
-                                 guilabel='U_n',
-                                 default='0.0',
-                                 tip="Normalized position (based on U)")),
+                               guilabel='U_n',
+                               default='0.0',
+                               tip="Normalized position (based on U)")),
          ('length', VtableElement('num_resample', type='array',
-                                 guilabel='length',
-                                 default='1.0',
-                                 tip="Length of line")),
+                                  guilabel='length',
+                                  default='1.0',
+                                  tip="Length of line")),
          ('rev_dir', VtableElement('rev_dir', type='bool',
-                                 guilabel='Reverse',
-                                 default=False,
-                                 tip="reverse direction ")), )
+                                   guilabel='Reverse',
+                                   default=False,
+                                   tip="reverse direction ")), )
+
 
 class NormalLine2D(GeomPB):
     vt = Vtable(ldata)
-    
-    @classmethod    
+
+    @classmethod
     def fancy_menu_name(self):
         return 'Normal to Existing Lines'
 
     @classmethod
     def fancy_tree_name(self):
         return 'Line'
-    
+
 
 ldata = (('points', VtableElement('pts', type='string',
                                   guilabel='Points',
@@ -744,7 +758,7 @@ class CreateLine(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Line'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Line'
@@ -755,8 +769,10 @@ ldata = (('lines', VtableElement('lines', type='string',
                                  default="",
                                  tip="lines to be connected")), )
 
+
 class LineLoop(GeomPB):
     vt = Vtable(ldata)
+
 
 ldata = (('loop1', VtableElement('loop1', type='string',
                                  guilabel='Edges1',
@@ -775,13 +791,13 @@ ldata = (('loop1', VtableElement('loop1', type='string',
                                  default=False,
                                  tip="create ruled surface ")),
          ('rev1', VtableElement('rev1', type='bool',
-                                 guilabel='Reverse edges1',
-                                 default=False,
-                                 tip="revesre edges 1 direction ")),
+                                guilabel='Reverse edges1',
+                                default=False,
+                                tip="revesre edges 1 direction ")),
          ('rev2', VtableElement('rev2', type='bool',
-                                 guilabel='Reverse edges2',
-                                 default=False,
-                                 tip="reverse edge 2 direction ")), )
+                                guilabel='Reverse edges2',
+                                default=False,
+                                tip="reverse edge 2 direction ")), )
 
 
 class ThruSection(GeomPB):
@@ -792,10 +808,10 @@ ldata = (('lines', VtableElement('lines', type='string',
                                  guilabel='Lines',
                                  default="",
                                  tip="lines to be connected")),
-         ('points', VtableElement('points', type='string',         
-                        guilabel='Points on surface',
-                                 default="",
-                                 tip="points as constraints")),         
+         ('points', VtableElement('points', type='string',
+                                  guilabel='Points on surface',
+                                  default="",
+                                  tip="points as constraints")),
          ('isplane', VtableElement('isplane_org', type='bool',
                                    guilabel='Use surface filling',
                                    default=False,
@@ -808,7 +824,7 @@ class CreateSurface(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Surface'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Surface'
@@ -830,39 +846,41 @@ class CreateVolume(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Volume'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Volume'
-    
-ldata = (('volume', VtableElement('volume', type='string',
-                                 guilabel='Volume',
-                                 default="",
-                                 tip="Volume to generate shell")), 
-         ('opening', VtableElement('opening', type='string',
-                                 guilabel='OpeningFaces',
-                                 default="",
-                                 tip="Shell opening")), 
-         ('thickness', VtableElement('thikcness', type='float',
-                                 guilabel='Thickness',
-                                 default='1.0',
-                                 tip="Shell thickness")),
-         ('round_conner', VtableElement('round_conner', type='bool',
-                                   guilabel='Fillet outer edges',
-                                   default=False,
-                                   tip="Use rounded conner ")), )
 
-         
+
+ldata = (('volume', VtableElement('volume', type='string',
+                                  guilabel='Volume',
+                                  default="",
+                                  tip="Volume to generate shell")),
+         ('opening', VtableElement('opening', type='string',
+                                   guilabel='OpeningFaces',
+                                   default="",
+                                   tip="Shell opening")),
+         ('thickness', VtableElement('thikcness', type='float',
+                                     guilabel='Thickness',
+                                     default='1.0',
+                                     tip="Shell thickness")),
+         ('round_conner', VtableElement('round_conner', type='bool',
+                                        guilabel='Fillet outer edges',
+                                        default=False,
+                                        tip="Use rounded conner ")), )
+
+
 class CreateShell(GeomPB):
     vt = Vtable(ldata)
 
     @classmethod
     def fancy_menu_name(self):
         return 'Shell'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Shell'
+
 
 ldata = (('target', VtableElement('target', type='string',
                                   guilabel='Volume',
@@ -895,6 +913,7 @@ edata = (('ex_target', VtableElement('ex_target', type='string',
 
 class Extrude(GeomPB):
     vt = Vtable(edata)
+
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Targets (v/f/l/p)',
@@ -970,18 +989,17 @@ data0 = (('target_object', VtableElement('target_object', type='string',
                                   default="",
                                   tip="2nd point to define translation")),
          ('distance', VtableElement('distance', type='float',
-                                  guilabel='Distance',
-                                  default="1.0",
-                                  tip="Distance")),
+                                    guilabel='Distance',
+                                    default="1.0",
+                                    tip="Distance")),
          ('scale_d', VtableElement('scale_d', type='bool',
-                                    guilabel='Use distance between pionts + scaler',
-                                    default=True,
-                                    tip="Scale or give the distance for translation")), 
+                                   guilabel='Use distance between pionts + scaler',
+                                   default=True,
+                                   tip="Scale or give the distance for translation")),
          ('keep_org', VtableElement('kepp_org', type='bool',
                                     guilabel='Copy',
                                     default=False,
                                     tip="Keep original")), )
-
 
 
 class MoveByPoints(GeomPB):
@@ -994,6 +1012,31 @@ class MoveByPoints(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'Move'
+
+
+class MovePoint(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Objects (v/f/l/p)',
+                                             default="",
+                                             tip="object to move")),
+             ('point1', VtableElement('point1', type='string',
+                                      guilabel='Point1',
+                                      default="",
+                                      tip="point to be moved")),
+             ('point2', VtableElement('point2', type='string',
+                                      guilabel='Point2)',
+                                      default="",
+                                      tip="destination of move")),)
+
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'MovePoint'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'MovePoint'
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1194,15 +1237,16 @@ class ArrayRotByPoints(GeomPB):
     def fancy_tree_name(self):
         return 'ArrayRot'
 
+
 class ArrayPath(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
                                              guilabel='Objects (v/f/l/p)',
                                              default="",
                                              tip="object to move")),
              ('ref_pnt', VtableElement('ref_pnt', type='string',
-                                         default='',
-                                         guilabel='Reference Point',
-                                         tip="Reference point of object")),
+                                       default='',
+                                       guilabel='Reference Point',
+                                       tip="Reference point of object")),
              ('pathlines', VtableElement('pathlines', type='string',
                                          default='',
                                          guilabel='Path(lines)',
@@ -1227,7 +1271,6 @@ class ArrayPath(GeomPB):
                                             default=False,
                                             tip="Ignore rotation along the path")), )
 
-         
     vt = Vtable(data0)
 
     @classmethod
@@ -1245,17 +1288,19 @@ data0 = (('target_object', VtableElement('target_object',
                                          default="",
                                          tip="object to move")),
          ('flip_plane', VtableElement_Plane('flip_plane', type='float',
-                                       guilabel='flip plane',
-                                       suffix=('a', 'b', 'c', 'd'),
-                                       default=[1, 0, 0, 0],
-                                       tip="Flipping Plane")),
+                                            guilabel='flip plane',
+                                            suffix=('a', 'b', 'c', 'd'),
+                                            default=[1, 0, 0, 0],
+                                            tip="Flipping Plane")),
          ('keep_org', VtableElement('kepp_org', type='bool',
                                     guilabel='Copy',
                                     default=True,
                                     tip="Keep original")), )
 
+
 class Flip(GeomPB):
     vt = Vtable(data0)
+
 
 data0 = (('target_object', VtableElement('target_object',
                                          type='string',
@@ -1274,6 +1319,7 @@ data0 = (('target_object', VtableElement('target_object',
 
 class Fillet(GeomPB):
     vt = Vtable(data0)
+
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Volume',
@@ -1296,11 +1342,13 @@ data0 = (('target_object', VtableElement('target_object', type='string',
 class Chamfer(GeomPB):
     vt = Vtable(data0)
 
+
 data0 = (('target_object', VtableElement('target_object',
                                          type='string',
                                          guilabel='Objects (v/f/l/p)',
                                          default="",
                                          tip="object to move")), )
+
 
 class Copy(GeomPB):
     vt = Vtable(data0)
@@ -1308,7 +1356,7 @@ class Copy(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Copy'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Copy'
@@ -1330,7 +1378,7 @@ class Remove(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Delete'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Delete'
@@ -1348,19 +1396,21 @@ class Remove2(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Delete Rest'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'DeleteRest'
+
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Surfaces',
                                          default="",
                                          tip="surfaces")),
          ('use_unifier', VtableElement('use_unifier', type='bool',
-                                     guilabel='Merge edge',
-                                     default=True,
-                                     tip="Use unifier to merge edges if possible")), )
+                                       guilabel='Merge edge',
+                                       default=True,
+                                       tip="Use unifier to merge edges if possible")), )
+
 
 class MergeFace(GeomPB):
     vt = Vtable(data0)
@@ -1372,7 +1422,7 @@ class MergeFace(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return "MergeFace"
-    
+
 
 class GeomPB_Bool(GeomPB):
     def attribute_set(self, v):
@@ -1381,6 +1431,7 @@ class GeomPB_Bool(GeomPB):
         v["delete_input"] = True
         v["delete_tool"] = True
         v["keep_highest"] = False
+        v["tol_scale"] = 1.0
         return v
 
     def panel1_param(self):
@@ -1391,62 +1442,15 @@ class GeomPB_Bool(GeomPB):
                    self.delete_tool, 3, {"text": ""}])
         ll.append(["Keep highest dim only",
                    self.keep_highest, 3, {"text": ""}])
+        ll.append(["Tolelance scalar",
+                   self.tol_scale, 300, {"text": ""}])
+
         return ll
 
     def get_panel1_value(self):
         v = GeomPB.get_panel1_value(self)
         return v + [self.delete_input,
-                    self.delete_tool, self.keep_highest]
-
-    def preprocess_params(self, engine):
-        self.vt.preprocess_params(self)
-        return
-
-    def import_panel1_value(self, v):
-        GeomPB.import_panel1_value(self, v[:-3])
-        self.delete_input = v[-3]
-        self.delete_tool = v[-2]
-        self.keep_highest = v[-1]
-
-    def panel1_tip(self):
-        tip = GeomPB.panel1_tip(self)
-        return tip + ['delete input objects'] + \
-            ['delete tool objects'] + ['keep highest dim. objects']
-    
-    def add_geom_sequence(self, geom):
-        gui_name = self.fullname()
-        gui_param = (list(self.vt.make_value_or_expression(self)) +
-                     [self.delete_input,
-                      self.delete_tool, self.keep_highest])
-        geom_name = self.__class__.__name__
-        geom.add_sequence(gui_name, gui_param, geom_name)
-
-class GeomPB_Bool_with_UP(GeomPB):
-    def attribute_set(self, v):
-        v = super(GeomPB, self).attribute_set(v)
-        self.vt.attribute_set(v)
-        v["delete_input"] = True
-        v["delete_tool"] = True
-        v["keep_highest"] = False
-        v["use_upgrade"] = False
-        return v
-    
-    def panel1_param(self):
-        ll = GeomPB.panel1_param(self)
-        ll.append(["Delete Input",
-                   self.delete_input, 3, {"text": ""}])
-        ll.append(["Delete Tool",
-                   self.delete_tool, 3, {"text": ""}])
-        ll.append(["Keep highest dim only",
-                   self.keep_highest, 3, {"text": ""}])
-        ll.append(["Use domain unifier",
-                   self.use_upgrade, 3, {"text": ""}])
-        return ll
-
-    def get_panel1_value(self):
-        v = GeomPB.get_panel1_value(self)
-        return v + [self.delete_input, self.delete_tool,
-                    self.keep_highest, self.use_upgrade]
+                    self.delete_tool, self.keep_highest, self.tol_scale]
 
     def preprocess_params(self, engine):
         self.vt.preprocess_params(self)
@@ -1457,18 +1461,77 @@ class GeomPB_Bool_with_UP(GeomPB):
         self.delete_input = v[-4]
         self.delete_tool = v[-3]
         self.keep_highest = v[-2]
-        self.use_upgrade = v[-1]
+        self.tol_scale = v[-1]
+
+    def panel1_tip(self):
+        tip = GeomPB.panel1_tip(self)
+        return tip + ['delete input objects'] + \
+            ['delete tool objects'] + \
+            ['keep highest dim. objects'] + ['tolelance scalar']
+
+    def add_geom_sequence(self, geom):
+        gui_name = self.fullname()
+        gui_param = (list(self.vt.make_value_or_expression(self)) +
+                     [self.delete_input,
+                      self.delete_tool, self.keep_highest, self.tol_scale])
+        geom_name = self.__class__.__name__
+        geom.add_sequence(gui_name, gui_param, geom_name)
+
+
+class GeomPB_Bool_with_UP(GeomPB):
+    def attribute_set(self, v):
+        v = super(GeomPB, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["delete_input"] = True
+        v["delete_tool"] = True
+        v["keep_highest"] = False
+        v["use_upgrade"] = False
+        v["tol_scale"] = 1.0
+        return v
+
+    def panel1_param(self):
+        ll = GeomPB.panel1_param(self)
+        ll.append(["Delete Input",
+                   self.delete_input, 3, {"text": ""}])
+        ll.append(["Delete Tool",
+                   self.delete_tool, 3, {"text": ""}])
+        ll.append(["Keep highest dim only",
+                   self.keep_highest, 3, {"text": ""}])
+        ll.append(["Use domain unifier",
+                   self.use_upgrade, 3, {"text": ""}])
+        ll.append(["Tolelance scalar",
+                   self.tol_scale, 300, {"text": ""}])
+
+        return ll
+
+    def get_panel1_value(self):
+        v = GeomPB.get_panel1_value(self)
+        return v + [self.delete_input, self.delete_tool,
+                    self.keep_highest, self.use_upgrade, self.tol_scale]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        GeomPB.import_panel1_value(self, v[:-5])
+        self.delete_input = v[-5]
+        self.delete_tool = v[-4]
+        self.keep_highest = v[-3]
+        self.use_upgrade = v[-2]
+        self.tol_scale = v[-1]
 
     def panel1_tip(self):
         tip = GeomPB.panel1_tip(self)
         return tip + ['delete input objects', 'delete tool objects',
-                      'keep highest dim. objects', 'unify the same domains']
+                      'keep highest dim. objects', 'unify the same domains',
+                      'scale tolerance of boolear operaion']
 
     def add_geom_sequence(self, geom):
         gui_name = self.fullname()
         gui_param = (list(self.vt.make_value_or_expression(self)) +
                      [self.delete_input, self.delete_tool,
-                      self.keep_highest, self.use_upgrade])
+                      self.keep_highest, self.use_upgrade, self.tol_scale])
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
@@ -1486,6 +1549,7 @@ ddata = (('objplus', VtableElement('objplus', type='string',
 class Difference(GeomPB_Bool_with_UP):
     vt = Vtable(ddata)
 
+
 udata = (('objplus', VtableElement('obj1', type='string',
                                    guilabel='Input (v/f/l/p)',
                                    default="",
@@ -1494,6 +1558,7 @@ udata = (('objplus', VtableElement('obj1', type='string',
                                        guilabel='Tool Obj. (v/f/l/p)',
                                        default="",
                                        tip="object to move")),)
+
 
 class Union(GeomPB_Bool_with_UP):
     vt = Vtable(udata)
@@ -1505,7 +1570,8 @@ class Union(GeomPB_Bool_with_UP):
     @classmethod
     def fancy_tree_name(self):
         return "Union"
-        
+
+
 class Union2(Union):
     vt = Vtable(udata)
 
@@ -1515,16 +1581,18 @@ class Union2(Union):
         v["use_upgrade"] = False
         return v
 
+
 class Union2D(GeomPB_Bool):
     vt = Vtable(udata)
 
     @classmethod
     def fancy_menu_name(self):
         return 'Union'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Union'
+
 
 class Intersection(GeomPB_Bool_with_UP):
     vt = Vtable(udata)
@@ -1539,9 +1607,10 @@ pdata = (('objp', VtableElement("obj1p", type='string',
                                 default="",
                                 tip="objects")),
          ('fill_wire', VtableElement('fill_wire', type='bool',
-                                      guilabel='Fill',
-                                      default=False,
-                                      tip='Fill projected faces')),)
+                                     guilabel='Fill',
+                                     default=False,
+                                     tip='Fill projected faces')),)
+
 
 class ProjectOnWP(GeomPB):
     vt = Vtable(pdata)
@@ -1553,6 +1622,7 @@ class ProjectOnWP(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'Projection'
+
 
 pdata = (('xarr', VtableElement('xarr', type='array',
                                 guilabel='X',
@@ -1570,10 +1640,11 @@ class Point2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Point'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Point'
+
 
 pdata = (('xarr', VtableElement('xarr', type='array',
                                 guilabel='X',
@@ -1602,6 +1673,7 @@ class Line2D(Line):
     def fancy_tree_name(self):
         return 'Line'
 
+
 cdata = (('center', VtableElement('center', type='float',
                                   guilabel='Center',
                                   suffix=('x', 'y', ),
@@ -1629,7 +1701,7 @@ class Circle2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Circle'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Circle'
@@ -1756,6 +1828,7 @@ class Rect2D(GeomPB):
     def fancy_tree_name(self):
         return 'Rect'
 
+
 cdata = (('corner_of_rect', VtableElement('corner_of_rect', type='string',
                                           guilabel='Points (2) at corner',
                                           default="",
@@ -1797,7 +1870,7 @@ class Spline2D(Spline):
     @classmethod
     def fancy_menu_name(self):
         return 'Spline'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Spline'
@@ -1831,6 +1904,7 @@ class Move2D(GeomPB):  # tanslate in gmsh
     @classmethod
     def fancy_tree_name(self):
         return 'Move'
+
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Object',
@@ -1891,7 +1965,7 @@ class Flip2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Flip'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Flip'
@@ -1923,10 +1997,11 @@ class Scale2D(GeomPB):  # Dilate in gmsh
     @classmethod
     def fancy_menu_name(self):
         return 'Scale'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'Scale'
+
 
 class CreateOffset(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1934,32 +2009,34 @@ class CreateOffset(GeomPB):
                                              default="",
                                              tip="object from which offset is created")),
              ('displacements', VtableElement('displacement', type='array',
-                                            guilabel='Displacements',
-                                            tip="displacemnts. ex) 1, 2, 3")),
+                                             guilabel='Displacements',
+                                             tip="displacemnts. ex) 1, 2, 3")),
              ('altitudes', VtableElement('altitudes', type='array',
-                                            guilabel='Altitudes',
-                                            tip="altitude (displacement normal to plane). scalar or array with the same length of displacements")),
+                                         guilabel='Altitudes',
+                                         tip="altitude (displacement normal to plane). scalar or array with the same length of displacements")),
              ('round_conner', VtableElement('round_conner', type='bool',
-                                             guilabel='Fillet conner',
-                                             default=False,
-                                             tip="Use rounded conner")), 
+                                            guilabel='Fillet conner',
+                                            default=False,
+                                            tip="Use rounded conner")),
              ('close_wire', VtableElement('close_wire', type='bool',
-                                             guilabel='Close lines',
-                                             default=False,
-                                             tip="Close offset lines")), 
+                                          guilabel='Close lines',
+                                          default=False,
+                                          tip="Close offset lines")),
              ('fill_wire', VtableElement('fill_wire', type='bool',
-                                             guilabel='Fill',
-                                             default=False,
-                                             tip="Fill when it is closed wire")), )
-    
+                                         guilabel='Fill',
+                                         default=False,
+                                         tip="Fill when it is closed wire")), )
+
     vt = Vtable(data0)
+
     @classmethod
     def fancy_menu_name(self):
         return 'OffsetLines'
-    
+
     @classmethod
     def fancy_Tree_name(self):
         return 'OffsetLines'
+
 
 class CreateOffsetFace(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
@@ -1967,55 +2044,58 @@ class CreateOffsetFace(GeomPB):
                                              default="",
                                              tip="object from which offset is created")),
              ('displacements', VtableElement('displacement', type='array',
-                                            guilabel='Displacements',
-                                            tip="displacemnts. ex) 1, 2, 3")),
-             
+                                             guilabel='Displacements',
+                                             tip="displacemnts. ex) 1, 2, 3")),
+
              ('round_conner', VtableElement('round_conner', type='bool',
-                                             guilabel='Fillet conner',
-                                             default=False,
-                                             tip="Use rounded conner")), 
+                                            guilabel='Fillet conner',
+                                            default=False,
+                                            tip="Use rounded conner")),
              ('fill_shell', VtableElement('fill_shell', type='bool',
-                                             guilabel='Fill',
-                                             default=False,
-                                             tip="Fill when it is closed shell")), )
-    
+                                          guilabel='Fill',
+                                          default=False,
+                                          tip="Fill when it is closed shell")), )
+
     vt = Vtable(data0)
+
     @classmethod
     def fancy_menu_name(self):
         return 'OffsetFaces'
-    
+
     @classmethod
     def fancy_Tree_name(self):
         return 'OffsetFaces'
-    
+
+
 class CreateProjection(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
                                              guilabel='Faces/Edges',
                                              default="",
                                              tip="edges to be projected")),
              ('taxis', VtableElement_Plane('taxis', type='float',
-                                       guilabel='cut plane',
-                                       suffix=('a', 'b', 'c', 'd'),
-                                       default=[1, 0, 0, 0],
-                                       tip="Cutting Plane")),
+                                           guilabel='cut plane',
+                                           suffix=('a', 'b', 'c', 'd'),
+                                           default=[1, 0, 0, 0],
+                                           tip="Cutting Plane")),
              ('offset', VtableElement('offset', type='float',
-                                  guilabel='offset',
-                                  default=0.0,
-                                  tip="offset in normal direction")), 
+                                      guilabel='offset',
+                                      default=0.0,
+                                      tip="offset in normal direction")),
              ('fill_edges', VtableElement('fill_edges', type='bool',
-                                             guilabel='Fill',
-                                             default=False,
-                                             tip="Fill projected faces")), )
-    
+                                          guilabel='Fill',
+                                          default=False,
+                                          tip="Fill projected faces")), )
+
     vt = Vtable(data0)
+
     @classmethod
     def fancy_menu_name(self):
         return 'EdgeProjection'
-    
+
     @classmethod
     def fancy_Tree_name(self):
         return 'Projection (Edge)'
-    
+
 
 class Array2D(GeomPB):
     data0 = (('target_object', VtableElement('target_object', type='string',
@@ -2035,10 +2115,40 @@ class Array2D(GeomPB):
     @classmethod
     def fancy_menu_name(self):
         return 'Array'
-    
+
     @classmethod
     def fancy_Tree_name(self):
         return 'Array'
+
+
+class Simplifiers(GeomPB):
+    data0 = (('target', VtableElement('target', type='string',
+                                      guilabel='Volume',
+                                      default="",
+                                      tip="target object")),
+             ('use_unifier', VtableElement('use_unifier', type='bool',
+                                           guilabel='Domain Unifier',
+                                           default=False,
+                                           tip="Merge faces/edges using DomainUnifier")),
+             ('use_rm_internal', VtableElement('use_rm_internal', type='bool',
+                                               guilabel='Remove internal wire',
+                                               default=False,
+                                               tip="Use RemoveInternalWires")),
+             ('rm_size', VtableElement('rm_size', type='float',
+                                       guilabel='displacement',
+                                       default=0.1,
+                                       tip="Size of minimum area")),)
+
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Simplifers'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Simplifers'
+
 
 edata = (('ex_target', VtableElement('ex_target', type='string',
                                      guilabel='Target',
@@ -2098,10 +2208,12 @@ class WPBase(GeomPB):
                 ("!", Arc2DBy2PointsAngle),
                 ("Add Rect", Rect2D), ("!", Rect2DByCorners),
                 ("Add Circle...", Circle2D), ("", CircleBy3Points),
-                ("", Circle2DCenterOnePoint), #("", Circle2DRadiusTwoTangentCurve),
+                # ("", Circle2DRadiusTwoTangentCurve),
+                ("", Circle2DCenterOnePoint),
                 ("!", Circle2DByDiameter),
                 ("", Spline2D),
-                ("Create...", CreateLine), ("", CreateSurface), ("", OCCPolygon), ("", CreateOffset), ("!", ProjectOnWP),
+                ("Create...", CreateLine), ("", CreateSurface), ("",
+                                                                 OCCPolygon), ("", CreateOffset), ("!", ProjectOnWP),
                 ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
                 ("", Flip2D), ("", Scale2D), ("!", Array2D),
@@ -2172,15 +2284,16 @@ class WorkPlaneByPoints(WPBase):
     def fancy_tree_name(self):
         return 'WorkPlane'
 
+
 data0 = (('surface', VtableElement('surface', type='string',
                                    guilabel='Surface',
                                    default="",
                                    tip="surface to which WP is paralle")),
-        ('center', VtableElement('pts1', type='string',
+         ('center', VtableElement('pts1', type='string',
                                   guilabel='Center point',
                                   default="",
                                   tip="center of WP")),
-        ('ax1', VtableElement('ax1', type='string',
+         ('ax1', VtableElement('ax1', type='string',
                                guilabel='Point on 1st axis',
                                default="",
                                tip="point on 1st axis")),
@@ -2196,7 +2309,8 @@ data0 = (('surface', VtableElement('surface', type='string',
                                   guilabel='Offset',
                                   default=0.0,
                                   tip="offset in normal direction")), )
-    
+
+
 class WPParallelToPlane(WPBase):
     vt = Vtable(data0)
 
@@ -2207,17 +2321,18 @@ class WPParallelToPlane(WPBase):
     @classmethod
     def fancy_tree_name(self):
         return 'WorkPlane'
-    
+
+
 data0 = (('wp_normal', VtableElement_Normal('wp_normal', type='float',
-                                           guilabel='normal',
-                                           suffix=('x', 'y', 'z'),
-                                           default=[0, 0, 1],
-                                           tip="wp_normal")),
-        ('center', VtableElement('pts1', type='string',
+                                            guilabel='normal',
+                                            suffix=('x', 'y', 'z'),
+                                            default=[0, 0, 1],
+                                            tip="wp_normal")),
+         ('center', VtableElement('pts1', type='string',
                                   guilabel='Center point',
                                   default="",
                                   tip="center of WP")),
-        ('ax1', VtableElement('ax1', type='string',
+         ('ax1', VtableElement('ax1', type='string',
                                guilabel='Point on 1st axis',
                                default="",
                                tip="point on 1st axis")),
@@ -2233,6 +2348,7 @@ data0 = (('wp_normal', VtableElement_Normal('wp_normal', type='float',
                                   guilabel='Offset',
                                   default=0.0,
                                   tip="offset in normal direction")), )
+
 
 class WPNormalToPlane(WPBase):
     vt = Vtable(data0)
@@ -2244,7 +2360,7 @@ class WPNormalToPlane(WPBase):
     @classmethod
     def fancy_tree_name(self):
         return 'WorkPlane'
-    
+
 
 cad_fix_cb = [None, None, 36, {"col": 4,
                                "labels": ["Degenerated",
@@ -2283,7 +2399,7 @@ class healCAD(ImportBase):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        #b1 = {"label": "S", "func": self.onBuildBefore,
+        # b1 = {"label": "S", "func": self.onBuildBefore,
         #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
@@ -2292,9 +2408,9 @@ class healCAD(ImportBase):
         ll = [[None, None, 241, {'buttons': [b2, ],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["Entity (v/f/l/p)", "", 0, {}],]
+              ["Entity (v/f/l/p)", "", 0, {}], ]
         ll.extend(cad_fix_elp0)
-        
+
         return ll
 
     def attribute_set(self, v):
@@ -2329,6 +2445,7 @@ class healCAD(ImportBase):
     @classmethod
     def fancy_menu_name(self):
         return "fixCAD"
+
     @classmethod
     def fancy_tree_name(self):
         return "fixCAD"
@@ -2342,15 +2459,15 @@ class CADImport(ImportBase):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        #b1 = {"label": "S", "func": self.onBuildBefore,
+        # b1 = {"label": "S", "func": self.onBuildBefore,
         #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
         wc = "ANY|*|STEP|*.stp|IGES|*.igs"
-        ll = [[None, None, 241, {'buttons': [b2,],
+        ll = [[None, None, 241, {'buttons': [b2, ],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["File(STEP/IGES)", None, 45, {'wildcard': wc,}],
+              ["File(STEP/IGES)", None, 45, {'wildcard': wc, }],
               cad_fix_elp,
               [None, True, 3, {'text': "Highest Dim Only"}],
               ["Unit", None, 0, {}],
@@ -2407,7 +2524,7 @@ class BrepImport(ImportBase):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        #b1 = {"label": "S", "func": self.onBuildBefore,
+        # b1 = {"label": "S", "func": self.onBuildBefore,
         #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
@@ -2415,7 +2532,7 @@ class BrepImport(ImportBase):
         ll = [[None, None, 241, {'buttons': [b2],
                                  'alignright':True,
                                  'noexpand': True}, ],
-              ["File(.brep)", None, 45, {'wildcard': wc,}],
+              ["File(.brep)", None, 45, {'wildcard': wc, }],
               cad_fix_elp,
               [None, True, 3, {'text': "Highest Dim Only"}],
               ]

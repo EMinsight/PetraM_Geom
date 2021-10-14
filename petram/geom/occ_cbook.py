@@ -123,7 +123,8 @@ try:
     from OCC.Core.BRepCheck import BRepCheck_Analyzer
     from OCC.Core.BRepLib import breplib_OrientClosedSolid
 
-    from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain    
+    from OCC.Core.ShapeUpgrade import (ShapeUpgrade_UnifySameDomain,
+                                       ShapeUpgrade_RemoveInternalWires)
 
     __ex1 = TopExp_Explorer()
     __ex2 = TopExp_Explorer()
