@@ -26,6 +26,7 @@ else:
     import mfem.ser as mfem
     myid = 0
 
+
 class GMesh(Mesh):
     def onItemSelChanged(self, evt):
         '''
@@ -92,7 +93,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     has_2nd_panel = False
     isGmshMesh = True
     dim = -1
-    
+
     def attribute_set(self, v):
         v = super(GmshMeshActionBase, self).attribute_set(v)
         self.vt.attribute_set(v)
@@ -162,7 +163,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         dlg.OnRefreshTree()
         self.parent.update_meshview(dlg, viewer, clear=do_clear)
 
-    #def onBuildBefore(self, evt):
+    # def onBuildBefore(self, evt):
     #    dlg = evt.GetEventObject().GetTopLevelParent()
     #
     #    mm = dlg.get_selected_mm()
@@ -172,7 +173,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     def onBuildAfter(self, evt):
         dlg = evt.GetEventObject().GetTopLevelParent()
         _ = dlg.import_selected_panel_value()
-        
+
         mm = dlg.get_selected_mm()
         self._onBuildThis(evt, stop2=mm)
         dlg = evt.GetEventObject().GetTopLevelParent()
@@ -205,15 +206,15 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
     def update_viewer_selection(self, dlg):
         viewer = dlg.GetParent()
         sel, mode = self.get_element_selection()
-            
+
         if mode == 'volume':
-            viewer.set_toolbar_mode('volume')            
+            viewer.set_toolbar_mode('volume')
             viewer.highlight_domain(sel["volume"])
             viewer._dom_bdr_sel = (sel["volume"], [], [], [])
             status_txt = 'Volume :' + ','.join([str(x) for x in sel["volume"]])
             viewer.set_status_text(status_txt, timeout=60000)
         else:
-            viewer.set_toolbar_mode(mode)            
+            viewer.set_toolbar_mode(mode)
             figobjs = viewer.highlight_element(sel)
             if len(figobjs) > 0:
                 import ifigure.events
@@ -223,13 +224,13 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
 
     def get_embed(self):
         return [], [], []
-    
+
     def _eval_choices(self, mode):
         mesh_base = self.parent
         data = mesh_base.geom_root.geom_data
         if data is None:
             return []
-        
+
         if mode == 3:
             choices = list(data[5])
         elif mode == 2:
@@ -239,7 +240,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         else:
             choices = list(range(1, len(data[0])+1))
         return np.array(choices)
-    
+
     def _eval_entity_id(self, text):
         '''
         "remaining" -> "remaining"
@@ -305,11 +306,12 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
                     break
                 sel, mode = child.get_element_selection()
                 choices = choices[np.in1d(choices, sel[mode], invert=True)]
-            choices = ",".join([str(int(x)) for x in choices])            
+            choices = ",".join([str(int(x)) for x in choices])
             return choices
 
         else:
             return self.eval_entity_id(text)
+
 
 data = (('clmax', VtableElement('clmax', type='float',
                                 guilabel='Max size(def)',
@@ -382,10 +384,11 @@ class GmshMesh(GMeshTop, Vtable_mixin):
         setting4 = {"style": CB_READONLY, "choices": c4}
         ll_ho = [None, [True, [1, c3[0], 'all']],
                  27, [{'text': 'use high order (in dev, upto order 3, tet only)'},
-                                                {'elp': [["Order", self.ho_order, 400],
-                                                         ["HighOrder optimize", c3[-1], 4, setting3],
-                                                         ["Optimize domain", 'all', 0, None], ]}
-                                                ]]
+                      {'elp': [["Order", self.ho_order, 400],
+                               ["HighOrder optimize",
+                                c3[-1], 4, setting3],
+                               ["Optimize domain", 'all', 0, None], ]}
+                      ]]
 
         ll.extend([["2D Algorithm", c1[-1], 4, setting1],
                    ["3D Algorithm", c2[-1], 4, setting2],
@@ -454,13 +457,15 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                  None, None])
 
     def get_possible_child(self):
-        from .gmsh_mesh_actions import (TransfiniteLine, TransfiniteSurface, FreeFace,
+        from .gmsh_mesh_actions import (TransfiniteLine, TransfiniteSurface,
+                                        TransfiniteVolume, FreeFace,
                                         FreeVolume, FreeEdge, CharacteristicLength,
                                         CopyFace, CopyFaceRotate, RecombineSurface,
                                         ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve,
                                         CompoundSurface)
 
-        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine, TransfiniteSurface,
+        return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine,
+                TransfiniteSurface, TransfiniteVolume,
                 CharacteristicLength, CopyFace, CopyFaceRotate, RecombineSurface,
                 ExtrudeMesh, RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
 
@@ -471,7 +476,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 ('+Export', None, None),
                 ('Msh', self.onExportMsh, None),
                 ('STL', self.onExportSTL, None),
-                ('!', None, None),                                
+                ('!', None, None),
                 ('Clear mesh', self.onClearMesh, None),
                 ('Clear mesh sequense...', self.onClearMeshSq, None)]
 
@@ -532,7 +537,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                                  txt='Failed to export msh file',
                                  title='Error',
                                  traceback=traceback.format_exc())
-            
+
     def onExportSTL(self, evt):
         src = self.mesh_output
 
@@ -540,9 +545,9 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             import wx
             trash = wx.GetApp().GetTopWindow().proj.get_trash()
             src = os.path.join(trash, 'tmp0.msh')
-            
+
         if not os.path.exists(src):
-            import ifigure.widgets.dialog as dialog            
+            import ifigure.widgets.dialog as dialog
             ret = dialog.message(parent=dlg,
                                  message='Mesh must be created first',
                                  title='Can not export STL.',
@@ -569,7 +574,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                                  txt='Failed to export STL file',
                                  title='Error',
                                  traceback=traceback.format_exc())
-            
+
     def update_meshview(self, dlg, viewer, clear=False):
         import gmsh
         from petram.geom.read_gmsh import read_pts_groups, read_loops
@@ -790,7 +795,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                 else:
                     self._mesh_output = msh_output
                 '''
-                self._mesh_output = msh_output                    
+                self._mesh_output = msh_output
 
             else:
                 self._mesh_output = ''

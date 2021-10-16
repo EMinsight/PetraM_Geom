@@ -77,7 +77,9 @@ class TransfiniteSurface(GmshMeshActionBase):
         gid = self.eval_entity_id(gid)
 
         c = [int(x) for x in (e1, e2, e3, e4) if x.strip() != '']
-        mesher.add('transfinite_surface', gid, corner=c)
+        mesher.add('transfinite_surface', gid,
+                   corner=c,
+                   arrangement=self.transfinite_arrangement)
 
     def get_element_selection(self):
         self.vt.preprocess_params(self)
@@ -88,6 +90,73 @@ class TransfiniteSurface(GmshMeshActionBase):
         except BaseException:
             pass
         return ret, 'face'
+
+    def attribute_set(self, v):
+        v = super(TransfiniteSurface, self).attribute_set(v)
+        self.vt.attribute_set(v)
+        v["transfinite_arrangement"] = "Left"
+        return v
+
+    def panel1_param(self):
+        import wx
+        transfinite_arrangement_cb = [None, "Left", 4,
+                                      {"style": wx.CB_READONLY,
+                                       "choices": ["Left",
+                                                   "Right",
+                                                   "AlternateLeft",
+                                                   "AlternateRight"]}]
+
+        ll = super(TransfiniteSurface, self).panel1_param()
+        ll.append(transfinite_arrangement_cb)
+        return ll
+
+    def get_panel1_value(self):
+        v = super(TransfiniteSurface, self).get_panel1_value()
+        return v + [self.transfinite_arrangement]
+
+    def preprocess_params(self, engine):
+        self.vt.preprocess_params(self)
+        return
+
+    def import_panel1_value(self, v):
+        super(TransfiniteSurface, self).import_panel1_value(v[:-1])
+        self.transfinite_arrangement = v[-1]
+
+    def panel1_tip(self):
+        tip = super(TransfiniteSurface, self).panel1_tip()
+        return tip + ['arrangement of triangles', ]
+
+
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                  guilabel='Volume#',
+                                  default="",
+                                  tip="Surface ID")),
+        ('corners', VtableElement('corners', type='string',
+                                  guilabel='Corners (1/6/8pts)',
+                                  default="",
+                                  tip="Corners (1 or 6 or 8 points)")),)
+
+
+class TransfiniteVolume(GmshMeshActionBase):
+    dim = 3
+    vt = Vtable(data)
+
+    def add_meshcommand(self, mesher):
+        gid, pts = self.vt.make_value_or_expression(self)
+        gid = self.eval_entity_id(gid)
+
+        c = [int(x) for x in pts.split(',') if x.strip() != '']
+        mesher.add('transfinite_volume', gid, corner=c)
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)
+        ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
+        try:
+            ret['volume'] = [int(x) for x in gid.split(',')]
+        except BaseException:
+            pass
+        return ret, 'volume'
 
 
 data = (('geom_id', VtableElement('geom_id', type='string',
