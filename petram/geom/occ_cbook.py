@@ -62,7 +62,8 @@ try:
                                       BRepPrimAPI_MakeTorus,
                                       BRepPrimAPI_MakeCylinder,)
     from OCC.Core.BRepFilletAPI import (BRepFilletAPI_MakeFillet,
-                                        BRepFilletAPI_MakeChamfer)
+                                        BRepFilletAPI_MakeChamfer,
+                                        BRepFilletAPI_MakeFillet2d,)
     from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
                                         BRepOffsetAPI_MakeOffsetShape,
                                         BRepOffsetAPI_MakeOffset,

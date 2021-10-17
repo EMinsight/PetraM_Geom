@@ -1343,6 +1343,61 @@ class Chamfer(GeomPB):
     vt = Vtable(data0)
 
 
+class Fillet2D(GeomPB):
+    data0 = (('target_object', VtableElement('target_object',
+                                             type='string',
+                                             guilabel='Surface',
+                                             default="",
+                                             tip="object to add fillet")),
+             ('corner', VtableElement('corner', type='string',
+                                      guilabel='Corner points',
+                                      default="",
+                                      tip="corner to add fillet")),
+             ('radius', VtableElement('radisu', type='float',
+                                      guilabel='Radius',
+                                      default=1.0,
+                                      tip="radisu")),)
+
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Fillet'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Fillet'
+
+
+class Chamfer2D(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Surface',
+                                             default="",
+                                             tip="object to add chamfer")),
+             ('edges', VtableElement('edges', type='string',
+                                     guilabel='Pair of edges',
+                                     default="",
+                                     tip="Coner to add chamfer")),
+             ('distance1', VtableElement('distance1', type='float',
+                                         guilabel='1st distances',
+                                         default=1.0,
+                                         tip="distance")),
+             ('distance2', VtableElement('distance2', type='string',
+                                         guilabel='2d distances (optional)',
+                                         default='',
+                                         tip="distance")),)
+
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Chamfer'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Chamfer'
+
+
 data0 = (('target_object', VtableElement('target_object',
                                          type='string',
                                          guilabel='Objects (v/f/l/p)',
@@ -2198,6 +2253,7 @@ class WPBase(GeomPB):
                 Polygon2D, Spline2D,
                 Move2D, Rotate2D, Flip2D, Scale2D, Array2D,
                 Union2D, Intersection, Difference, Fragments, Copy, Remove,
+                Fillet2D, Chamfer2D,
                 CreateLine, CreateSurface, ProjectOnWP, OCCPolygon]
 
     def get_possible_child_menu(self):
@@ -2212,8 +2268,9 @@ class WPBase(GeomPB):
                 ("", Circle2DCenterOnePoint),
                 ("!", Circle2DByDiameter),
                 ("", Spline2D),
-                ("Create...", CreateLine), ("", CreateSurface), ("",
-                                                                 OCCPolygon), ("", CreateOffset), ("!", ProjectOnWP),
+                ("Create...", CreateLine), ("", CreateSurface),
+                ("", OCCPolygon), ("", CreateOffset), ("!", ProjectOnWP),
+                ("Fillet/Chamfer", Fillet2D), ("!", Chamfer2D),
                 ("Copy/Remove...", Copy), ("!", Remove),
                 ("Translate...", Move2D), ("", Rotate2D),
                 ("", Flip2D), ("", Scale2D), ("!", Array2D),

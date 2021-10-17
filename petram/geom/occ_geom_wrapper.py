@@ -1224,7 +1224,34 @@ class Geometry():
         result = f.Shape()
 
         result = self.select_highest_dim(result)
-        new_objs = self.register_shaps_balk(result)
+        new_objs = self.register_shaps_balk(result, self.shape)
+
+        return new_objs
+
+    def fillet2d(self, gid_face, gid_corners, radius):
+        comp = TopoDS_Compound()
+        self.builder.MakeCompound(comp)
+
+        topolist = self.get_topo_list_for_gid(gid_face)
+        shape = topolist[gid_face]
+        self.builder.Add(comp, shape)
+        self.remove(gid_face, recursive=True)
+
+        f = BRepFilletAPI_MakeFillet2d(shape)
+
+        for kk, gid in enumerate(gid_corners):
+            topolist = self.get_topo_list_for_gid(gid)
+            ptx = topolist[gid]
+            f.AddFillet(ptx, radius)
+
+        f.Build()
+        if not f.IsDone():
+            assert False, "Can not make fillet"
+
+        result = f.Shape()
+
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result, self.shape)
 
         return new_objs
 
@@ -1266,6 +1293,37 @@ class Geometry():
 
         result = self.select_highest_dim(result)
         new_objs = self.register_shaps_balk(result)
+
+        return new_objs
+
+    def chamfer2d(self, gid_face, gid_edges, e1, e2):
+        comp = TopoDS_Compound()
+        self.builder.MakeCompound(comp)
+
+        topolist = self.get_topo_list_for_gid(gid_face)
+        shape = topolist[gid_face]
+        self.builder.Add(comp, shape)
+        self.remove(gid_face, recursive=True)
+
+        f = BRepFilletAPI_MakeFillet2d(shape)
+
+        L = len(gid_edges)
+        for kk in range(L//2):
+            gid1 = gid_edges[2*kk]
+            gid2 = gid_edges[2*kk+1]
+            topolist = self.get_topo_list_for_gid(gid1)
+            l1 = topolist[gid1]
+            l2 = topolist[gid2]
+            f.AddChamfer(l1, l2, e1, e2)
+
+        f.Build()
+        if not f.IsDone():
+            assert False, "Can not make fillet"
+
+        result = f.Shape()
+
+        result = self.select_highest_dim(result)
+        new_objs = self.register_shaps_balk(result, self.shape)
 
         return new_objs
 
@@ -3954,7 +4012,50 @@ class Geometry():
         self.synchronize_topo_list()
         return list(objs), newkeys
 
+    def Fillet2D_build_geom(self, objs, *args):
+
+        faces, corners, radius = args
+        faces = [x.strip() for x in faces.split(',')]
+        corners = [x.strip() for x in corners.split(',')]
+
+        gid_face = self.get_target1(objs, faces, 'f')[0]
+        gid_corners = self.get_target1(objs, corners, 'p')
+
+        gids_new = self.fillet2d(gid_face, gid_corners, float(radius))
+
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'ps'))
+
+        self.synchronize_topo_list()
+        return list(objs), newkeys
+
+    def Chamfer2D_build_geom(self, objs, *args):
+
+        faces, edges, e1, e2 = args
+        if len(e2.strip()) == 0:
+            e2 = e1
+        else:
+            e2 = float(e1)
+        faces = [x.strip() for x in faces.split(',')]
+        edges = [x.strip() for x in edges.split(',')]
+
+        gid_face = self.get_target1(objs, faces, 'f')[0]
+        gid_edges = self.get_target1(objs, edges, 'l')
+
+        print(gid_edges)
+
+        gids_new = self.chamfer2d(gid_face, gid_edges, e1, e2)
+
+        newkeys = []
+        for gid in gids_new:
+            newkeys.append(objs.addobj(gid, 'ps'))
+
+        self.synchronize_topo_list()
+        return list(objs), newkeys
+
     # copy/remove
+
     def Copy_build_geom(self, objs, *args):
         targets = args[0]
         targets = [x.strip() for x in targets.split(',')]

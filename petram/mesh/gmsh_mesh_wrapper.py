@@ -1,7 +1,7 @@
 from __future__ import print_function
+import petram.debug
 from threading import Thread
 from queue import Queue
-import petram.debug as debug
 
 from petram.debug import timeit, use_profiler
 import petram.geom.gmsh_config as gmsh_config
@@ -34,20 +34,7 @@ HighOrderOptimize = OrderedDict((("none", 0),
                                  ("elastic+optimization", 2),
                                  ("elastic", 3),
                                  ("fast curving", 4)))
-debug = True
-debug2 = False
-
-dprint1, dprint2, dprint3 = debug.init_dprints('GMSHMeshWrapper')
-
-
-def dprint(*args):
-    if debug:
-        print(*args)
-
-
-def dprint2(*args):
-    if debug2:
-        print(*args)
+dprint1, dprint2, dprint3 = petram.debug.init_dprints('GMSHMeshWrapper')
 
 
 def get_vertex_geom_size(default_value):
@@ -199,6 +186,37 @@ def get_nodes_elements(ents, normalize=False):
     return mdata
 
 
+class trasnfinite_surface_wrap(dict):
+    def __init__(self):
+        super(trasnfinite_surface_wrap, self).__init__()
+        self['Right'] = []
+        self['Left'] = []
+        self['AlternateRight'] = []
+        self['AlternateLeft'] = []
+
+    def find_arrangement(self, face):
+        for x in self:
+            if face in self[x]:
+                return x
+        return None
+
+    def dump(self):
+        print('Right', self['Right'])
+        print('Left', self['Left'])
+
+    def set_arrangement(self, face, a, cornerTags=[]):
+        if a not in self:
+            assert False, "unknonw arrangement: " + a
+        if self.find_arrangement(face) is None:
+            gmsh.model.mesh.setTransfiniteSurface(face,
+                                                  arrangement=a,
+                                                  cornerTags=cornerTags)
+            self[a].append(face)
+        else:
+            assert self.find_arrangement(
+                face) == a,  "arrangement is enforced to something else:" + str(face)
+
+
 class GMSHMeshWrapper():
     workspace_base = 1
     gmsh_init = False
@@ -317,6 +335,8 @@ class GMSHMeshWrapper():
 
         done = [[], [], [], []]
         params = [None]*len(self.mesh_sequence)
+
+        self.TS_wrap = trasnfinite_surface_wrap()
 
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
@@ -1128,14 +1148,23 @@ class GMSHMeshWrapper():
         cornerTags = kwargs.get('corner', [])
 
         for dim, tag in dimtags:
+            a = self.TS_wrap.find_arrangement(tag)
+            if a is not None:
+                if a != arrangement:
+                    dprint1(
+                        "transfinite arragement is constrained by other factor...")
+                    arrangement = a
+
             if tag in done[2]:
                 print("Surface " + str(tag) + " is already meshed (skipping)")
                 continue
-            gmsh.model.mesh.setTransfiniteSurface(tag,
-                                                  arrangement=arrangement,
-                                                  cornerTags=cornerTags)
-
+            # gmsh.model.mesh.setTransfiniteSurface(tag,
+            #                                      arrangement=arrangement,
+            #                                      cornerTags=cornerTags)
+            self.TS_wrap.set_arrangement(
+                tag, arrangement, cornerTags=cornerTags)
             done[2].append(tag)
+
         return done, params
 
     @process_text_tags(dim=2)
@@ -1170,33 +1199,33 @@ class GMSHMeshWrapper():
     def transfinite_volume_0D(self, done, params, dimtags, *args, **kwargs):
         cornerTags = kwargs.get('corner', [])
         if len(cornerTags) == 0:
-            ptx = [x[0] for x in self.expand_dimtags(dimtags, return_dim=0)]
+            ptx = [x[1] for x in self.expand_dimtags(dimtags, return_dim=0)]
             assert len(
                 ptx) == 8, "automatic shape detection works only for a box-like shape. Give corners"
             cornerTags = [ptx[0]]
 
-        if len(cornerTags) == 1:
-            '''
-            in this case, we use the give vertex as corner stone
-            for volume mesh. this controls orientation of tets.
-            '''
+        def make_corner_loop(start):
             face_dimtags = self.expand_dimtags(dimtags, return_dim=2)
             edges_dimtags = self.expand_dimtags(dimtags, return_dim=1)
 
-            corners = []
+            corners = [start]
             for f in face_dimtags:
-
                 f_ptx = [x[1] for x in self.expand_dimtags([f], return_dim=0)]
-                if cornerTags[0] in f_ptx:
-                    check = False
-                    while not check:
-                        print(f_ptx)
-                        if f_ptx[0] == cornerTags[0]:
-                            corners.extend(f_ptx)
-                            check = True
-                        else:
-                            f_ptx = [f_ptx[-1]] + f_ptx[:-1]
+                if corners[0] in f_ptx:
+                    edge_dimtags2 = self.expand_dimtags([f], return_dim=1)
+                    ptx_pairs = [[x[1] for x in self.expand_dimtags([e], return_dim=0)]
+                                 for e in edge_dimtags2]
                     break
+
+            while len(corners) < 4:
+                for pp in ptx_pairs:
+                    if pp[0] == corners[-1] and pp[1] not in corners:
+                        corners.append(pp[1])
+                    elif pp[1] == corners[-1] and pp[0] not in corners:
+                        corners.append(pp[0])
+                    else:
+                        pass
+
             for c in corners[0:4]:
                 for e in edges_dimtags:
                     ptx = [x[1]
@@ -1209,8 +1238,185 @@ class GMSHMeshWrapper():
                         break
                     else:
                         pass
-            cornerTags = corners
+            return corners
 
+        corners = make_corner_loop(cornerTags[0])
+        cornerTags = corners
+        dprint1("Initial cornerTags", corners)
+
+        def pair_key(f, of):
+            return (min([f, of]), max([f, of]))
+
+        '''
+        find proper arrangements....
+        '''
+        corners = np.array(corners)
+
+        face_dimtags = self.expand_dimtags(dimtags, return_dim=2)
+        all_ptx = [x[1] for x in self.expand_dimtags(dimtags, return_dim=0)]
+        edge_tags = {f[1]: [x[1] for x in self.expand_dimtags([f], return_dim=1)]
+                     for f in face_dimtags}
+        all_edge_dimtags = self.expand_dimtags(dimtags, return_dim=1)
+        ptx_to_edge = {pair_key(*[x[1] for x in self.expand_dimtags([e], return_dim=0)]): e[1]
+                       for e in all_edge_dimtags}
+
+        corner_edges = [ptx_to_edge[pair_key(corners[0], corners[1])],
+                        ptx_to_edge[pair_key(corners[0], corners[3])],
+                        ptx_to_edge[pair_key(corners[0], corners[4])]]
+        '''
+        these edges starts from the first corner points
+        '''
+        faces = list(edge_tags)
+
+        def opposite_face(f):
+            edges = edge_tags[f]
+            for key in edge_tags:
+                if len(np.unique(edges + edge_tags[key])) == 8:
+                    return key
+
+        def check_shift(f):
+            edges1 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, f)], oriented=False, combined=False)]
+            check = np.in1d(edges1, corner_edges)
+            if (check[0] and check[1]) or (check[2] and check[3]):
+                return 'Right'
+            if (check[1] and check[2]) or (check[0] and check[3]):
+                return 'Left'
+            return None
+
+        left_right = ({f: check_shift(f) for f in faces})
+
+        def check_orientation_pair(f, of):
+            edges1 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, f)], oriented=False, combined=False)]
+            edges2 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, of)], oriented=False, combined=False)]
+
+            print("  --- edges", f, edges1, edges2)
+            edges2_mapped = []
+            for e1 in edges1:
+                for e2 in edges2:
+                    found = False
+                    for f in edge_tags:
+                        if e1 in edge_tags[f] and e2 in edge_tags[f]:
+                            edges2_mapped.append(e2)
+                            found = True
+                            break
+                    if found:
+                        break
+            while edges2[0] != edges2_mapped[0]:
+                edges2_mapped = [edges2_mapped[-1]]+edges2_mapped[:-1]
+            #print("  --- mapped_edges", edges1, edges2_mapped)
+            return edges2_mapped[1] == edges2[1]
+
+        face_done = {f: False for f in faces}
+        face_pairs = []
+        for f in faces:
+            if face_done[f]:
+                continue
+
+            if left_right[f] is not None:
+                of = opposite_face(f)
+                face_pairs.append(pair_key(f, of))
+                face_done[f] = True
+                face_done[of] = True
+                isgood = check_orientation_pair(f, of)
+                if left_right[f] == 'Right':
+                    if isgood:
+                        left_right[of] = 'Right'
+                    else:
+                        left_right[of] = 'Left'
+                if left_right[f] == 'Left':
+                    if isgood:
+                        left_right[of] = 'Left'
+                    else:
+                        left_right[of] = 'Right'
+                face_done[f] = True
+                face_done[of] = True
+
+            else:
+                continue
+        dprint1("Left/Right choice", left_right)
+        swap_count = 0
+        swap_pairs = [-1, -1, -1]
+        for f in faces:
+            known_a = self.TS_wrap.find_arrangement(f)
+            if known_a is None:
+                continue
+
+            if (known_a == 'Right' and left_right[f] == 'Left' or
+                    known_a == 'Left' and left_right[f] == 'Right'):
+                for i in range(3):
+                    if f in face_pairs[i]:
+                        if swap_pairs[i] == -1:
+                            swap_pairs[i] = 1
+                            swap_count = swap_count + 1
+                        elif swap_pairs[i] == 1:
+                            pass
+                        else:
+                            assert False, "requirement for face arrangement contradicts"
+            else:
+                for i in range(3):
+                    if f in face_pairs[i]:
+                        if swap_pairs[i] == -1:
+                            swap_pairs[i] = 0
+                        elif swap_pairs[i] == 0:
+                            pass
+                        else:
+                            assert False, "requirement for face arrangement contradicts"
+
+        # I can swap two togehter or none.
+        if swap_count == 0:
+            pass
+        elif swap_count == 1:
+            for i in range(3):
+                if swap_pairs[i] == -1 or swap_pairs[i] == 0:
+                    swap_pairs[i] = 1
+                    break
+        elif swap_count == 2:
+            pass
+        elif swap_count == 3:
+            dprint1(
+                "swap-count is 3, resulttant TransfinteVolume is incorrect. Conintue to show the surface plot")
+
+        for i in range(3):
+            if swap_pairs[i] == 1:
+                for f in face_pairs[i]:
+                    print(f)
+                    left_right[f] = 'Left' if left_right[f] == 'Right' else 'Right'
+
+        for f in faces:
+            if self.TS_wrap.find_arrangement(f) is None:
+                self.TS_wrap.set_arrangement(f, left_right[f])
+        dprint1("Left/Right choice(after adjustment)", left_right)
+
+        def common_ptx(e1, e2):
+            p1 = [x[1] for x in self.expand_dimtags([(1, e1)], return_dim=0)]
+            p2 = [x[1] for x in self.expand_dimtags([(1, e2)], return_dim=0)]
+            a = np.intersect1d(p1, p2)
+            return int(a[0])
+
+        good_count = {x: 0 for x in all_ptx}
+        for f in faces:
+            edges1 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, f)], oriented=False, combined=False)]
+            if left_right[f] == 'Right':
+                p1 = common_ptx(edges1[0], edges1[1])
+                p2 = common_ptx(edges1[2], edges1[3])
+                good_count[p1] = good_count[p1] + 1
+                good_count[p2] = good_count[p2] + 1
+            elif left_right[f] == 'Left':
+                p1 = common_ptx(edges1[0], edges1[-1])
+                p2 = common_ptx(edges1[1], edges1[2])
+                good_count[p1] = good_count[p1] + 1
+                good_count[p2] = good_count[p2] + 1
+
+        for x in good_count:
+            if good_count[x] == 3:
+                corners = make_corner_loop(x)
+                cornerTags = corners
+                break
+        dprint1("Adjusted corner parameter", cornerTags)
         for dim, tag in dimtags:
             if tag in done[3]:
                 print("Volume " + str(tag) + " is already meshed (skipping)")
@@ -1228,6 +1434,12 @@ class GMSHMeshWrapper():
 
     @process_text_tags(dim=3)
     def transfinite_volume_2D(self, done, params, dimtags, *args, **kwargs):
+        dimtags = self.expand_dimtags(dimtags, return_dim=2)
+        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
+
+        self.show_only(dimtags)
+        gmsh.model.mesh.generate(2)
+        done[2].extend([x for dim, x in dimtags])
         return done, params
 
     @process_text_tags(dim=3)
@@ -1235,32 +1447,21 @@ class GMSHMeshWrapper():
         '''
         checking orientation of triangles
         '''
-        cornerTags = kwargs.get('corner', [])
-        corners = params[0]
-        if len(cornerTags) == 0:
-            ptx = [x[0] for x in self.expand_dimtags(dimtags, return_dim=0)]
-            assert len(
-                ptx) == 8, "automatic shape detection works only for a box-like shape. Give corners"
-            cornerTags = [ptx[0]]
-        if len(cornerTags) == 1:
-            c1 = corners[0]
-            c2 = corners[-2]
+        cornerTags = params[0]
+        check = False
+        for c in cornerTags:
+            total = 0
             face_dimtags = self.expand_dimtags(dimtags, return_dim=2)
             for dim, tag in face_dimtags:
                 edata = gmsh.model.mesh.getElements(dim, tag)
-                number_of_element_contains_c1 = np.sum(
-                    [np.sum(x == c1) for x in edata[2]])
-                number_of_element_contains_c2 = np.sum(
-                    [np.sum(x == c2) for x in edata[2]])
-                print(number_of_element_contains_c1,
-                      number_of_element_contains_c2)
-                if number_of_element_contains_c1 >= 2:
-                    assert False, "face " + \
-                        str(tag) + " contains more than one element involving corner stone (change arrangement)"
-                if number_of_element_contains_c2 >= 2:
-                    assert False, "face " + \
-                        str(tag) + " contains more than one element involving corner stone (change arrangement)"
+                number_of_element_contains_c = np.sum(
+                    [np.sum(x == c) for x in edata[2]])
+                total = total + number_of_element_contains_c
 
+            if total == 3:
+                check = True
+
+        assert check, "No corner satisfies corner stone requirment (change arrangement)"
         dimtags = [x for x in dimtags if not x[1] in done[3]]
         self.show_only(dimtags)
         gmsh.model.mesh.generate(3)
