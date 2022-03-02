@@ -54,7 +54,6 @@ class Point(GeomPB):
     def fancy_tree_name(self):
         return 'Point'
 
-
 class PointOCC(Point):
     vt = Vtable(pdata)
 

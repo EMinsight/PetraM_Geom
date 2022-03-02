@@ -295,7 +295,7 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         gmsh.option.setNumber("General.ExpertMode",
                               1 if self.use_expert_mode else 0)
-        self.maxthreads = (3, 3, 3, 3)
+        #self.maxthreads = (8, 8, 8, 8)
         gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])

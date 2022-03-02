@@ -5921,7 +5921,7 @@ class OCCGeometryGeneratorBase():
 
             if task[0] == 3:
                 try:
-                    print("exporting", task[1])
+                    #print("exporting", task[1])
                     ret = self.mw.export_shapes(*task[1])
                     self.q.put((True, ('success', ret)))
                 except BaseException:
@@ -5930,7 +5930,7 @@ class OCCGeometryGeneratorBase():
 
             if task[0] == 4:
                 try:
-                    print("exporting (STEP/STL)", task[1])
+                    #print("exporting (STEP/STL)", task[1])
                     ret = self.mw.export_shapes_step(*task[1])
                     self.q.put((True, ('success', ret)))
                 except BaseException:

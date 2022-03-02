@@ -752,6 +752,8 @@ class GmshMesh(GMeshTop, Vtable_mixin):
             line_idx = self.geom_root.geom_data[2]['line']['geometrical']
             edge_tss = (ptx2, idx2, line_idx)
 
+            import multiprocessing as mp
+            num_th = max([mp.cpu_count()-1, 1])
             kwargs = {'CharacteristicLengthMax': clmax,
                       'CharacteristicLengthMin': clmin,
                       'EdgeResolution': 3,
@@ -767,7 +769,7 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                       'trash': trash,
                       'gen_all_phys_entity': self.gen_all_phys_entity,
                       'meshformat': 2.2,
-                      'MaxThreads': [1, 1, 1, 1],
+                      'MaxThreads': [num_th, num_th, num_th, num_th],
                       'edge_tss': edge_tss}
 
             if self.mesh_output != '':

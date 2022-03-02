@@ -15,11 +15,11 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                   default=5,
                                   tip="Number of segments")),
         ('progression', VtableElement('progression', type='float',
-                                      guilabel='Progression',
+                                      guilabel='Progression (> 0)',
                                       default=1.0,
                                       tip="Progression")),
         ('bump', VtableElement('bump', type='float',
-                               guilabel='Bump',
+                               guilabel='Bump (> 0)',
                                default=1.0,
                                tip="Bump")),)
 
