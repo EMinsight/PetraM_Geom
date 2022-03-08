@@ -72,6 +72,8 @@ def map_points_in_geom_info(info1, info2, th=1e-10):
     dist = np.array([np.min(np.sum((ptx1 - ptx2[k, :])**2, 1))for k in iv2p2])
     if np.any(dist > th):
         print(dist)
+        print("ptx1", ptx1)
+        print("ptx2", ptx2)        
         assert False, "could not able to find vertex mapping"
 
     # {point in info2 : point in info1}
@@ -203,12 +205,10 @@ def find_translate_between_surface(src, dst, edge_tss, geom=None,
     p1 = ptx[i1, :]
     p2 = ptx[i2, :]
 
-    n1 = find_normal_from_edgedata(edge_tss, l1)
-    n2 = find_normal_from_edgedata(edge_tss, l2)
-    #n1 = normal2points(p1)
-    #n2 = normal2points(p2)
-
     if axan is None:
+        n1 = find_normal_from_edgedata(edge_tss, l1)
+        n2 = find_normal_from_edgedata(edge_tss, l2)
+
         ax = n1
         an = 0.0
 
@@ -225,7 +225,7 @@ def find_translate_between_surface(src, dst, edge_tss, geom=None,
         ax, an = axan
         ax = np.array(ax, dtype=float)
         ax = ax / np.linalg.norm(ax)
-        an = np.pi / 180. * an
+        an = 0.0
 
     def find_mapping(ax, an, p1, p2):
         if an != 0.0:

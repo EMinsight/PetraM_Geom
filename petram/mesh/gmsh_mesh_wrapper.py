@@ -1,4 +1,7 @@
 from __future__ import print_function
+import petram.debug
+from threading import Thread
+from queue import Queue
 
 from petram.debug import timeit, use_profiler
 import petram.geom.gmsh_config as gmsh_config
@@ -16,10 +19,10 @@ from six.moves.queue import Empty as QueueEmpty
 
 from collections import OrderedDict
 Algorithm2D = OrderedDict((("MeshAdap", 1), ("Automatic", 2), ("Delaunay", 5),
-                           ("Frontal", 6), ("BAMG", 7), 
+                           ("Frontal", 6), ("BAMG", 7),
                            ("FrrontalQuad", 8), ("Paking of parallelograms", 9),
                            ("default", 2)))
-Algorithm3D = OrderedDict((("Delaunay", 1), 
+Algorithm3D = OrderedDict((("Delaunay", 1),
                            ("Frontal", 4),
                            ("HXT", 10), ("MMG3D", 7),
                            ("R-tree", 9), ("default", 1)))
@@ -31,20 +34,7 @@ HighOrderOptimize = OrderedDict((("none", 0),
                                  ("elastic+optimization", 2),
                                  ("elastic", 3),
                                  ("fast curving", 4)))
-debug = True
-debug2 = False
-
-import petram.debug as debug
-dprint1, dprint2, dprint3 = debug.init_dprints('GMSHMeshWrapper')
-
-def dprint(*args):
-    if debug:
-        print(*args)
-
-
-def dprint2(*args):
-    if debug2:
-        print(*args)
+dprint1, dprint2, dprint3 = petram.debug.init_dprints('GMSHMeshWrapper')
 
 
 def get_vertex_geom_size(default_value):
@@ -53,7 +43,7 @@ def get_vertex_geom_size(default_value):
     lcar = defaultdict(lambda: np.inf)
     for dim, tag in gmsh.model.getEntities(0):
         lcar[tag] = default_value
-        
+
     for dim, tag in gmsh.model.getEntities(1):
         x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
         s = ((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2)**0.5
@@ -149,19 +139,20 @@ def set_restore_maxmin_cl(method):
             value = self.clmax
         kwargs['maxsize'] = value
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", value)
-        
+
         if minsize != 0:
             value = minsize
         else:
             value = self.clmin
         kwargs['minsize'] = value
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", value)        
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", value)
 
         ret = method(self, *args, **kwargs)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
         return ret
     return wrapped2
+
 
 def check_line_orientation(ltag, vtags, pcoord):
     p1 = np.array(gmsh.model.getValue(0, vtags[0], [0]))
@@ -195,6 +186,37 @@ def get_nodes_elements(ents, normalize=False):
     return mdata
 
 
+class trasnfinite_surface_wrap(dict):
+    def __init__(self):
+        super(trasnfinite_surface_wrap, self).__init__()
+        self['Right'] = []
+        self['Left'] = []
+        self['AlternateRight'] = []
+        self['AlternateLeft'] = []
+
+    def find_arrangement(self, face):
+        for x in self:
+            if face in self[x]:
+                return x
+        return None
+
+    def dump(self):
+        print('Right', self['Right'])
+        print('Left', self['Left'])
+
+    def set_arrangement(self, face, a, cornerTags=[]):
+        if a not in self:
+            assert False, "unknonw arrangement: " + a
+        if self.find_arrangement(face) is None:
+            gmsh.model.mesh.setTransfiniteSurface(face,
+                                                  arrangement=a,
+                                                  cornerTags=cornerTags)
+            self[a].append(face)
+        else:
+            assert self.find_arrangement(
+                face) == a,  "arrangement is enforced to something else:" + str(face)
+
+
 class GMSHMeshWrapper():
     workspace_base = 1
     gmsh_init = False
@@ -216,11 +238,11 @@ class GMSHMeshWrapper():
         self.edge_tss = kwargs.pop("edge_tss", None)
         self.mesh_sequence = kwargs.pop("mesh_sequence", [])
         self.use_ho = kwargs.pop("use_ho", False)
-        self.ho_order = kwargs.pop("ho_order", 2)        
+        self.ho_order = kwargs.pop("ho_order", 2)
         self.optimize_ho = kwargs.pop("optimize_ho", 0)
-        self.optimize_dom = kwargs.pop("optimize_dom", "all")        
+        self.optimize_dom = kwargs.pop("optimize_dom", "all")
         self.mapper_tol = kwargs.pop("mapper_tol", 1e-5)
-        
+
         gmsh.clear()
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", meshformat)
@@ -269,11 +291,11 @@ class GMSHMeshWrapper():
                               AlgorithmR[self.algorithmr])
         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.clmax)
         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.clmin)
-        
+
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
         gmsh.option.setNumber("General.ExpertMode",
                               1 if self.use_expert_mode else 0)
-        self.maxthreads = (3,3,3,3)
+        #self.maxthreads = (8, 8, 8, 8)
         gmsh.option.setNumber("General.NumThreads",   self.maxthreads[0])
         gmsh.option.setNumber("Mesh.MaxNumThreads1D", self.maxthreads[1])
         gmsh.option.setNumber("Mesh.MaxNumThreads2D", self.maxthreads[2])
@@ -281,18 +303,19 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("Mesh.Optimize", 0)
         #gmsh.option.setNumber('Geometry.ReparamOnFaceRobust', 1)
 
-        #if self.use_ho:
+        # if self.use_ho:
         #    gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
         #    gmsh.option.setNumber("Mesh.HighOrderOptimize",
         #                          HighOrderOptimize[self.optimize_ho])
-        
+
         self.target_entities0 = (gmsh.model.getEntities(3),
                                  gmsh.model.getEntities(2),
                                  gmsh.model.getEntities(1),
                                  gmsh.model.getEntities(0))
         self.target_entities = gmsh.model.getEntities()
         #
-        self.vertex_geom_size = get_vertex_geom_size((self.clmin+self.clmax)/2.0)
+        self.vertex_geom_size = get_vertex_geom_size(
+            (self.clmin+self.clmax)/2.0)
 
         # set default vertex mesh size
         self.cl_data = {}
@@ -303,7 +326,7 @@ class GMSHMeshWrapper():
                 size = self.clmax
             if size <= self.clmin:
                 size = self.clmin
-                
+
             self.setCL(((0, tag),), size)
             sizes.append(size)
             #print("Default Point Size", (0, tag), size)
@@ -312,6 +335,8 @@ class GMSHMeshWrapper():
 
         done = [[], [], [], []]
         params = [None]*len(self.mesh_sequence)
+
+        self.TS_wrap = trasnfinite_surface_wrap()
 
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
@@ -345,31 +370,32 @@ class GMSHMeshWrapper():
 
             for i in range(mdim+1, 4):
                 done[i] = []
-                
+
         if self.use_ho:
             # using this option makes "computing connectivity and bad
             # elements very slow"
-            gmsh.option.setNumber("Mesh.HighOrderDistCAD", 0)            
+            gmsh.option.setNumber("Mesh.HighOrderDistCAD", 0)
             gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
-            #gmsh.option.setNumber("Mesh.HighOrderOptimize",
+            # gmsh.option.setNumber("Mesh.HighOrderOptimize",
             #                       HighOrderOptimize[self.optimize_ho])
             self.hide_all()
             gmsh.model.mesh.generate(3)
 
             #
-            #self.show_all()
+            # self.show_all()
             maxdim = max([x for x, tag in gmsh.model.getEntities()])
             if self.optimize_dom.lower() == 'all':
                 dimTags = gmsh.model.getEntities(maxdim)
             else:
-                dimTags = [(maxdim, int(x)) for x in self.optimize_dom.split(',')]
+                dimTags = [(maxdim, int(x))
+                           for x in self.optimize_dom.split(',')]
 
             #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
-            #self.show_all()
-            # it is not well-written but I have to include all 
+            # self.show_all()
+            # it is not well-written but I have to include all
             # boundaries
             # elastic seems to apply for everything anyway ???
-            self.show_only(dimTags, recursive=True)            
+            self.show_only(dimTags, recursive=True)
             if maxdim == 3:
                 dimTags1 = gmsh.model.getBoundary(dimTags)
                 dimTags2 = gmsh.model.getBoundary(dimTags1)
@@ -398,18 +424,20 @@ class GMSHMeshWrapper():
                 gmsh.option.setNumber("Mesh.HighOrderThresholdMin", 0.1)
 
                 if HighOrderOptimize[self.optimize_ho] == 1:
-                     gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)                
+                    gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)
                 elif HighOrderOptimize[self.optimize_ho] == 2:
-                     gmsh.model.mesh.optimize("HighOrderElastic", dimTags=dimTags)                
-                     gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)                
+                    gmsh.model.mesh.optimize(
+                        "HighOrderElastic", dimTags=dimTags)
+                    gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)
                 elif HighOrderOptimize[self.optimize_ho] == 3:
-                     gmsh.model.mesh.optimize("HighOrderElastic", dimTags=dimTags)
+                    gmsh.model.mesh.optimize(
+                        "HighOrderElastic", dimTags=dimTags)
                 elif HighOrderOptimize[self.optimize_ho] == 4:
-                     gmsh.model.mesh.optimize("HighOrderFastCurving", dimTags=dimTags)
+                    gmsh.model.mesh.optimize(
+                        "HighOrderFastCurving", dimTags=dimTags)
                 else:
                     pass
 
-            
         gmsh.model.mesh.removeDuplicateNodes()
 
         # somehow add_physical is very slow when there are too many physicals...
@@ -593,9 +621,9 @@ class GMSHMeshWrapper():
         while dimtags[0][0] != return_dim:
             bdimtags = []
             for dimtag in dimtags:
-                bdimtags.extend(gmsh.model.getBoundary([dimtag,],
-                                                      combined=False,
-                                                      oriented=False))
+                bdimtags.extend(gmsh.model.getBoundary([dimtag, ],
+                                                       combined=False,
+                                                       oriented=False))
             dimtags = tuple(set(tuple(bdimtags)))
         return list(dimtags)
         '''
@@ -644,14 +672,14 @@ class GMSHMeshWrapper():
         gmsh.model.setCurrent(self.current)
 
     def edit_msh_to_add_sequential_physicals(self, tmp_file, filename, verbose=True):
-        
+
         from petram.mesh.gmsh_helper import edit_msh_to_add_sequential_physicals
 
         edit_msh_to_add_sequential_physicals(tmp_file,
                                              filename,
                                              gen_all_phys_entity=self.gen_all_phys_entity,
                                              verbose=verbose)
-       
+
     def add_sequential_physicals(self, verbose=True):
         '''
         add sequencial physical entity numbers
@@ -723,17 +751,17 @@ class GMSHMeshWrapper():
 
     def check_algorith_dim(self):
         dims = {'cl': 0,
-                'freevolume':3,
-                'freeface':2,
-                'freeedge':1,
-                'transfinite_volume':3,
-                'transfinite_face':2,
-                'transfinite_edge':1,
-                'recombine_surface':0,
-                'copyface':2,
-                'extrude_face':2,
-                'revolve_face':2,
-                'mergetxt':0,
+                'freevolume': 3,
+                'freeface': 2,
+                'freeedge': 1,
+                'transfinite_volume': 3,
+                'transfinite_face': 2,
+                'transfinite_edge': 1,
+                'recombine_surface': 0,
+                'copyface': 2,
+                'extrude_face': 2,
+                'revolve_face': 2,
+                'mergetxt': 0,
                 }
         d = []
         for sq in self.mesh_sequence:
@@ -744,8 +772,8 @@ class GMSHMeshWrapper():
 
     def setCL(self, dimtags, size):
         for dimtag in dimtags:
-           self.cl_data[dimtag] = size
-        gmsh.model.mesh.setSize(dimtags, size)        
+            self.cl_data[dimtag] = size
+        gmsh.model.mesh.setSize(dimtags, size)
     '''
     Low-level implementation at each mesh dim
     '''
@@ -853,7 +881,7 @@ class GMSHMeshWrapper():
                 size = maxsize
             if size < minsize:
                 size = minsize
-            self.setCL(((0, tag), ), size)                
+            self.setCL(((0, tag), ), size)
             #print("Volume Set Point Size", (0, tag), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
@@ -913,7 +941,7 @@ class GMSHMeshWrapper():
             gmsh.option.setNumber("Mesh.Algorithm",
                                   Algorithm2D[self.algorithm])
         else:
-            gmsh.model.mesh.generate(2)        
+            gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in dimtags])
         return done, params
 
@@ -932,8 +960,8 @@ class GMSHMeshWrapper():
             gmsh.option.setNumber("Mesh.Algorithm3D",
                                   Algorithm3D[self.algorithm3d])
         else:
-            gmsh.model.mesh.generate(3)            
-        
+            gmsh.model.mesh.generate(3)
+
         done[3].extend([x for dim, x in tags])
         return done, params
 
@@ -999,7 +1027,7 @@ class GMSHMeshWrapper():
         gmsh.model.mesh.generate(1)
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 0)
         done[1].extend([x for dim, x in dimtags])
-        
+
         return done, params
 
     @set_restore_maxmin_cl
@@ -1012,13 +1040,13 @@ class GMSHMeshWrapper():
         alg2d = kwargs.get("alg2d", "default")
         if alg2d != 'default':
             gmsh.option.setNumber("Mesh.Algorithm",
-                                    Algorithm2D[alg2d])
+                                  Algorithm2D[alg2d])
             gmsh.model.mesh.generate(2)
             gmsh.option.setNumber("Mesh.Algorithm",
-                                   Algorithm2D[self.algorithm])
+                                  Algorithm2D[self.algorithm])
         else:
-            gmsh.model.mesh.generate(2)            
-        
+            gmsh.model.mesh.generate(2)
+
         done[2].extend([x for dim, x in tags])
         return done, params
 
@@ -1053,7 +1081,7 @@ class GMSHMeshWrapper():
                 size = maxsize
             if size <= minsize:
                 size = minsize
-            self.setCL(((0, tag), ), size)                
+            self.setCL(((0, tag), ), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
         return done, params
@@ -1081,7 +1109,6 @@ class GMSHMeshWrapper():
     # transfinite_edge
     @process_text_tags(dim=1)
     def transfinite_edge_0D(self, done, params, dimtags, *args, **kwargs):
-        #meher.add('transfinite_line', gid, nseg=nseg, progression = p,  bump = b)
         nseg = kwargs.get('nseg', 100) + 1
 
         meshType = 'Progression'
@@ -1117,33 +1144,42 @@ class GMSHMeshWrapper():
     # transfinite_face
     @process_text_tags(dim=2)
     def transfinite_surface_0D(self, done, params, dimtags, *args, **kwargs):
-        return done, params
-
-    @process_text_tags(dim=2)
-    def transfinite_surface_1D(self, done, params, dimtags, *args, **kwargs):
-        arrangement = kwargs.get('arrangement', 'Left')
-        cornerTags = kwargs.get('corner', [])
-        #print('Corner', cornerTags)
-
-        # for now, we don't do anything
-        # we could add a step to try trasnsfinite remaining (not-yet-meshed)
-        # edeges
-        return done, params
-
-    @process_text_tags(dim=2)
-    def transfinite_surface_2D(self, done, params, dimtags, *args, **kwargs):
         arrangement = kwargs.get('arrangement', 'Left')
         cornerTags = kwargs.get('corner', [])
 
         for dim, tag in dimtags:
+            a = self.TS_wrap.find_arrangement(tag)
+            if a is not None:
+                if a != arrangement:
+                    dprint1(
+                        "transfinite arragement is constrained by other factor...")
+                    arrangement = a
+
             if tag in done[2]:
                 print("Surface " + str(tag) + " is already meshed (skipping)")
                 continue
-            gmsh.model.mesh.setTransfiniteSurface(tag,
-                                                  arrangement=arrangement,
-                                                  cornerTags=cornerTags)
+            # gmsh.model.mesh.setTransfiniteSurface(tag,
+            #                                      arrangement=arrangement,
+            #                                      cornerTags=cornerTags)
+            self.TS_wrap.set_arrangement(
+                tag, arrangement, cornerTags=cornerTags)
+            done[2].append(tag)
 
-        dimtags = [x for x in dimtags if not x[1] in done[2]]
+        return done, params
+
+    @process_text_tags(dim=2)
+    def transfinite_surface_1D(self, done, params, dimtags, *args, **kwargs):
+        dimtags = self.expand_dimtags(dimtags, return_dim=1)
+        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
+
+        print("meshing ", dimtags, "transfinite_surface_1D")
+        self.show_only(dimtags)
+        gmsh.model.mesh.generate(1)
+        done[1].extend([x for dim, x in dimtags])
+        return done, params
+
+    @process_text_tags(dim=2)
+    def transfinite_surface_2D(self, done, params, dimtags, *args, **kwargs):
         self.show_only(dimtags)
         gmsh.model.mesh.generate(2)
         done[2].extend([x for dim, x in dimtags])
@@ -1159,35 +1195,278 @@ class GMSHMeshWrapper():
     transfinite_face_3D = transfinite_surface_3D
 
     # transfinite_volume
-    @process_text_tags(dim=2)
+    @process_text_tags(dim=3)
     def transfinite_volume_0D(self, done, params, dimtags, *args, **kwargs):
+        cornerTags = kwargs.get('corner', [])
+        if len(cornerTags) == 0:
+            ptx = [x[1] for x in self.expand_dimtags(dimtags, return_dim=0)]
+            assert len(
+                ptx) == 8, "automatic shape detection works only for a box-like shape. Give corners"
+            cornerTags = [ptx[0]]
+
+        def make_corner_loop(start):
+            face_dimtags = self.expand_dimtags(dimtags, return_dim=2)
+            edges_dimtags = self.expand_dimtags(dimtags, return_dim=1)
+
+            corners = [start]
+            for f in face_dimtags:
+                f_ptx = [x[1] for x in self.expand_dimtags([f], return_dim=0)]
+                if corners[0] in f_ptx:
+                    edge_dimtags2 = self.expand_dimtags([f], return_dim=1)
+                    ptx_pairs = [[x[1] for x in self.expand_dimtags([e], return_dim=0)]
+                                 for e in edge_dimtags2]
+                    break
+
+            while len(corners) < 4:
+                for pp in ptx_pairs:
+                    if pp[0] == corners[-1] and pp[1] not in corners:
+                        corners.append(pp[1])
+                    elif pp[1] == corners[-1] and pp[0] not in corners:
+                        corners.append(pp[0])
+                    else:
+                        pass
+
+            for c in corners[0:4]:
+                for e in edges_dimtags:
+                    ptx = [x[1]
+                           for x in self.expand_dimtags([e], return_dim=0)]
+                    if ptx[0] == c and ptx[1] not in corners:
+                        corners.append(ptx[1])
+                        break
+                    elif ptx[1] == c and ptx[0] not in corners:
+                        corners.append(ptx[0])
+                        break
+                    else:
+                        pass
+            return corners
+
+        corners = make_corner_loop(cornerTags[0])
+        cornerTags = corners
+        dprint1("Initial cornerTags", corners)
+
+        def pair_key(f, of):
+            return (min([f, of]), max([f, of]))
+
+        '''
+        find proper arrangements....
+        '''
+        corners = np.array(corners)
+
+        face_dimtags = self.expand_dimtags(dimtags, return_dim=2)
+        all_ptx = [x[1] for x in self.expand_dimtags(dimtags, return_dim=0)]
+        edge_tags = {f[1]: [x[1] for x in self.expand_dimtags([f], return_dim=1)]
+                     for f in face_dimtags}
+        all_edge_dimtags = self.expand_dimtags(dimtags, return_dim=1)
+        ptx_to_edge = {pair_key(*[x[1] for x in self.expand_dimtags([e], return_dim=0)]): e[1]
+                       for e in all_edge_dimtags}
+
+        corner_edges = [ptx_to_edge[pair_key(corners[0], corners[1])],
+                        ptx_to_edge[pair_key(corners[0], corners[3])],
+                        ptx_to_edge[pair_key(corners[0], corners[4])]]
+        '''
+        these edges starts from the first corner points
+        '''
+        faces = list(edge_tags)
+
+        def opposite_face(f):
+            edges = edge_tags[f]
+            for key in edge_tags:
+                if len(np.unique(edges + edge_tags[key])) == 8:
+                    return key
+
+        def check_shift(f):
+            edges1 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, f)], oriented=False, combined=False)]
+            check = np.in1d(edges1, corner_edges)
+            if (check[0] and check[1]) or (check[2] and check[3]):
+                return 'Right'
+            if (check[1] and check[2]) or (check[0] and check[3]):
+                return 'Left'
+            return None
+
+        left_right = ({f: check_shift(f) for f in faces})
+
+        def check_orientation_pair(f, of):
+            edges1 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, f)], oriented=False, combined=False)]
+            edges2 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, of)], oriented=False, combined=False)]
+
+            print("  --- edges", f, edges1, edges2)
+            edges2_mapped = []
+            for e1 in edges1:
+                for e2 in edges2:
+                    found = False
+                    for f in edge_tags:
+                        if e1 in edge_tags[f] and e2 in edge_tags[f]:
+                            edges2_mapped.append(e2)
+                            found = True
+                            break
+                    if found:
+                        break
+            while edges2[0] != edges2_mapped[0]:
+                edges2_mapped = [edges2_mapped[-1]]+edges2_mapped[:-1]
+            #print("  --- mapped_edges", edges1, edges2_mapped)
+            return edges2_mapped[1] == edges2[1]
+
+        face_done = {f: False for f in faces}
+        face_pairs = []
+        for f in faces:
+            if face_done[f]:
+                continue
+
+            if left_right[f] is not None:
+                of = opposite_face(f)
+                face_pairs.append(pair_key(f, of))
+                face_done[f] = True
+                face_done[of] = True
+                isgood = check_orientation_pair(f, of)
+                if left_right[f] == 'Right':
+                    if isgood:
+                        left_right[of] = 'Right'
+                    else:
+                        left_right[of] = 'Left'
+                if left_right[f] == 'Left':
+                    if isgood:
+                        left_right[of] = 'Left'
+                    else:
+                        left_right[of] = 'Right'
+                face_done[f] = True
+                face_done[of] = True
+
+            else:
+                continue
+        dprint1("Left/Right choice", left_right)
+        swap_count = 0
+        swap_pairs = [-1, -1, -1]
+        for f in faces:
+            known_a = self.TS_wrap.find_arrangement(f)
+            if known_a is None:
+                continue
+
+            if (known_a == 'Right' and left_right[f] == 'Left' or
+                    known_a == 'Left' and left_right[f] == 'Right'):
+                for i in range(3):
+                    if f in face_pairs[i]:
+                        if swap_pairs[i] == -1:
+                            swap_pairs[i] = 1
+                            swap_count = swap_count + 1
+                        elif swap_pairs[i] == 1:
+                            pass
+                        else:
+                            assert False, "requirement for face arrangement contradicts"
+            else:
+                for i in range(3):
+                    if f in face_pairs[i]:
+                        if swap_pairs[i] == -1:
+                            swap_pairs[i] = 0
+                        elif swap_pairs[i] == 0:
+                            pass
+                        else:
+                            assert False, "requirement for face arrangement contradicts"
+
+        # I can swap two togehter or none.
+        if swap_count == 0:
+            pass
+        elif swap_count == 1:
+            for i in range(3):
+                if swap_pairs[i] == -1 or swap_pairs[i] == 0:
+                    swap_pairs[i] = 1
+                    break
+        elif swap_count == 2:
+            pass
+        elif swap_count == 3:
+            dprint1(
+                "swap-count is 3, resulttant TransfinteVolume is incorrect. Conintue to show the surface plot")
+
+        for i in range(3):
+            if swap_pairs[i] == 1:
+                for f in face_pairs[i]:
+                    print(f)
+                    left_right[f] = 'Left' if left_right[f] == 'Right' else 'Right'
+
+        for f in faces:
+            if self.TS_wrap.find_arrangement(f) is None:
+                self.TS_wrap.set_arrangement(f, left_right[f])
+        dprint1("Left/Right choice(after adjustment)", left_right)
+
+        def common_ptx(e1, e2):
+            p1 = [x[1] for x in self.expand_dimtags([(1, e1)], return_dim=0)]
+            p2 = [x[1] for x in self.expand_dimtags([(1, e2)], return_dim=0)]
+            a = np.intersect1d(p1, p2)
+            return int(a[0])
+
+        good_count = {x: 0 for x in all_ptx}
+        for f in faces:
+            edges1 = [x[1] for x in gmsh.model.getBoundary(
+                [(2, f)], oriented=False, combined=False)]
+            if left_right[f] == 'Right':
+                p1 = common_ptx(edges1[0], edges1[1])
+                p2 = common_ptx(edges1[2], edges1[3])
+                good_count[p1] = good_count[p1] + 1
+                good_count[p2] = good_count[p2] + 1
+            elif left_right[f] == 'Left':
+                p1 = common_ptx(edges1[0], edges1[-1])
+                p2 = common_ptx(edges1[1], edges1[2])
+                good_count[p1] = good_count[p1] + 1
+                good_count[p2] = good_count[p2] + 1
+
+        for x in good_count:
+            if good_count[x] == 3:
+                corners = make_corner_loop(x)
+                cornerTags = corners
+                break
+        dprint1("Adjusted corner parameter", cornerTags)
+        for dim, tag in dimtags:
+            if tag in done[3]:
+                print("Volume " + str(tag) + " is already meshed (skipping)")
+                continue
+            gmsh.model.mesh.setTransfiniteVolume(tag,
+                                                 cornerTags=cornerTags)
+            done[3].append(tag)
+
+        params = (cornerTags, )
         return done, params
 
-    @process_text_tags(dim=2)
+    @process_text_tags(dim=3)
     def transfinite_volume_1D(self, done, params, dimtags, *args, **kwargs):
         return done, params
 
-    @process_text_tags(dim=2)
+    @process_text_tags(dim=3)
     def transfinite_volume_2D(self, done, params, dimtags, *args, **kwargs):
+        dimtags = self.expand_dimtags(dimtags, return_dim=2)
+        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
+
+        self.show_only(dimtags)
+        gmsh.model.mesh.generate(2)
+        done[2].extend([x for dim, x in dimtags])
         return done, params
 
-    @process_text_tags(dim=2)
+    @process_text_tags(dim=3)
     def transfinite_volume_3D(self, done, params, dimtags, *args, **kwargs):
-        arrangement = kwargs.get('arrangement', 'Left')
-        cornerTags = kwargs.get('cornerTags', [])
+        '''
+        checking orientation of triangles
+        '''
+        cornerTags = params[0]
+        check = False
+        for c in cornerTags:
+            total = 0
+            face_dimtags = self.expand_dimtags(dimtags, return_dim=2)
+            for dim, tag in face_dimtags:
+                edata = gmsh.model.mesh.getElements(dim, tag)
+                number_of_element_contains_c = np.sum(
+                    [np.sum(x == c) for x in edata[2]])
+                total = total + number_of_element_contains_c
 
-        for dim, tag in dimtags:
-            if tag in done[2]:
-                print("Surface " + str(tag) + " is already meshed (skipping)")
-                continue
-            gmsh.model.mesh.setTransfiniteVolume(tag,
-                                                 arrangement=arrangement,
-                                                 cornerTags=cornerTags)
+            if total == 3:
+                check = True
 
-        dimtags = [x for x in dimtags if not x[1] in done[2]]
+        assert check, "No corner satisfies corner stone requirment (change arrangement)"
+        dimtags = [x for x in dimtags if not x[1] in done[3]]
         self.show_only(dimtags)
         gmsh.model.mesh.generate(3)
         done[3].extend([x for dim, x in dimtags])
+
         return done, params
 
     # merge text
@@ -1239,8 +1518,9 @@ class GMSHMeshWrapper():
         from petram.geom.geom_utils import find_rotation_between_surface2
 
         ptx, p, l, s, v, mid_points = self.geom_info
-        geom_size = np.sqrt(np.sum((np.max(ptx[:,0], 0) -  np.min(ptx[:,0], 0))**2))
-        
+        geom_size = np.sqrt(
+            np.sum((np.max(ptx[:, 0], 0) - np.min(ptx[:, 0], 0))**2))
+
         axan = kwargs.pop('axan', None)
         revolve = kwargs.pop('revolve', False)
         volume_hint = kwargs.pop('volume_hint', None)
@@ -1278,6 +1558,7 @@ class GMSHMeshWrapper():
                     geom_data=self.geom_info,
                     axan=axan, mind_eps=geom_size*self.mapper_tol)
         else:
+            print("axan", axan)
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                 tag1, tag2, self.edge_tss,
                 geom_data=self.geom_info,
@@ -1334,22 +1615,24 @@ class GMSHMeshWrapper():
 
             ntag, pos, ppos = ndata
             etypes, etags, nodes = edata
-            
+
             # check if points are reversed
-            mdata_dest = get_nodes_elements([(1,tag)], normalize=True)
-            nodes_org = mdata_dest[0][2][0][-2:] # this is start and end points
+            mdata_dest = get_nodes_elements([(1, tag)], normalize=True)
+            # this is start and end points
+            nodes_org = mdata_dest[0][2][0][-2:]
             if (node_map2[ndata[0][-2]] == nodes_org[1] and
-                node_map2[ndata[0][-1]] == nodes_org[0]):
+                    node_map2[ndata[0][-1]] == nodes_org[0]):
                 do_flip = True
                 #print("flipping point order", tag)
-                tmp  = np.array(pos).reshape(-1, 3)
-                pos =  np.vstack([tmp[:-2][::-1], tmp[-1], tmp[-2]]).flatten()
+                tmp = np.array(pos).reshape(-1, 3)
+                pos = np.vstack([tmp[:-2][::-1], tmp[-1], tmp[-2]]).flatten()
                 ntag = np.hstack([ntag[:-2][::-1], ntag[-1], ntag[-2]])
                 ppos = (1 - ppos)[::-1]
                 #etags = etags[::-1]
-                nodes = [np.hstack([x[-1], x[1:-1][::-1], x[0]]) for x in nodes]
+                nodes = [np.hstack([x[-1], x[1:-1][::-1], x[0]])
+                         for x in nodes]
             else:
-                do_flip = False 
+                do_flip = False
 
             ntag2 = list(range(noffset, noffset+len(ntag)-2))
             noffset = noffset+len(ntag)-2
@@ -1395,14 +1678,14 @@ class GMSHMeshWrapper():
             #else:
             '''
             ppos = (tmp[1]-tmp[0])*ppos + tmp[0]
-            
+
             for i, j in zip(ntag, ntag2):
                 node_map2[i] = j
             nodes2 = [[node_map2[x] for x in item] for item in nodes]
-            
+
             gmsh.model.mesh.addNodes(dim, tag, ntag2, pos, ppos)
             gmsh.model.mesh.addElements(dim, tag, etypes, etags2, nodes2)
-            
+
             done[1].append(tag)
 
         return done, params
@@ -1410,9 +1693,9 @@ class GMSHMeshWrapper():
     @process_text_tags_sd(dim=2)
     def copyface_2D(self,  done, params, dimtags, dimtags2, *args, **kwargs):
         ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = params
- 
+
         #print("Entering CopyFace2D", s_pairs)
-        
+
         mdata = []
         for dim, tag in dimtags:
             ndata = gmsh.model.mesh.getNodes(dim, tag)
@@ -1514,7 +1797,8 @@ class GMSHMeshWrapper():
         axan = kwargs.pop('axan', None)
 
         ptx, p, l, s, v, mid_points = self.geom_info
-        geom_size = np.sqrt(np.sum((np.max(ptx[:,0], 0) -  np.min(ptx[:,0], 0))**2))
+        geom_size = np.sqrt(
+            np.sum((np.max(ptx[:, 0], 0) - np.min(ptx[:, 0], 0))**2))
 
         #geom_data = (ptx, l, s, v, mid_points)
         tag1 = [x for dim, x in dimtags]
@@ -1612,10 +1896,10 @@ class GMSHMeshWrapper():
 
         lateral_edge_digtags = [(1, lmap[key]) for key in tobe_meshed_edges]
         self.show_only(lateral_edge_digtags)
-        
+
         gmsh.model.mesh.generate(1)
-        #gmsh.write("debug_1d.msh")
-        
+        # gmsh.write("debug_1d.msh")
+
         node_map1 = {info1[1][k]+1: info2[1][pmap[k]]+1 for k in pmap}
         #noffset = max(gmsh.model.mesh.getNodes()[0])+1
         #eoffset = max(sum(gmsh.model.mesh.getElements()[1],[]))+1
@@ -1639,7 +1923,7 @@ class GMSHMeshWrapper():
 
             etypes, etags, nodes = edata
 
-            etags2 = [list(range(eoffset, eoffset+len(etags[0]))),]
+            etags2 = [list(range(eoffset, eoffset+len(etags[0]))), ]
             eoffset = eoffset+len(etags[0])
             nodes2 = [[node_map1[x] for x in item] for item in nodes]
 
@@ -1756,7 +2040,7 @@ class GMSHMeshWrapper():
         # this meshes un-meshed  sides ....
 
         gmsh.model.mesh.generate(2)
-        
+
         ents_1D = gmsh.model.getEntities(1)
         #ents_1D = list(set(gmsh.model.getBoundary(src_dst, combined=False, oriented=False)))
         tmp = [gmsh.model.mesh.getNodes(dim, tag) for dim, tag in ents_1D]
@@ -1957,6 +2241,7 @@ class GMSHMeshWrapper():
         kwargs['revolve'] = True
         return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
 
+
 class GMSHMeshGeneratorBase():
     def __init__(self, q, task_q):
         self.q = q
@@ -1982,7 +2267,7 @@ class GMSHMeshGeneratorBase():
                 except BaseException:
                     txt = traceback.format_exc()
                     traceback.print_exc()
-                    self.q.put((True, ('fail', txt)))
+                    self.q.put((True, ('fail', txt, None)))
                     # self.task_queue.task_done()
                     break
         print("exiting prcesss")
@@ -2012,12 +2297,10 @@ class GMSHMeshGenerator(GMSHMeshGeneratorBase, mp.Process):
         GMSHMeshGeneratorBase.__init__(self, q, task_q)
         mp.Process.__init__(self)
         dprint1("starting a process for meshing")
-        
+
     def ready_for_next_task(self):
         pass
 
-from threading import Thread
-from queue import Queue
 
 class GMSHMeshGeneratorTH(GMSHMeshGeneratorBase, Thread):
     def __init__(self):
@@ -2030,9 +2313,7 @@ class GMSHMeshGeneratorTH(GMSHMeshGeneratorBase, Thread):
 
         GMSHMeshGeneratorBase.__init__(self, q, task_q)
         Thread.__init__(self)
-        dprint1("starting a thread for mesh")        
+        dprint1("starting a thread for mesh")
 
     def ready_for_next_task(self):
         self.task_q.task_done()
-
-

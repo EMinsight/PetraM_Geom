@@ -62,7 +62,8 @@ try:
                                       BRepPrimAPI_MakeTorus,
                                       BRepPrimAPI_MakeCylinder,)
     from OCC.Core.BRepFilletAPI import (BRepFilletAPI_MakeFillet,
-                                        BRepFilletAPI_MakeChamfer)
+                                        BRepFilletAPI_MakeChamfer,
+                                        BRepFilletAPI_MakeFillet2d,)
     from OCC.Core.BRepOffsetAPI import (BRepOffsetAPI_MakePipe,
                                         BRepOffsetAPI_MakeOffsetShape,
                                         BRepOffsetAPI_MakeOffset,
@@ -123,7 +124,8 @@ try:
     from OCC.Core.BRepCheck import BRepCheck_Analyzer
     from OCC.Core.BRepLib import breplib_OrientClosedSolid
 
-    from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain    
+    from OCC.Core.ShapeUpgrade import (ShapeUpgrade_UnifySameDomain,
+                                       ShapeUpgrade_RemoveInternalWires)
 
     __ex1 = TopExp_Explorer()
     __ex2 = TopExp_Explorer()
