@@ -1558,6 +1558,7 @@ class GMSHMeshWrapper():
                     geom_data=self.geom_info,
                     axan=axan, mind_eps=geom_size*self.mapper_tol)
         else:
+            print("axan", axan)
             ax, an, px, d, affine, p_pairs, l_pairs, s_pairs = find_translate_between_surface(
                 tag1, tag2, self.edge_tss,
                 geom_data=self.geom_info,
@@ -2266,7 +2267,7 @@ class GMSHMeshGeneratorBase():
                 except BaseException:
                     txt = traceback.format_exc()
                     traceback.print_exc()
-                    self.q.put((True, ('fail', txt)))
+                    self.q.put((True, ('fail', txt, None)))
                     # self.task_queue.task_done()
                     break
         print("exiting prcesss")

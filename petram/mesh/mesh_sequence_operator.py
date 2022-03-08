@@ -135,6 +135,7 @@ class MeshSequenceOperator():
 
         try:
             max_dim, done, msh_output = ret[1]
+            assert msh_output is not None, "failed to generate mesh"
             from petram.geom.read_gmsh import read_pts_groups, read_loops
 
             if progressbar is not None:
