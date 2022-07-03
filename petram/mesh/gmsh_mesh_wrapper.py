@@ -353,8 +353,6 @@ class GMSHMeshWrapper():
             gmsh.option.setNumber("Mesh.ElementOrder", self.ho_order)
             #gmsh.option.setNumber("Mesh.HighOrderOptimize",
             #                       HighOrderOptimize[self.optimize_ho])
-            self.hide_all()
-            gmsh.model.mesh.generate(3)
 
             #
             #self.show_all()
@@ -364,22 +362,24 @@ class GMSHMeshWrapper():
             else:
                 dimTags = [(maxdim, int(x)) for x in self.optimize_dom.split(',')]
 
-            #gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
-            #self.show_all()
-            # it is not well-written but I have to include all 
-            # boundaries
-            # elastic seems to apply for everything anyway ???
-            self.show_only(dimTags, recursive=True)            
+            gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
+            gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 1)
+            gmsh.option.setNumber("Mesh.Optimize", 0)
+            gmsh.model.mesh.generate(maxdim)
+
+            # it is not well-written but I have to include all
+            # boundaries elastic seems to apply for everything
+            # anyway (for now, this section is commented out) ???
             if maxdim == 3:
-                dimTags1 = gmsh.model.getBoundary(dimTags)
-                dimTags2 = gmsh.model.getBoundary(dimTags1)
-                dimTags3 = gmsh.model.getBoundary(dimTags2)
-                dimTags = list(set(dimTags + dimTags1 + dimTags2 + dimTags3))
+                #dimTags1 = gmsh.model.getBoundary(dimTags)
+                #dimTags2 = gmsh.model.getBoundary(dimTags1)
+                #dimTags3 = gmsh.model.getBoundary(dimTags2)
+                #dimTags = list(set(dimTags + dimTags1 + dimTags2 + dimTags3))
                 do_ho = True
             elif maxdim == 2:
-                dimTags1 = gmsh.model.getBoundary(dimTags)
-                dimTags2 = gmsh.model.getBoundary(dimTags1)
-                dimTags = list(set(dimTags + dimTags1 + dimTags2))
+                #dimTags1 = gmsh.model.getBoundary(dimTags)
+                #dimTags2 = gmsh.model.getBoundary(dimTags1)
+                #dimTags = list(set(dimTags + dimTags1 + dimTags2))
                 do_ho = True
             else:
                 do_ho = False
