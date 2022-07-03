@@ -174,7 +174,8 @@ class OCCGeom(GmshGeom):
                                                  ArrayPath,
                                                  ThruSection, CreateShell,
                                                  RotateCenterPoints, MoveByPoints, ExtendedLine,
-                                                 CreateOffset, CreateOffsetFace, CreateProjection)
+                                                 CreateOffset, CreateOffsetFace, CreateProjection,
+                                                 Simplifiers, MovePoint)
         return [PointOCC, LineOCC, CircleOCC, Polygon2,
                 Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
                 Line, Circle, CircleByAxisPoint, CircleBy3Points,
@@ -191,7 +192,7 @@ class OCCGeom(GmshGeom):
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                 ArrayPath,  
                 ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine,
-                CreateOffset, CreateOffsetFace, CreateProjection]
+                CreateOffset, CreateOffsetFace, CreateProjection, Simplifiers, MovePoint]
 
     def get_possible_child_menu(self):
         from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
@@ -214,7 +215,8 @@ class OCCGeom(GmshGeom):
                                                  ArrayPath,
                                                  ThruSection, CreateShell,
                                                  RotateCenterPoints, MoveByPoints, ExtendedLine,
-                                                 CreateOffset, CreateOffsetFace, CreateProjection)
+                                                 CreateOffset, CreateOffsetFace, CreateProjection,
+                                                 Simplifiers, MovePoint)
 
         return [("Geometry Element...", None),
                 ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
@@ -243,7 +245,9 @@ class OCCGeom(GmshGeom):
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints),
                 ("", WPParallelToPlane), ("!", WPNormalToPlane),
-                ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
+                ("Import...", BrepImport), ("", CADImport), ("", healCAD),
+                ("Extra(under Dev,)...", Simplifiers),("!", MovePoint),
+                ("!", None),
                 ]
 
     def get_special_menu(self, evt):
