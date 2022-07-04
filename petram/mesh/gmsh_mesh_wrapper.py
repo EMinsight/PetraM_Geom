@@ -53,6 +53,24 @@ def get_vertex_geom_size(default_value):
     return dict(lcar)
 
 
+def get_boundingbox(dimTags):
+    xa = np.inf
+    ya = np.inf
+    za = np.inf
+    xb = -np.inf
+    yb = -np.inf
+    zb = -np.inf
+    for dim, tag in dimTags:
+        x1, y1, z1, x2, y2, z2 = gmsh.model.getBoundingBox(dim, tag)
+        xa = min(x1, xa)
+        ya = min(y1, ya)
+        za = min(z1, za)
+        xb = max(x2, xb)
+        yb = max(y2, yb)
+        zb = max(z2, zb)
+    return xa, ya, za, xb, yb, zb
+
+
 def process_text_tags(dim=1, check=True):
     '''
     convert text tags input to dimtags
@@ -247,6 +265,7 @@ class GMSHMeshWrapper():
         gmsh.option.setNumber("General.Terminal", 1)
         gmsh.option.setNumber("Mesh.MshFileVersion", meshformat)
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 1)
         gmsh.option.setNumber("Mesh.IgnorePeriodicity", 1)
 
         gmsh_init = True
@@ -371,7 +390,7 @@ class GMSHMeshWrapper():
             for i in range(mdim+1, 4):
                 done[i] = []
 
-        if self.use_ho:
+        if self.use_ho and finalize:
             # using this option makes "computing connectivity and bad
             # elements very slow"
             gmsh.option.setNumber("Mesh.HighOrderDistCAD", 0)
@@ -386,7 +405,6 @@ class GMSHMeshWrapper():
             else:
                 dimTags = [(maxdim, int(x))
                            for x in self.optimize_dom.split(',')]
-
 
             gmsh.option.setNumber("Mesh.MeshOnlyVisible", 0)
             gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 1)
@@ -838,8 +856,9 @@ class GMSHMeshWrapper():
         maxsize = kwargs.pop("maxsize", 1e20)
         minsize = kwargs.pop("minsize", 0.0)
         res = kwargs.pop("resolution",  np.inf)
+        growth = kwargs.pop("sizegrowth", 1.0)
 
-        done[3].extend([x for dim, x in dimtags])
+        done[3].extend([x for dim, x in dimtags if x not in done[3]])
 
         embeds = [x for x in kwargs.pop("embed_s",  '').split(',')]
         embeds = [int(x) for x in embeds if len(x) > 0]
@@ -892,7 +911,7 @@ class GMSHMeshWrapper():
     def freevolume_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
 
-        done[3].extend([x for dim, x in dimtags])
+        done[3].extend([x for dim, x in dimtags if x not in done[3]])
 
         embeds = [x for x in kwargs.pop("embed_s",  '').split(',')]
         embeds = [(2, int(x)) for x in embeds if len(x) > 0]
@@ -907,7 +926,7 @@ class GMSHMeshWrapper():
 
         dimtags = self.expand_dimtags(dimtags, return_dim=1)
 
-        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
+        dimtags = [(dim, tag) for dim, tag in dimtags if tag not in done[1]]
         #tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
 
         self.show_only(dimtags)
@@ -918,9 +937,11 @@ class GMSHMeshWrapper():
     @set_restore_maxmin_cl
     @process_text_tags(dim=3)
     def freevolume_2D(self, done, params, dimtags, *args, **kwargs):
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
+        maxsize = kwargs.pop("maxsize", self.clmax)
+        growth = kwargs.pop("sizegrowth", 1.0)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
 
-        done[3].extend([x for dim, x in dimtags])
+        done[3].extend([x for dim, x in dimtags if x not in done[3]])
 
         embeds = [x for x in kwargs.pop("embed_s",  '').split(',')]
         embeds = [(2, int(x)) for x in embeds if len(x) > 0]
@@ -928,11 +949,11 @@ class GMSHMeshWrapper():
 
         dimtags = self.expand_dimtags(dimtags, return_dim=2)
 
-        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
-        #tags = [(dim, tag) for dim, tag in dimtags if not tag in done[2]]
+        tags = [(dim, tag) for dim, tag in dimtags if tag not in done[2]]
+        field = self.add_default_field(
+            tags, maxsize, scale=1/(growth-1.0+0.01))
+        self.show_only(tags)
 
-        self.show_only(dimtags)
-        #print("2D meshing for ", dimtags)
         alg2d = kwargs.get("alg2d", "default")
         if alg2d != 'default':
             gmsh.option.setNumber("Mesh.Algorithm",
@@ -942,15 +963,23 @@ class GMSHMeshWrapper():
                                   Algorithm2D[self.algorithm])
         else:
             gmsh.model.mesh.generate(2)
-        done[2].extend([x for dim, x in dimtags])
+
+        if field is not None:
+            field_tag = gmsh.model.mesh.field.remove(field)
+        done[2].extend([x for dim, x in tags])
         return done, params
 
     @set_restore_maxmin_cl
     @process_text_tags(dim=3)
     def freevolume_3D(self, done, params, dimtags, *args, **kwargs):
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        tags = [(dim, tag) for dim, tag in dimtags if not tag in done[3]]
-        self.show_only(tags, recursive=True)
+        maxsize = kwargs.pop("maxsize", self.clmax)
+        growth = kwargs.pop("sizegrowth", 1.0)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+
+        tags = [(dim, tag) for dim, tag in dimtags if tag not in done[3]]
+        field = self.add_default_field(
+            tags, maxsize, scale=1/(growth-1.0+0.01))
+        self.show_only(tags)
 
         alg3d = kwargs.get("alg3d", "default")
         if alg3d != 'default':
@@ -961,6 +990,9 @@ class GMSHMeshWrapper():
                                   Algorithm3D[self.algorithm3d])
         else:
             gmsh.model.mesh.generate(3)
+
+        if field is not None:
+            field_tag = gmsh.model.mesh.field.remove(field)
 
         done[3].extend([x for dim, x in tags])
         return done, params
@@ -973,7 +1005,8 @@ class GMSHMeshWrapper():
         minsize = kwargs.pop("minsize", 0.0)
         res = kwargs.pop("resolution", np.inf)
 
-        done[2].extend([x for dim, x in dimtags])
+        tags = [x for dim, x in dimtags if x not in done[2]]
+        done[2].extend(tags)
 
         embedl = [x for x in kwargs.pop("embed_l",  '').split(',')]
         embedl = [int(x) for x in embedl if len(x) > 0]
@@ -993,7 +1026,7 @@ class GMSHMeshWrapper():
         dimtags.extend([(0, x) for x in embedp])
         dimtags = self.expand_dimtags(dimtags, return_dim=0)
 
-        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[0]]
+        dimtags = [(dim, tag) for dim, tag in dimtags if tag not in done[0]]
         self.show_only(dimtags)
         for dim, tag in dimtags:
             size = self.vertex_geom_size[tag]/res
@@ -1005,6 +1038,7 @@ class GMSHMeshWrapper():
             #print("Face Set Point Size", (0, tag), size)
             done[0].append(tag)
         gmsh.model.mesh.generate(0)
+
         return done, params
 
     @set_restore_maxmin_cl
@@ -1012,15 +1046,14 @@ class GMSHMeshWrapper():
     def freeface_1D(self, done, params, dimtags, *args, **kwargs):
         gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
 
-        done[2].extend([x for dim, x in dimtags])
+        done[2].extend([x for dim, x in dimtags if x not in done[2]])
 
         dimtags = self.expand_dimtags(dimtags, return_dim=1)
         embedl = [x for x in kwargs.pop("embed_l",  '').split(',')]
         embedl = [(1, int(x)) for x in embedl if len(x) > 0]
         dimtags.extend(embedl)
 
-        dimtags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
-        #tags = [(dim, tag) for dim, tag in dimtags if not tag in done[1]]
+        dimtags = [(dim, tag) for dim, tag in dimtags if tag not in done[1]]
         self.show_only(dimtags)
 
         gmsh.option.setNumber("Mesh.CharacteristicLengthFromCurvature", 1)
@@ -1033,9 +1066,14 @@ class GMSHMeshWrapper():
     @set_restore_maxmin_cl
     @process_text_tags(dim=2)
     def freeface_2D(self, done, params, dimtags, *args, **kwargs):
-        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 1)
-        tags = [(dim, tag) for dim, tag in dimtags]
-        self.show_only(dimtags)
+        maxsize = kwargs.pop("maxsize", self.clmax)
+        growth = kwargs.pop("sizegrowth", 1.0)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthExtendFromBoundary", 0)
+
+        tags = [(dim, tag) for dim, tag in dimtags if tag not in done[2]]
+        field = self.add_default_field(
+            tags, maxsize, scale=1/(growth-1.0+0.01))
+        self.show_only(tags)
 
         alg2d = kwargs.get("alg2d", "default")
         if alg2d != 'default':
@@ -1047,6 +1085,8 @@ class GMSHMeshWrapper():
         else:
             gmsh.model.mesh.generate(2)
 
+        if field is not None:
+            field_tag = gmsh.model.mesh.field.remove(field)
         done[2].extend([x for dim, x in tags])
         return done, params
 
@@ -1919,6 +1959,7 @@ class GMSHMeshWrapper():
             for i, j in zip(ntag, ntag2):
                 node_map1[i] = j
 
+            # this is not used?
             vtags = [x for xx, x in gmsh.model.getBoundary(((1, tag),))]
 
             etypes, etags, nodes = edata
@@ -2085,6 +2126,7 @@ class GMSHMeshWrapper():
         # gmsh.write("debug_2d.msh")
 
         gmsh.option.setNumber("Mesh.MeshOnlyVisible", 1)
+        gmsh.option.setNumber("Mesh.MeshOnlyEmpty", 1)
         self.show_only([(3, x) for x in list(vmap_r)])
         gmsh.model.mesh.generate(3)
         # gmsh.write("debug_3d.msh")
@@ -2240,6 +2282,128 @@ class GMSHMeshWrapper():
     def revolve_face_3D(self,  done, params, vdimtags, dimtags, dimtags2, *args, **kwargs):
         kwargs['revolve'] = True
         return self.extrude_face_3D(done, params, vdimtags, dimtags, dimtags2, *args, **kwargs)
+
+    #
+    # boundary layer
+    #
+    def boundary_layer_0D(self, done, params, gid, sid, **kwargs):
+        print("boundary layer", gid, sid, kwargs)
+        self.add_boundary_field(gid, sid, **kwargs)
+        return done, params
+
+    def boundary_layer_1D(self, done, params, gid, sid, **kwargs):
+        return done, params
+
+    def boundary_layer_2D(self, done, params, gid, sid, **kwargs):
+        return done, params
+
+    def boundary_layer_3D(self, done, params, gid, sid, **kwargs):
+        return done, params
+
+    #
+    #  default extend field
+    #
+    def add_default_field(self, dimTags, maxsize, scale=100):
+        '''
+        default mesh size field
+        extend mesh size from all boundaries
+
+        we assume all dimTags has the same dim
+        '''
+        if len(dimTags) == 0:
+            return
+        xa, ya, za, xb, yb, zb = get_boundingbox(dimTags)
+        size = np.sqrt((xa-xb)**2 + (ya-yb)**2 + (za-zb)**2)/2.0
+        bdrs = [x[1] for x in gmsh.model.getBoundary(
+            dimTags, oriented=False, combined=False)]
+        dim = dimTags[0][0]
+
+        field_tag = gmsh.model.mesh.field.add("Extend")
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "SizeMax",
+                                        maxsize)
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "DistMax",
+                                        size*scale)
+        print("dimtags, Size", "Dist, Curves/Surfaces",
+              dimTags, maxsize, size*scale, bdrs)
+        if dim == 2:
+            gmsh.model.mesh.field.setNumbers(field_tag,
+                                             "CurvesList",
+                                             bdrs)
+        elif dim == 3:
+            gmsh.model.mesh.field.setNumbers(field_tag,
+                                             "SurfacesList",
+                                             bdrs)
+        gmsh.model.mesh.field.setAsBackgroundMesh(field_tag)
+        return field_tag
+
+    def add_boundary_field(self, gid, sid, thickness=None, growth=None, nlayer=None,
+                           fanpoints=None, fanpointssize=None, use_quad=False):
+        '''
+        add Boundary Field (works only for 2D mesh)
+        '''
+        curves = [int(x) for x in gid.split(",") if len(x) > 0]
+        if len(curves) == 0:
+            return
+
+        tmp = np.array([(growth)**i for i in range(nlayer)])
+        sizes = list(np.array(tmp)/np.sum(tmp)*thickness)
+        thickness = np.sum(sizes)
+
+        points = [x[1] for x in gmsh.model.getBoundary([(1, x) for x in curves],
+                                                       oriented=False,
+                                                       combined=True)]
+        print("points, nblayers, thickness", points, len(sizes), thickness)
+
+        field_tag = gmsh.model.mesh.field.add("BoundaryLayer")
+        gmsh.model.mesh.field.setNumbers(field_tag,
+                                         "CurvesList",
+                                         curves)
+        if sid != 'auto':
+            excludedsurfaces = [int(x) for x in sid.split(',') if len(x) > 0]
+            if len(excludedsurfaces) > 0:
+                gmsh.model.mesh.field.setNumbers(field_tag,
+                                                 "ExcludedSurfacesList",
+                                                 excludedsurfaces,)
+
+        if len(fanpoints) > 0:
+            gmsh.model.mesh.field.setNumbers(field_tag,
+                                             "FanPointsList",
+                                             fanpoints,)
+        if len(fanpointssize) > 0:
+            gmsh.model.mesh.field.setNumbers(field_tag,
+                                             "FanPointsSizeList",
+                                             fanpointssize,)
+        if len(points) > 0:
+            gmsh.model.mesh.field.setNumbers(field_tag,
+                                             "PointsList",
+                                             points)
+        if use_quad:
+            gmsh.model.mesh.field.setNumber(field_tag,
+                                            "Quads",
+                                            1)
+
+        # gmsh.model.mesh.field.setNumber(field_tag,
+        #                                 "BetaLaw",
+        #                                  1)
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "Size",
+                                        sizes[0])
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "SizeFar",
+                                        sizes[1])
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "Ratio",
+                                        growth)
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "Thickness",
+                                        thickness)
+        gmsh.model.mesh.field.setNumber(field_tag,
+                                        "NbLayers", len(sizes))
+
+        gmsh.model.mesh.field.setAsBoundaryLayer(field_tag)
+        return field_tag
 
 
 class GMSHMeshGeneratorBase():

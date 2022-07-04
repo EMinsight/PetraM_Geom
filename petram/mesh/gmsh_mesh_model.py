@@ -85,7 +85,7 @@ class GMeshTop(Mesh):
         set its own default namespace. For example, when
         RF module set freq and omega
         '''
-        return {"remaining": "remaining", "all": "all"}
+        return {"remaining": "remaining", "all": "all", "auto": "auto"}
 
 
 class GmshMeshActionBase(GMesh, Vtable_mixin):
@@ -245,6 +245,7 @@ class GmshMeshActionBase(GMesh, Vtable_mixin):
         '''
         "remaining" -> "remaining"
         "all" -> "all"
+        "auto" -> "auto"
         something else  -> global vaiable
 
         failure -> pass thorough
@@ -462,12 +463,13 @@ class GmshMesh(GMeshTop, Vtable_mixin):
                                         FreeVolume, FreeEdge, CharacteristicLength,
                                         CopyFace, CopyFaceRotate, RecombineSurface,
                                         ExtrudeMesh, RevolveMesh, MergeText, CompoundCurve,
-                                        CompoundSurface)
+                                        CompoundSurface, BoundaryLayer)
 
         return [FreeVolume, FreeFace, FreeEdge, TransfiniteLine,
                 TransfiniteSurface, TransfiniteVolume,
                 CharacteristicLength, CopyFace, CopyFaceRotate, RecombineSurface,
-                ExtrudeMesh, RevolveMesh, CompoundCurve, CompoundSurface, MergeText]
+                ExtrudeMesh, RevolveMesh, CompoundCurve, CompoundSurface, BoundaryLayer,
+                MergeText]
 
     def get_special_menu(self, evt):
         from petram.geom.gmsh_geom_model import use_gmsh_api
