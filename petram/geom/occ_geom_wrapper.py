@@ -1892,7 +1892,6 @@ class Geometry():
         a, b, c = abc
 
         if a == b and b == c:
-            print("using Trsf")
             gt = gp_Trsf()
             pts = gp_Pnt(x, y, z)
             gt.SetScale(pts, float(a))
