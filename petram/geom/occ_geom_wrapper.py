@@ -5275,6 +5275,9 @@ class Geometry():
             fix_param = None
 
         shape = TopoDS_Shape()
+
+        import os
+        cad_file = os.path.expanduser(cad_file)
         success = breptools_Read(shape, cad_file, self.builder)
 
         if not success:
@@ -5296,6 +5299,9 @@ class Geometry():
             fix_param = (use_fix_param, use_fix_tol, use_fix_rescale,)
         else:
             fix_param = None
+
+        import os
+        cad_file = os.path.expanduser(cad_file)
 
         if (cad_file.lower().endswith(".iges") or
                 cad_file.lower().endswith(".igs")):
