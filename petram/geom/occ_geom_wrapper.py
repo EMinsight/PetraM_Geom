@@ -3710,7 +3710,7 @@ class Geometry():
         for gid in gids:
             new_gid = self.symmetrize(gid, abcd, copy=keep)
             if new_gid is not None:
-                newkeys.append(objs.addobj(new_gid, 'flp'))
+                newkeys.append(objs.addobj(new_gid, 'mv'))
 
         self.synchronize_topo_list(action='both')
 
@@ -4707,7 +4707,7 @@ class Geometry():
         for gid in gids:
             new_gid = self.symmetrize(gid, abcd, copy=keep)
             if new_gid is not None:
-                newkeys.append(objs.addobj(new_gid, 'flp'))
+                newkeys.append(objs.addobj(new_gid, 'mv'))
 
         self.synchronize_topo_list(action='both')
 
