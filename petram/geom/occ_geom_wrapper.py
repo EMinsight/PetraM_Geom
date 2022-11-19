@@ -4833,13 +4833,13 @@ class Geometry():
             self.remove(gid)
 
         result = operator.Shape()
-        gids_new = self.register_shaps_balk(result)
+        gids_new = self.register_shaps_balk(result, check_this=self.shape)
 
         newkeys = []
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'splt'))
 
-        self.synchronize_topo_list()
+        self.synchronize_topo_list(action='both')
         return list(objs), newkeys
 
     def ProjectOnWP_build_geom(self, objs, *args):
