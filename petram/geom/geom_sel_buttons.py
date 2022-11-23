@@ -90,6 +90,7 @@ def hide_elem(evt, inverse=False):
                 idx = list(set(idx+new_hide))
                 o.hide_component(idx)
             viewer._hidden_volume.extend(selected_volume)
+            viewer._hidden_volume = list(set(viewer._hidden_volume))
             
     elif mode == 'face' or mode == 'edge':
         for o in objs:

@@ -5290,7 +5290,9 @@ class Geometry():
         from OCC.Core.STEPControl import STEPControl_Reader
         from OCC.Core.IGESControl import IGESControl_Reader
         from OCC.Core.IFSelect import IFSelect_RetDone, IFSelect_ItemsByEntity
-        from OCC.Core.Interface import Interface_Static_SetCVal
+        from OCC.Core.Interface import (Interface_Static_SetCVal,
+                                        Interface_Static_SetRVal,
+                                        Interface_Static_SetIVal)
 
         unit = args[-1]
         cad_file, use_fix, use_fix_param, use_fix_tol, use_fix_rescale, highestDimOnly = args[
