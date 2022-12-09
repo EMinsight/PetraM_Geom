@@ -349,7 +349,7 @@ cdata = (('axis_by_points', VtableElement('axis_by_points', type='string',
                                   default="",
                                           tip="Points to define axis")),
          ('radius', VtableElement('point_on_circle', type='string',
-                                  guilabel='Raidus',
+                                  guilabel='Radius',
                                   default="1.0",
                                   tip="Radius")),
          ('num_points', VtableElement('num_points', type='int',
@@ -1037,6 +1037,20 @@ class MovePoint(GeomPB):
     def fancy_tree_name(self):
         return 'MovePoint'
 
+class healExtra(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Faces',
+                                             default="",
+                                             tip="object to heal (split face algorithm)")),)
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'HealExtra'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'HealExtra'
 
 data0 = (('target_object', VtableElement('target_object', type='string',
                                          guilabel='Objects (v/f/l/p)',

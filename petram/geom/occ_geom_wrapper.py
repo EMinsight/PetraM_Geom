@@ -2688,6 +2688,21 @@ class Geometry():
 
         return list(objs), newkeys
 
+    def healExtra_build_geom(self, objs, *args):
+        targets = args[0]
+        targets = [x.strip() for x in targets.split(',')]
+        faces = self.get_target1(objs, targets, 'f')
+
+        from .occ_heal_extra import split_face_extra
+
+        for f in faces:
+            shape = self.faces[f]
+            split_face_extra(shape)
+
+        newkeys = []
+
+        return list(objs), newkeys
+
     def CreateLine_build_geom(self, objs, *args):
         pts = args
         pts = [x.strip() for x in pts[0].split(',')]
