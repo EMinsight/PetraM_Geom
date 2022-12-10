@@ -248,7 +248,6 @@ def shape_inspector(shape, inspect_type, shapes):
                 curve, kind = downcast_curve(curve)
                 kinds.append(kind)
 
-        kinds = [downcast_curve(bt.Curve(e2))[1]
         txt= ',\n'.join([str(int(gid)) + " (L = "+str(l) + "): "+k
                           for gid, l, k in zip(gids, ll, kinds)])
 
