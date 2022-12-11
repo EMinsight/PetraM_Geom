@@ -172,8 +172,8 @@ def find_sameedge(bt, shape, edges, tol):
         l1 = measure_len(edge)
         params = bt.Curve(edge)
         if len(params) == 2:
-           # null handle case
-           continue
+            # null handle case
+            continue
         curve = params[0]
         curve, kind = downcast_curve(curve)
         dataset.append((kind, l1))
@@ -202,6 +202,31 @@ def find_sameedge(bt, shape, edges, tol):
     return sameedges
 
 
+def find_min_distance_in_face(bt, shape):
+    '''
+    shape is face
+    check all distances between vertices in face
+    '''
+    from scipy.spatial import distance_matrix
+
+    vertices = [p for p in iter_shape_once(shape, 'vertex')]
+
+    ptx = []
+    for v in vertices:
+        pnt = bt.Pnt(v)
+        p = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+        ptx.append(p)
+
+    ptx = np.vstack(ptx)
+    md = distance_matrix(ptx, ptx, p=2)
+
+    # diagnal is zero. needs to inflate it to find minimum
+    for i in range(len(vertices)):
+        md[i, i] = np.infty
+
+    return np.min(md.flatten())
+
+
 def shape_inspector(shape, inspect_type, shapes):
 
     # print("inspection ", shape, inspect_type, shapes)
@@ -221,9 +246,10 @@ def shape_inspector(shape, inspect_type, shapes):
                                                       return_area=True)
         gids = [topolist.find_gid(f) for f in faces]
         kinds = [downcast_surface(bt.Surface(f))[1] for f in faces]
-
-        txt = '\n'.join([str(int(gid)) + " (area = "+str(a) + "): "+k
-                          for gid, a, k in zip(gids, areas, kinds)])
+        min_ds = [find_min_distance_in_face(bt, f) for f in faces]
+        txt = '\n'.join([str(int(gid)) + "\t(area = "+str(a) +
+                         ",\tmin D= " + str(min_d) + ")\t:" + k
+                         for gid, a, k, min_d in zip(gids, areas, kinds, min_ds)])
 
         txt = txt + '\n smax = ' + str(smax)
 
@@ -248,35 +274,35 @@ def shape_inspector(shape, inspect_type, shapes):
                 curve, kind = downcast_curve(curve)
                 kinds.append(kind)
 
-        txt= ',\n'.join([str(int(gid)) + " (L = "+str(l) + "): "+k
+        txt = ',\n'.join([str(int(gid)) + " (L = "+str(l) + "): "+k
                           for gid, l, k in zip(gids, ll, kinds)])
 
-        txt= txt + '\n smax = ' + str(lmax)
+        txt = txt + '\n smax = ' + str(lmax)
 
         if nsmall != 0:
-            data= gids
+            data = gids
         return txt, data
 
     elif inspect_type == 'distance':
         if shape_dim(shapes[0]) > shape_dim(shapes[1]):
-            shapes= (shapes[1], shapes[0])
+            shapes = (shapes[1], shapes[0])
 
         if (isinstance(shapes[0], TopoDS_Vertex) and
                 isinstance(shapes[1], TopoDS_Face)):
             # distance between point and surface
-            pnt= bt.Pnt(shapes[0])
-            p1= np.array((pnt.X(), pnt.Y(), pnt.Z(),))
-            surf= bt.Surface(shapes[1])
+            pnt = bt.Pnt(shapes[0])
+            p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            surf = bt.Surface(shapes[1])
 
-            pj= GeomAPI_ProjectPointOnSurf(pnt, surf)
+            pj = GeomAPI_ProjectPointOnSurf(pnt, surf)
             # print("number of solution ", pj.NbPoints())
 
-            pnt= pj.NearestPoint()
-            p2= np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            pnt = pj.NearestPoint()
+            p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
 
-            dist= np.sqrt(np.sum((p1 - p2)**2))
-            ret= dist
-            txt= "\n".join(["Number of projection point: " +
+            dist = np.sqrt(np.sum((p1 - p2)**2))
+            ret = dist
+            txt = "\n".join(["Number of projection point: " +
                              str(pj.NbPoints()),
                              "Nearest point: " + str(p2),
                              "Distance: " + str(dist)])
@@ -285,20 +311,20 @@ def shape_inspector(shape, inspect_type, shapes):
         elif (isinstance(shapes[0], TopoDS_Vertex) and
               isinstance(shapes[1], TopoDS_Edge)):
             # distance between point and edge
-            pnt= bt.Pnt(shapes[0])
-            p1= np.array((pnt.X(), pnt.Y(), pnt.Z(),))
-            curve, _first, _last= bt.Curve(shapes[1])
+            pnt = bt.Pnt(shapes[0])
+            p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            curve, _first, _last = bt.Curve(shapes[1])
 
-            pj= GeomAPI_ProjectPointOnCurve(pnt, curve)
+            pj = GeomAPI_ProjectPointOnCurve(pnt, curve)
             # print("number of solution ", pj.NbPoints())
 
-            pnt= pj.NearestPoint()
-            p2= np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            pnt = pj.NearestPoint()
+            p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
 
-            dist= np.sqrt(np.sum((p1 - p2)**2))
-            ret= dist
+            dist = np.sqrt(np.sum((p1 - p2)**2))
+            ret = dist
 
-            txt= "\n".join(["Number of projection point: " +
+            txt = "\n".join(["Number of projection point: " +
                              str(pj.NbPoints()),
                              "Nearest point: " + str(p2),
                              "Distance: " + str(dist)])
@@ -307,13 +333,13 @@ def shape_inspector(shape, inspect_type, shapes):
         elif (isinstance(shapes[0], TopoDS_Vertex) and
               isinstance(shapes[1], TopoDS_Vertex)):
             # distance between point and point
-            pnt= bt.Pnt(shapes[0])
-            p1= np.array((pnt.X(), pnt.Y(), pnt.Z(),))
-            pnt= bt.Pnt(shapes[1])
-            p2= np.array((pnt.X(), pnt.Y(), pnt.Z(),))
-            dist= np.sqrt(np.sum((p1 - p2)**2))
+            pnt = bt.Pnt(shapes[0])
+            p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            pnt = bt.Pnt(shapes[1])
+            p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+            dist = np.sqrt(np.sum((p1 - p2)**2))
 
-            txt= "Distance: " + str(dist)
+            txt = "Distance: " + str(dist)
             return txt, data
 
         elif (isinstance(shapes[0], TopoDS_Edge) and
@@ -334,39 +360,39 @@ def shape_inspector(shape, inspect_type, shapes):
             assert False, "not implemented"
 
     elif inspect_type == 'findsame':
-        tol, shapes, topolists= shapes
-        facelist= topolists[0]
-        edgelist= topolists[1]
-        gids= []
-        nface= 0
-        nedge= 0
+        tol, shapes, topolists = shapes
+        facelist = topolists[0]
+        edgelist = topolists[1]
+        gids = []
+        nface = 0
+        nedge = 0
         for s in shapes:
             if isinstance(s, TopoDS_Face):
-                nface= nface + 1
+                nface = nface + 1
             if isinstance(s, TopoDS_Edge):
-                nedge= nedge + 1
+                nedge = nedge + 1
 
         assert nface > 0 or nedge > 0, "Specify either faces or edges"
         assert nface == 0 or nedge == 0, "Specify either faces or edges"
 
-        faces= [s for s in shapes if isinstance(s, TopoDS_Face)]
-        edges= [s for s in shapes if isinstance(s, TopoDS_Edge)]
+        faces = [s for s in shapes if isinstance(s, TopoDS_Face)]
+        edges = [s for s in shapes if isinstance(s, TopoDS_Edge)]
 
         if len(faces) > 0:
-            samefaces= find_sameface(bt, shape, faces, tol)
-            gidsf= [facelist.find_gid(f) for f in samefaces]
+            samefaces = find_sameface(bt, shape, faces, tol)
+            gidsf = [facelist.find_gid(f) for f in samefaces]
             gids.extend(gidsf)
         if len(edges) > 0:
-            sameedges= find_sameedge(bt, shape, edges, tol)
-            gidse= [edgelist.find_gid(e) for e in sameedges]
+            sameedges = find_sameedge(bt, shape, edges, tol)
+            gidse = [edgelist.find_gid(e) for e in sameedges]
             gids.extend(gidse)
 
-        gids_int= np.unique([int(x) for x in gids])
+        gids_int = np.unique([int(x) for x in gids])
         if nface > 0:
-            gids= [SurfaceID(int(x)) for x in gids_int]
+            gids = [SurfaceID(int(x)) for x in gids_int]
         if nedge > 0:
-            gids= [LineID(int(x)) for x in gids_int]
-        txt= ',\n'.join([str(int(x)) for x in gids])
+            gids = [LineID(int(x)) for x in gids_int]
+        txt = ',\n'.join([str(int(x)) for x in gids])
 
         return txt, gids
     else:

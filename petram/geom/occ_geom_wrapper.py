@@ -830,14 +830,6 @@ class Geometry():
         return f_id
 
     def add_plate_surface(self, gids_edge, gids_vertex):
-        from OCC.Core.GeomPlate import (GeomPlate_BuildPlateSurface,
-                                        GeomPlate_PointConstraint,
-                                        GeomPlate_MakeApprox)
-        from OCC.Core.BRepTools import BRepTools_WireExplorer
-        from OCC.Core.BRepAdaptor import BRepAdaptor_HCurve
-        from OCC.Core.BRepFill import BRepFill_CurveConstraint
-        from OCC.Core.ShapeFix import ShapeFix_Face
-
         bt = BRep_Tool()
         BPSurf = GeomPlate_BuildPlateSurface(2, 150, 10)
 
@@ -2688,20 +2680,142 @@ class Geometry():
 
         return list(objs), newkeys
 
-    def healExtra_build_geom(self, objs, *args):
-        targets = args[0]
+    def SplitHairlineFace_build_geom(self, objs, *args):
+        vols, thr1, thr2, targets, recursive = args
+        targets = [x.strip() for x in targets.split(',') if len(x.strip()) > 0]
+        faces = self.get_target1(objs, targets, 'f')
+        vols = [x.strip() for x in vols.split(',')]
+        vols = self.get_target1(objs, vols, 'v')
+
+        thr1 = float(thr1)
+        thr2 = float(thr2)
+
+        from .occ_heal_extra import (split_hairlineface,
+                                     replace_faces)
+        from .occ_inspect import find_min_distance_in_face
+
+        newobj = []
+
+        for v in vols:
+            vol = self.solids[v]
+            orig_vol = vol
+            while True:
+                mapper = get_mapper(vol, 'face')
+
+                new_faces = []
+                nsmall, smax, sfaces, areas = check_shape_area(vol, thr1,
+                                                               return_area=True)
+                small_faces = [f for f, a in zip(sfaces, areas)
+                               if find_min_distance_in_face(self.bt, f) < thr2]
+
+                if len(small_faces) != 0:
+                    data = [(mapper.FindIndex(f), a, find_min_distance_in_face(self.bt, f))
+                            for f, a in zip(sfaces, areas)
+                            if find_min_distance_in_face(self.bt, f) < thr2]
+
+                    txt = '\n'.join([str(int(gid)) + "\t(area = "+str(a) +
+                                     ",\tmin D= " + str(dist) + ")"
+                                     for gid, a, dist in data])
+
+                    print("Working on following faces: value=" + str(v))
+                    print(txt)
+
+                faces = [self.faces[f] for f in faces]
+                for f in faces:
+                    if mapper.Contains(f):
+                        small_faces.append(f)
+                    else:
+                        print("not contained!!")
+
+                print(small_faces)
+                if len(small_faces) == 0:
+                    break
+
+                replaced_faces = []
+                for f in small_faces:
+                    print("processing face:" + str(mapper.FindIndex(f)))
+                    replacements = split_hairlineface(f, limit=thr2)
+                    if replacements is None:
+                        print("skipping...." + str(mapper.FindIndex(f)))
+                        continue
+                    new_faces.extend(replacements)
+                    replaced_faces.append(f)
+
+                vol = replace_faces(vol, replaced_faces, new_faces)
+                if not recursive:
+                    break
+
+            solid_id = self.solids.add(vol)
+            self.builder.Add(self.shape, vol)
+
+            newobj.append(objs.addobj(solid_id, 'vol'))
+
+            self.builder.Remove(self.shape, orig_vol)
+
+        self.synchronize_topo_list(action='both', verbose=False)
+        return list(objs), newobj
+
+    def CapFaces_build_geom(self, objs, *args):
+        vols, targets, use_filling = args
         targets = [x.strip() for x in targets.split(',')]
         faces = self.get_target1(objs, targets, 'f')
+        vols = [x.strip() for x in vols.split(',')]
+        vols = self.get_target1(objs, vols, 'v')
 
-        from .occ_heal_extra import split_face_extra
+        from .occ_heal_extra import (create_cap_face,
+                                     replace_faces)
+        newobj = []
 
-        for f in faces:
-            shape = self.faces[f]
-            split_face_extra(shape)
+        vol = self.solids[vols[0]]
+        faces = [self.faces[f] for f in faces]
 
-        newkeys = []
+        new_face = create_cap_face(
+            vol, faces, use_filling, self.occ_geom_tolerance)
 
-        return list(objs), newkeys
+        for v in vols:
+            vol = self.solids[v]
+            orig_vol = vol
+            vol = replace_faces(vol, faces, [new_face])
+
+            self.builder.Add(self.shape, vol)
+            self.builder.Remove(self.shape, orig_vol)
+
+            solid_id = self.solids.add(vol)
+            newobj.append(objs.addobj(solid_id, 'vol'))
+
+        self.synchronize_topo_list(action='both', verbose=False)
+        return list(objs), newobj
+
+    def ReplaceFaces_build_geom(self, objs, *args):
+        vols, targets, ntargets = args
+        targets = [x.strip() for x in targets.split(',')]
+        faces = self.get_target1(objs, targets, 'f')
+        ntargets = [x.strip() for x in ntargets.split(',')]
+        faces2 = self.get_target1(objs, ntargets, 'f')
+
+        vols = [x.strip() for x in vols.split(',')]
+        vols = self.get_target1(objs, vols, 'v')
+
+        from .occ_heal_extra import replace_faces
+
+        faces = [self.faces[f] for f in faces]
+        faces2 = [self.faces[f] for f in faces2]
+
+        newobj = []
+
+        for v in vols:
+            vol = self.solids[v]
+            orig_vol = vol
+            vol = replace_faces(vol, faces, faces2)
+
+            self.builder.Add(self.shape, vol)
+            self.builder.Remove(self.shape, orig_vol)
+
+            solid_id = self.solids.add(vol)
+            newobj.append(objs.addobj(solid_id, 'vol'))
+
+        self.synchronize_topo_list(action='both', verbose=False)
+        return list(objs), newobj
 
     def CreateLine_build_geom(self, objs, *args):
         pts = args
