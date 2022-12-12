@@ -104,8 +104,6 @@ def split_hairlineface(face, limit=0.1):
             edge_connection[idx[1]] = idx[0]
         edge_shapes[tuple(idx)] = e
 
-    print(edge_shapes)
-
     ptx = []
     for v in vertices:
         pnt = bt.Pnt(v)
@@ -200,7 +198,7 @@ def create_cap_face(volume, faces, use_filling, occ_geom_tolerance):
 
     eidx = []
     arr = sorted([mapper.FindIndex(e) for e in all_edges])
-    print(arr)
+
     if arr[0] != arr[1]:
         eidx.append(arr[0])
     if arr[-2] != arr[-1]:
@@ -210,20 +208,17 @@ def create_cap_face(volume, faces, use_filling, occ_geom_tolerance):
                 arr[i] != arr[i - 1]):
             eidx.append(arr[i])
 
-    print(eidx)
     outer_edges = []
     for e in all_edges:
         if mapper.FindIndex(e) in eidx:
             outer_edges.append(e)
 
-    print(outer_edges)
     if use_filling:
         face = _create_surface_filling(outer_edges, occ_geom_tolerance)
     else:
         face = _create_plane_filling(outer_edges)
 
     return face
-
 
 def replace_faces(volume, old_faces, new_faces):
     '''
