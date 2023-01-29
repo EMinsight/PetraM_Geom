@@ -2,6 +2,7 @@ from __future__ import print_function
 import petram.geom.occ_inspect
 from threading import Thread
 from queue import Queue
+
 from petram.geom.occ_cbook import *
 from petram.geom.geom_id import (
     GeomIDBase,
@@ -829,6 +830,7 @@ class Geometry():
 
         return f_id
 
+    '''
     def add_plate_surface(self, gids_edge, gids_vertex):
         bt = BRep_Tool()
         BPSurf = GeomPlate_BuildPlateSurface(2, 150, 10)
@@ -889,7 +891,7 @@ class Geometry():
         new_objs = self.register_shaps_balk(result)
 
         return new_objs
-
+    '''
     def add_surface_filling(self, gids_edge, gids_vertex):
         from OCC.Core.GeomAbs import GeomAbs_C0
         from OCC.Core.BRepTools import BRepTools_WireExplorer
@@ -5559,17 +5561,25 @@ class Geometry():
                 print('tesselation of face is missing, iface=', iface)
                 return
             else:
-                tab = facing.Nodes()
-                tri = facing.Triangles()
-                idx = [tri.Value(i).Get()
-                       for i in range(1, facing.NbTriangles() + 1)]
-                values = [tab.Value(i) for i in range(1, tab.Length() + 1)]
+                if not OCC_after_7_6_0:
+                    tab = facing.Nodes()
+                    tri = facing.Triangles()
+                    idx = [tri.Value(i).Get()
+                           for i in range(1, facing.NbTriangles() + 1)]
+                    values = [tab.Value(i) for i in range(1, tab.Length() + 1)]
+                    LL = tab.Length()
+                else:
+                    values = [facing.Node(i) for i in range(1, facing.NbNodes() + 1)]
+                    idx = [facing.Triangle(i).Get()
+                           for i in range(1, facing.NbTriangles() + 1)]
+                    LL = len(values)
+                
                 ptx = value2coord(values, location)
 
                 all_ptx.append(np.vstack(ptx))
 
                 face_idx[iface] = np.vstack(idx) - 1 + offset()
-                offset.increment(tab.Length())
+                offset.increment(LL)
                 return
 
         def work_on_edge_on_face(iedge, edge):
