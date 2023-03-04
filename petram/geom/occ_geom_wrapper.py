@@ -2508,7 +2508,6 @@ class Geometry():
         lines = [self.add_extended_line(gid, ratio, resample)
                  for gid in gids]
 
-        print(lines)
         newobjs = []
         newkeys = []
         for l in lines:
@@ -2636,7 +2635,7 @@ class Geometry():
     def Simplifiers_build_geom(self, objs, *args):
         targets, use_merge, use_remover, rm_size = args
 
-        print(targets, use_merge, use_remover, rm_size)
+        #print(targets, use_merge, use_remover, rm_size)
 
         targets = [x.strip() for x in targets.split(',')]
         vols = self.get_target1(objs, targets, 'v')
@@ -2883,7 +2882,7 @@ class Geometry():
         a2 = a2 * radius
 
         c = np.array(center)
-        print(a1, a2, c)
+        #print(a1, a2, c)
         if npts == 0:
             edges = [self.add_circle_by_axis_radius(c, dirct, radius)]
         else:
@@ -3000,7 +2999,7 @@ class Geometry():
 
         edges = [self.add_circle_by_axis_radius(c, dirct, r, npts=npts)
                  for c, r in zip(centers, radius)]
-        print(edges)
+        #print(edges)
 
         newkeys = []
         for e in edges:
@@ -3299,7 +3298,7 @@ class Geometry():
         results = []
 
         for offset, altitude in zip(offsets, altitudes):
-            print(offset)
+            #print(offset)
             OM.Perform(float(offset), float(altitude))
             if not OM.IsDone():
                 assert False, "Faile to make offset"
@@ -4096,7 +4095,7 @@ class Geometry():
                 gids_new.extend(self.translate_rot(gids, tt, poa,
                                                    v2, ang, copy=True))
 
-        print(gids_new)
+        #print(gids_new)
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'arr'))
 
@@ -4173,7 +4172,7 @@ class Geometry():
         gid_face = self.get_target1(objs, faces, 'f')[0]
         gid_edges = self.get_target1(objs, edges, 'l')
 
-        print(gid_edges)
+        #print(gid_edges)
 
         gids_new = self.chamfer2d(gid_face, gid_edges, e1, e2)
 
@@ -4463,7 +4462,7 @@ class Geometry():
 
     def Circle2DRadiusTwoTangentCurve_build_geom(self, objs, *args):
         tlines, radius, make_face = args
-        print(tlines, radius, make_face)
+        #print(tlines, radius, make_face)
 
         tlines = [x.strip() for x in tlines.split(',')]
         gids = self.get_target1(objs, tlines, 'l')
@@ -4489,7 +4488,7 @@ class Geometry():
 
         l1 = gp_Lin2d(p1, gp_Dir2d(v1))
         l2 = gp_Lin2d(p2, gp_Dir2d(v2))
-        print(l1, l2)
+        #print(l1, l2)
 
         from OCC.Core.GccEnt import gccent_Unqualified, GccEnt_QualifiedLin
         from OCC.Core.Geom2d import Geom2d_Circle
@@ -4502,8 +4501,8 @@ class Geometry():
 
         c_solver = GccAna_Circ2d2TanRad(l1_q, l2_q,
                                         radius, self.occ_geom_tolerance)
-        print(c_solver.IsDone())
-        print(c_solver.NbSolutions())
+        #print(c_solver.IsDone())
+        #print(c_solver.NbSolutions())
         for i in range(c_solver.NbSolutions()):
             c_sol = c_solver.ThisSolution(i + 1)
             c = Geom2d_Circle(c_sol)
