@@ -5960,7 +5960,37 @@ class Geometry():
         stlmode = filename.endswith('.stl')
 
         if selection is None:
-            comp = self.shape
+            # create temporary compound to avoid writing duplicate objects
+            #
+            shape = self.shape
+            comp = self.new_compound()
+            b = self.builder
+
+            ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_SHELL, TopAbs_SOLID)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_FACE, TopAbs_SHELL)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_WIRE, TopAbs_FACE)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_EDGE, TopAbs_WIRE)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_VERTEX, TopAbs_EDGE)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+
         else:
             gids = []
             for i in selection[0]:
