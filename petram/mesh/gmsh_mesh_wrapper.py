@@ -259,6 +259,7 @@ class GMSHMeshWrapper():
         self.ho_order = kwargs.pop("ho_order", 2)
         self.optimize_ho = kwargs.pop("optimize_ho", 0)
         self.optimize_dom = kwargs.pop("optimize_dom", "all")
+        self.optimize_lim = kwargs.pop("optimize_lim", [0.1, 2])
         self.mapper_tol = kwargs.pop("mapper_tol", 1e-5)
 
         gmsh.clear()
@@ -439,8 +440,9 @@ class GMSHMeshWrapper():
                 # need this to control the domain to be optimzed
                 self.show_only(dimTags, recursive=True)
 
-                gmsh.option.setNumber("Mesh.HighOrderThresholdMax", 2)
-                gmsh.option.setNumber("Mesh.HighOrderThresholdMin", 0.1)
+                print(self.optimize_lim)
+                gmsh.option.setNumber("Mesh.HighOrderThresholdMax", self.optimize_lim[1])
+                gmsh.option.setNumber("Mesh.HighOrderThresholdMin", self.optimize_lim[0])
 
                 if self.queue is not None:
                     self.queue.put((False,
