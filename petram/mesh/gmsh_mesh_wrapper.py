@@ -433,14 +433,9 @@ class GMSHMeshWrapper():
                 do_ho = False
 
             if do_ho:
-                if self.queue is not None:
-                    self.queue.put((False,
-                                    "Optimizing mesh (FastCurving)"))
-
                 # need this to control the domain to be optimzed
                 self.show_only(dimTags, recursive=True)
 
-                print(self.optimize_lim)
                 gmsh.option.setNumber("Mesh.HighOrderThresholdMax", self.optimize_lim[1])
                 gmsh.option.setNumber("Mesh.HighOrderThresholdMin", self.optimize_lim[0])
 
