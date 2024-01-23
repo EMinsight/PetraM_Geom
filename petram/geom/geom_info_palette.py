@@ -28,8 +28,8 @@ class GeomInfoPalette(SimpleFramePlus):
                  wx.CLOSE_BOX|
                  wx.MINIMIZE_BOX|
                  wx.RESIZE_BORDER|
-                 wx.FRAME_FLOAT_ON_PARENT|
-                 wx.FRAME_TOOL_WINDOW)
+                 wx.FRAME_FLOAT_ON_PARENT)
+        #        wx.FRAME_TOOL_WINDOW) # this does not work on apptainer on Mac/Windows
 
         super(GeomInfoPalette, self).__init__(parent, wid, title, style=style)
 
