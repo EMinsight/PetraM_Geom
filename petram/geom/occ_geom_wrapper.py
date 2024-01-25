@@ -1892,7 +1892,6 @@ class Geometry():
         a, b, c = abc
 
         if a == b and b == c:
-            print("using Trsf")
             gt = gp_Trsf()
             pts = gp_Pnt(x, y, z)
             gt.SetScale(pts, float(a))
@@ -3710,7 +3709,7 @@ class Geometry():
         for gid in gids:
             new_gid = self.symmetrize(gid, abcd, copy=keep)
             if new_gid is not None:
-                newkeys.append(objs.addobj(new_gid, 'flp'))
+                newkeys.append(objs.addobj(new_gid, 'mv'))
 
         self.synchronize_topo_list(action='both')
 
@@ -4707,7 +4706,7 @@ class Geometry():
         for gid in gids:
             new_gid = self.symmetrize(gid, abcd, copy=keep)
             if new_gid is not None:
-                newkeys.append(objs.addobj(new_gid, 'flp'))
+                newkeys.append(objs.addobj(new_gid, 'mv'))
 
         self.synchronize_topo_list(action='both')
 
@@ -4834,13 +4833,13 @@ class Geometry():
             self.remove(gid)
 
         result = operator.Shape()
-        gids_new = self.register_shaps_balk(result)
+        gids_new = self.register_shaps_balk(result, check_this=self.shape)
 
         newkeys = []
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'splt'))
 
-        self.synchronize_topo_list()
+        self.synchronize_topo_list(action='both')
         return list(objs), newkeys
 
     def ProjectOnWP_build_geom(self, objs, *args):
@@ -5276,6 +5275,9 @@ class Geometry():
             fix_param = None
 
         shape = TopoDS_Shape()
+
+        import os
+        cad_file = os.path.expanduser(cad_file)
         success = breptools_Read(shape, cad_file, self.builder)
 
         if not success:
@@ -5288,7 +5290,9 @@ class Geometry():
         from OCC.Core.STEPControl import STEPControl_Reader
         from OCC.Core.IGESControl import IGESControl_Reader
         from OCC.Core.IFSelect import IFSelect_RetDone, IFSelect_ItemsByEntity
-        from OCC.Core.Interface import Interface_Static_SetCVal
+        from OCC.Core.Interface import (Interface_Static_SetCVal,
+                                        Interface_Static_SetRVal,
+                                        Interface_Static_SetIVal)
 
         unit = args[-1]
         cad_file, use_fix, use_fix_param, use_fix_tol, use_fix_rescale, highestDimOnly = args[
@@ -5297,6 +5301,9 @@ class Geometry():
             fix_param = (use_fix_param, use_fix_tol, use_fix_rescale,)
         else:
             fix_param = None
+
+        import os
+        cad_file = os.path.expanduser(cad_file)
 
         if (cad_file.lower().endswith(".iges") or
                 cad_file.lower().endswith(".igs")):

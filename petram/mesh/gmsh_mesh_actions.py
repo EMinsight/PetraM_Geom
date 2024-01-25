@@ -207,6 +207,10 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                      guilabel='Resolution',
                                      default=5.,
                                      tip="Edge Resolution")),
+        ('growth', VtableElement('growth', type='float',
+                                 guilabel='Growth',
+                                 default=1.0,
+                                 tip="Mesh size growth")),
         ('embed_s', VtableElement('embed_s', type='string',
                                   guilabel='Surface#',
                                   default="",
@@ -227,7 +231,7 @@ class FreeVolume(GmshMeshActionBase):
 
     def add_meshcommand(self, mesher):
         values = self.vt.make_value_or_expression(self)
-        gid, clmax, clmin, res, embed_s, embed_l, embed_p = values
+        gid, clmax, clmin, res, growth, embed_s, embed_l, embed_p = values
         gid, embed_s, embed_l, embed_p = self.eval_entity_id(
             gid, embed_s, embed_l, embed_p)
 
@@ -235,6 +239,7 @@ class FreeVolume(GmshMeshActionBase):
                    maxsize=clmax,
                    minsize=clmin,
                    resolution=res,
+                   sizegrowth=growth,
                    embed_s=embed_s,
                    embed_l=embed_l,
                    embed_p=embed_p,
@@ -309,6 +314,10 @@ data = (('geom_id', VtableElement('geom_id', type='string',
                                      guilabel='Resolution',
                                      default=5.,
                                      tip="Edge Resolution")),
+        ('growth', VtableElement('growth', type='float',
+                                 guilabel='Growth',
+                                 default=1.0,
+                                 tip="Mesh size growth")),
         ('embed_l', VtableElement('embed_l', type='string',
                                   guilabel='Line#',
                                   default="",
@@ -324,13 +333,14 @@ class FreeFace(GmshMeshActionBase):
     vt = Vtable(data)
 
     def add_meshcommand(self, mesher):
-        gid, clmax, clmin, res, embed_l, embed_p = self.vt.make_value_or_expression(
+        gid, clmax, clmin, res, growth, embed_l, embed_p = self.vt.make_value_or_expression(
             self)
         gid, embed_l, embed_p = self.eval_entity_id(gid, embed_l, embed_p)
         mesher.add('freeface', gid,
                    maxsize=clmax,
                    minsize=clmin,
                    resolution=res,
+                   sizegrowth=growth,
                    embed_l=embed_l,
                    embed_p=embed_p,
                    alg2d=self.alg_2d)
@@ -541,6 +551,73 @@ class CopyFaceRotate(GmshMeshActionBase):
         except BaseException:
             pass
         return ret, 'face'
+
+
+data = (('geom_id', VtableElement('geom_id', type='string',
+                                  guilabel='Curves',
+                                  default="",
+                                  tip="Curves to generate boundary layer")),
+        ('surface_id', VtableElement('surface_id', type='string',
+                                     guilabel='Surfaces',
+                                     default="auto",
+                                     tip="Surfaces where boundary layer is generated")),
+        ('thickness', VtableElement('thckness', type='float',
+                                    guilabel='Thickness',
+                                    default_txt="0.1",
+                                    default=0.1,
+                                    tip="total thickness of layer")),
+        ('growth', VtableElement('growth', type='float',
+                                 guilabel='Growth',
+                                 default_txt="1.1",
+                                 default=0.1,
+                                 tip="growth of layer thickness")),
+        ('nlayer', VtableElement('nlayer', type='int',
+                                 guilabel='# of layer',
+                                 default_txt='5',
+                                 default=5.,
+                                 tip="number of boundary layer")),
+        ('fanpoint', VtableElement('fanpoint', type='string',
+                                   guilabel='Fan points',
+                                   tip="number of boundary layer")),
+        ('fanpointsizes', VtableElement('fanpointsizes', type='string',
+                                        guilabel='# of size at fan points',
+                                        tip="number of element for fan points")),
+        ('use_quad', VtableElement('use_quad', type='bool',
+                                   guilabel='Quad element',
+                                   default=False,
+                                   tip="Generate boundary layer using quad elements")), )
+
+
+class BoundaryLayer(GmshMeshActionBase):
+    vt = Vtable(data)
+
+    def add_meshcommand(self, mesher):
+        gid, sid, thickness, growth, nlayer, fanpoints, fanpointssize, use_quad = self.vt.make_value_or_expression(
+            self)
+        gid = self.eval_entity_id(gid)
+        sid = self.eval_entity_id(sid)
+
+        fanpoints = self.eval_entity_id(fanpoints)
+        fanpointssize = [int(x)
+                         for x in fanpointssize.split(',') if len(x) > 0]
+
+        mesher.add('boundary_layer', gid, sid,
+                   thickness=thickness,
+                   growth=growth,
+                   nlayer=nlayer,
+                   fanpoints=fanpoints,
+                   fanpointssize=fanpointssize,
+                   use_quad=use_quad)
+
+    def get_element_selection(self):
+        self.vt.preprocess_params(self)
+        ret, mode = self.element_selection_empty()
+        gid = self.eval_entity_id2(self.geom_id)
+        try:
+            ret['edge'] = [int(x) for x in gid.split(',')]
+        except BaseException:
+            pass
+        return ret, 'edge'
 
 
 merge_loc = [None, None, 36, {"col": 4,

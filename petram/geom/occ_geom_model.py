@@ -3,6 +3,7 @@ import numpy as np
 
 from petram.geom.gmsh_geom_model import GmshGeom
 
+
 class OCCGeom(GmshGeom):
     has_2nd_panel = False
 
@@ -43,7 +44,7 @@ class OCCGeom(GmshGeom):
                          extname='STEP', ext='.stp'):
         if not hasattr(self, '_gso'):
             return None
-        
+
         if make_selection:
             dlg = evt.GetEventObject().GetTopLevelParent()
             viewer = dlg.GetParent()
@@ -62,7 +63,7 @@ class OCCGeom(GmshGeom):
                 return None
         else:
             selection = None
-            
+
         from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         path = write(parent,
@@ -72,11 +73,11 @@ class OCCGeom(GmshGeom):
             if not path.endswith(ext):
                 path = path + ext
             return self._gso.export_shapes_step(selection, path)
-        
+
     def onExportSelectedSTEP(self, evt):
         self._do_onexportstep(evt, make_selection=True)
-        evt.Skip()            
-        
+        evt.Skip()
+
     def onExportSTEP(self, evt):
         self._do_onexportstep(evt)
         evt.Skip()
@@ -85,10 +86,10 @@ class OCCGeom(GmshGeom):
         self._do_onexportstep(evt, make_selection=True,
                               extname='STL', ext='.stl')
         evt.Skip()
-        
+
     def onExportSTL(self, evt):
         self._do_onexportstep(evt, extname='STL', ext='.stl')
-        evt.Skip()                        
+        evt.Skip()
 
     def onExportSelectedBrep(self, evt):
         if not hasattr(self, '_gso'):
@@ -111,8 +112,8 @@ class OCCGeom(GmshGeom):
             return None
 
         parent = evt.GetEventObject()
-        
-        from ifigure.widgets.dialog import write        
+
+        from ifigure.widgets.dialog import write
         path = write(parent,
                      message='Enter .brep file name',
                      wildcard='*.brep')
@@ -125,15 +126,65 @@ class OCCGeom(GmshGeom):
         evt.Skip()
         return None
 
+    def _do_export_visible(self, evt, extname='brep', ext='.brep'):
+
+        dlg = evt.GetEventObject().GetTopLevelParent()
+        viewer = dlg.GetParent()
+
+        s2l, v2s = viewer._s_v_loop['geom']
+
+        volumes = list(v2s)
+        surfaces = list(s2l)
+
+        org_selection = viewer.dom_bdr_sel
+        if len(volumes) > 0:
+            hidden = list(set(viewer._hidden_volume))
+            new_sel = list(np.array(volumes)[np.in1d(
+                volumes, hidden, invert=True)]), [], [], []
+        else:
+            assert False, "Export Visible support only 3D geomgery"
+
+        from ifigure.widgets.dialog import write
+        parent = evt.GetEventObject()
+        path = write(parent,
+                     message='Enter ' + extname + ' filename',
+                     wildcard='*'+ext)
+        if path != '':
+            if not path.endswith(ext):
+                path = path + ext
+
+            if ext == '.brep':
+                return self._gso.export_shapes(new_sel, path)
+            else:
+                return self._gso.export_shapes_step(new_sel, path)
+
+        return None
+
+    def onExportVisibleBrep(self, evt):
+        ret = self._do_export_visible(evt)
+        evt.Skip()
+        return ret
+
+    def onExportVisibleSTEP(self, evt):
+        ret = self._do_export_visible(evt, extname='STEP', ext='.stp')
+        evt.Skip()
+        return ret
+
+    def onExportVisibleSTL(self, evt):
+        ret = self._do_export_visible(evt, extname='STL', ext='.stl')
+        evt.Skip()
+        return ret
+
     def panel1_param(self):
         import wx
         return [["", "Geometry model using OpenCascade", 2, None],
-                #["PreviewAlgorith", "Automatic", 4, {"style": wx.CB_READONLY,
+                # ["PreviewAlgorith", "Automatic", 4, {"style": wx.CB_READONLY,
                 #                                     "choices": ["Auto", "MeshAdpat",
                 #                                                 "Delaunay", "Frontal"]}],
-                ["Preview Resolution (linear)", self.small_edge_thr, 300, None],
+                ["Preview Resolution (linear)",
+                 self.small_edge_thr, 300, None],
                 ["Preview Resolution (angle)", self.long_edge_thr, 300, None],
-                [None, self.maxthreads > 1, 3, {"text": "Parallel preview"}],                
+                [None, self.maxthreads > 1, 3, {"text": "Parallel preview"}],
                 [None, self.occ_parallel, 3, {"text": "Parallel boolean"}],
                 [None, self.skip_final_frag, 3, {
                     "text": "Skip fragmentationn"}],
@@ -190,7 +241,7 @@ class OCCGeom(GmshGeom):
                 WPNormalToPlane,
                 healCAD, CADImport, BrepImport,
                 Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
-                ArrayPath,  
+                ArrayPath,
                 ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine,
                 CreateOffset, CreateOffsetFace, CreateProjection, Simplifiers, MovePoint]
 
@@ -222,7 +273,7 @@ class OCCGeom(GmshGeom):
                 ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
                 ("", PointCircleCenter), ("!", PointByUV),
                 ("Lines...", LineOCC), ("!", ExtendedLine),
-                ("Polygon...", Polygon2), ("!", OCCPolygon), 
+                ("Polygon...", Polygon2), ("!", OCCPolygon),
                 ("Circle...", CircleOCC), ("", CircleByAxisPoint),
                 ("", CircleByAxisCenterRadius), ("!", CircleBy3Points),
                 ("", Rect),
@@ -232,21 +283,25 @@ class OCCGeom(GmshGeom):
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
                 ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
-                ("", ThruSection), ("", CreateOffset), ("", CreateOffsetFace), ("", CreateShell),
+                ("", ThruSection), ("", CreateOffset), ("",
+                                                        CreateOffsetFace), ("", CreateShell),
                 ("!", CreateProjection),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
-                ("Fillet/Chamfer", Fillet), ("!", Chamfer),                                
-                ("Copy/Remove...", Copy), ("", Remove), ("", Remove2), ("!", RemoveFaces),
-                ("Translate...", Move,), ("", MoveByPoints), ("", Rotate), ("", RotateCenterPoints),
+                ("Fillet/Chamfer", Fillet), ("!", Chamfer),
+                ("Copy/Remove...", Copy), ("",
+                                           Remove), ("", Remove2), ("!", RemoveFaces),
+                ("Translate...", Move,), ("", MoveByPoints), ("",
+                                                              Rotate), ("", RotateCenterPoints),
                 ("", Flip), ("!", Scale),
-                ("Array...", Array), ("", ArrayRot), ("", ArrayByPoints), ("", ArrayRotByPoints),
-                ("!", ArrayPath), 
+                ("Array...", Array), ("", ArrayRot), ("",
+                                                      ArrayByPoints), ("", ArrayRotByPoints),
+                ("!", ArrayPath),
                 ("Boolean...", Union), ("", MergeFace), ("", Intersection),
                 ("", Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints),
                 ("", WPParallelToPlane), ("!", WPNormalToPlane),
                 ("Import...", BrepImport), ("", CADImport), ("", healCAD),
-                ("Extra(under Dev,)...", Simplifiers),("!", MovePoint),
+                ("Extra(under Dev,)...", Simplifiers), ("!", MovePoint),
                 ("!", None),
                 ]
 
@@ -262,26 +317,41 @@ class OCCGeom(GmshGeom):
         if np.sum([len(x) for x in selection]) == 0:
             menu = [('Build All', self.onBuildAll, None),
                     ('+Export...', None, None),
+                    ('+All...', None, None),
                     ('Brep', self.onExportBrep, None),
                     ('STEP', self.onExportSTEP, None),
                     ('STL', self.onExportSTL, None),
-                    ('!', None, None)]
+                    ('!', None, None),
+                    ('+Visible...', None, None),
+                    ('as Brep', self.onExportVisibleBrep, None),
+                    ('as STEP', self.onExportVisibleSTEP, None),
+                    ('as STL', self.onExportVisibleSTL, None),
+                    ('!', None, None),
+                    ('!', None, None)
+                    ]
         else:
             menu = [('Build All', self.onBuildAll, None),
-                    ('+Export Selection...', None, None),                    
+                    ('+Export Selection...', None, None),
+                    ('+All...', None, None),
+                    ('as Brep', self.onExportBrep, None),
+                    ('as STEP', self.onExportSTEP, None),
+                    ('as STL', self.onExportSTL, None),
+                    ('!', None, None),
+                    ('+Selection...', None, None),
                     ('as Brep', self.onExportSelectedBrep, None),
                     ('as STEP', self.onExportSelectedSTEP, None),
                     ('as STL', self.onExportSelectedSTL, None),
                     ('!', None, None),
-                    ('+Export...', None, None),
-                    ('Brep', self.onExportBrep, None),
-                    ('STEP', self.onExportSTEP, None),
-                    ('STL', self.onExportSTL, None),
+                    ('+Visible...', None, None),
+                    ('as Brep', self.onExportVisibleBrep, None),
+                    ('as STEP', self.onExportVisibleSTEP, None),
+                    ('as STL', self.onExportVisibleSTL, None),
+                    ('!', None, None),
                     ('!', None, None)]
 
         if self._gso.child_alive():
             m2 = [('---', None, None),
                   ('Terminate geometry process',
-                   self.onTerminateChild, None),]
+                   self.onTerminateChild, None), ]
             menu.extend(m2)
         return menu
