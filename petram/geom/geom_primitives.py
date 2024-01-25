@@ -54,6 +54,7 @@ class Point(GeomPB):
     def fancy_tree_name(self):
         return 'Point'
 
+
 class PointOCC(Point):
     vt = Vtable(pdata)
 
@@ -349,7 +350,7 @@ cdata = (('axis_by_points', VtableElement('axis_by_points', type='string',
                                   default="",
                                           tip="Points to define axis")),
          ('radius', VtableElement('point_on_circle', type='string',
-                                  guilabel='Raidus',
+                                  guilabel='Radius',
                                   default="1.0",
                                   tip="Radius")),
          ('num_points', VtableElement('num_points', type='int',
@@ -1036,6 +1037,81 @@ class MovePoint(GeomPB):
     @classmethod
     def fancy_tree_name(self):
         return 'MovePoint'
+
+
+class SplitHairlineFace(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Volume',
+                                             default="",
+                                             tip="object to heal (split face algorithm)")),
+             ('area_limit', VtableElement('area_limit', type='float',
+                                          guilabel='Area thr.',
+                                          default="1e-5",
+                                          tip="relative area to check if it is hairline")),
+             ('dist_limit', VtableElement('dist_limit', type='float',
+                                          guilabel='DistanceLimit',
+                                          default="1",
+                                          tip="distance limit to split")),
+             ('wrong_object', VtableElement('wrong_object', type='string',
+                                            guilabel='Faces (optinal)',
+                                            default="",
+                                            tip="addtional faces to fix")),
+             ('recursive', VtableElement('recursive', type='bool',
+                                         guilabel='Recursive',
+                                         default=False,
+                                         tip="apply recursively")), )
+
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'SplitHairlineFace'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'SplitHairlineFace'
+
+
+class CapFaces(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Volume',
+                                             default="",
+                                             tip="object to heal (split face algorithm)")),
+             ('face_object', VtableElement('face_object', type='string',
+                                           guilabel='Faces',
+                                           default="",
+                                           tip="addtional faces to fix")),
+             ('use_filling', VtableElement('use_filling', type='bool',
+                                           guilabel='use Surface filling',
+                                           default=True,
+                                           tip="use surface filling to make a cap face")), )
+
+    vt = Vtable(data0)
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'CapFaces'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'CapFaces'
+
+
+class ReplaceFaces(GeomPB):
+    data0 = (('target_object', VtableElement('target_object', type='string',
+                                             guilabel='Volume',
+                                             default="",
+                                             tip="object to heal (split face algorithm)")),
+             ('face_object', VtableElement('face_object', type='string',
+                                           guilabel='Faces to replace',
+                                           default="",
+                                           tip="addtional faces to fix")),
+             ('face_object2', VtableElement('face_object2', type='string',
+                                            guilabel='New faces',
+                                            default="",
+                                            tip="faces for replacement")),)
+
+    vt = Vtable(data0)
 
 
 data0 = (('target_object', VtableElement('target_object', type='string',

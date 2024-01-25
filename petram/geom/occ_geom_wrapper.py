@@ -2,6 +2,7 @@ from __future__ import print_function
 import petram.geom.occ_inspect
 from threading import Thread
 from queue import Queue
+
 from petram.geom.occ_cbook import *
 from petram.geom.geom_id import (
     GeomIDBase,
@@ -829,15 +830,8 @@ class Geometry():
 
         return f_id
 
+    '''
     def add_plate_surface(self, gids_edge, gids_vertex):
-        from OCC.Core.GeomPlate import (GeomPlate_BuildPlateSurface,
-                                        GeomPlate_PointConstraint,
-                                        GeomPlate_MakeApprox)
-        from OCC.Core.BRepTools import BRepTools_WireExplorer
-        from OCC.Core.BRepAdaptor import BRepAdaptor_HCurve
-        from OCC.Core.BRepFill import BRepFill_CurveConstraint
-        from OCC.Core.ShapeFix import ShapeFix_Face
-
         bt = BRep_Tool()
         BPSurf = GeomPlate_BuildPlateSurface(2, 150, 10)
 
@@ -897,7 +891,7 @@ class Geometry():
         new_objs = self.register_shaps_balk(result)
 
         return new_objs
-
+    '''
     def add_surface_filling(self, gids_edge, gids_vertex):
         from OCC.Core.GeomAbs import GeomAbs_C0
         from OCC.Core.BRepTools import BRepTools_WireExplorer
@@ -2514,7 +2508,6 @@ class Geometry():
         lines = [self.add_extended_line(gid, ratio, resample)
                  for gid in gids]
 
-        print(lines)
         newobjs = []
         newkeys = []
         for l in lines:
@@ -2642,7 +2635,7 @@ class Geometry():
     def Simplifiers_build_geom(self, objs, *args):
         targets, use_merge, use_remover, rm_size = args
 
-        print(targets, use_merge, use_remover, rm_size)
+        #print(targets, use_merge, use_remover, rm_size)
 
         targets = [x.strip() for x in targets.split(',')]
         vols = self.get_target1(objs, targets, 'v')
@@ -2687,6 +2680,143 @@ class Geometry():
                     newkeys.append(objs.addobj(gid, 'uni'))
 
         return list(objs), newkeys
+
+    def SplitHairlineFace_build_geom(self, objs, *args):
+        vols, thr1, thr2, targets, recursive = args
+        targets = [x.strip() for x in targets.split(',') if len(x.strip()) > 0]
+        faces = self.get_target1(objs, targets, 'f')
+        vols = [x.strip() for x in vols.split(',')]
+        vols = self.get_target1(objs, vols, 'v')
+
+        thr1 = float(thr1)
+        thr2 = float(thr2)
+
+        from .occ_heal_extra import (split_hairlineface,
+                                     replace_faces)
+        from .occ_inspect import find_min_distance_in_face
+
+        newobj = []
+
+        for v in vols:
+            vol = self.solids[v]
+            orig_vol = vol
+            while True:
+                mapper = get_mapper(vol, 'face')
+
+                new_faces = []
+                nsmall, smax, sfaces, areas = check_shape_area(vol, thr1,
+                                                               return_area=True)
+                small_faces = [f for f, a in zip(sfaces, areas)
+                               if find_min_distance_in_face(self.bt, f) < thr2]
+
+                if len(small_faces) != 0:
+                    data = [(mapper.FindIndex(f), a, find_min_distance_in_face(self.bt, f))
+                            for f, a in zip(sfaces, areas)
+                            if find_min_distance_in_face(self.bt, f) < thr2]
+
+                    txt = '\n'.join([str(int(gid)) + "\t(area = "+str(a) +
+                                     ",\tmin D= " + str(dist) + ")"
+                                     for gid, a, dist in data])
+
+                    print("Working on following faces: value=" + str(v))
+                    print(txt)
+
+                faces = [self.faces[f] for f in faces]
+                for f in faces:
+                    if mapper.Contains(f):
+                        small_faces.append(f)
+                    else:
+                        print("not contained!!")
+
+                print(small_faces)
+                if len(small_faces) == 0:
+                    break
+
+                replaced_faces = []
+                for f in small_faces:
+                    print("processing face:" + str(mapper.FindIndex(f)))
+                    replacements = split_hairlineface(f, limit=thr2)
+                    if replacements is None:
+                        print("skipping...." + str(mapper.FindIndex(f)))
+                        continue
+                    new_faces.extend(replacements)
+                    replaced_faces.append(f)
+
+                vol = replace_faces(vol, replaced_faces, new_faces)
+                if not recursive:
+                    break
+
+            solid_id = self.solids.add(vol)
+            self.builder.Add(self.shape, vol)
+
+            newobj.append(objs.addobj(solid_id, 'vol'))
+
+            self.builder.Remove(self.shape, orig_vol)
+
+        self.synchronize_topo_list(action='both', verbose=False)
+        return list(objs), newobj
+
+    def CapFaces_build_geom(self, objs, *args):
+        vols, targets, use_filling = args
+        targets = [x.strip() for x in targets.split(',')]
+        faces = self.get_target1(objs, targets, 'f')
+        vols = [x.strip() for x in vols.split(',')]
+        vols = self.get_target1(objs, vols, 'v')
+
+        from .occ_heal_extra import (create_cap_face,
+                                     replace_faces)
+        newobj = []
+
+        vol = self.solids[vols[0]]
+        faces = [self.faces[f] for f in faces]
+
+        new_face = create_cap_face(
+            vol, faces, use_filling, self.occ_geom_tolerance)
+
+        for v in vols:
+            vol = self.solids[v]
+            orig_vol = vol
+            vol = replace_faces(vol, faces, [new_face])
+
+            self.builder.Add(self.shape, vol)
+            self.builder.Remove(self.shape, orig_vol)
+
+            solid_id = self.solids.add(vol)
+            newobj.append(objs.addobj(solid_id, 'vol'))
+
+        self.synchronize_topo_list(action='both', verbose=False)
+        return list(objs), newobj
+
+    def ReplaceFaces_build_geom(self, objs, *args):
+        vols, targets, ntargets = args
+        targets = [x.strip() for x in targets.split(',')]
+        faces = self.get_target1(objs, targets, 'f')
+        ntargets = [x.strip() for x in ntargets.split(',')]
+        faces2 = self.get_target1(objs, ntargets, 'f')
+
+        vols = [x.strip() for x in vols.split(',')]
+        vols = self.get_target1(objs, vols, 'v')
+
+        from .occ_heal_extra import replace_faces
+
+        faces = [self.faces[f] for f in faces]
+        faces2 = [self.faces[f] for f in faces2]
+
+        newobj = []
+
+        for v in vols:
+            vol = self.solids[v]
+            orig_vol = vol
+            vol = replace_faces(vol, faces, faces2)
+
+            self.builder.Add(self.shape, vol)
+            self.builder.Remove(self.shape, orig_vol)
+
+            solid_id = self.solids.add(vol)
+            newobj.append(objs.addobj(solid_id, 'vol'))
+
+        self.synchronize_topo_list(action='both', verbose=False)
+        return list(objs), newobj
 
     def CreateLine_build_geom(self, objs, *args):
         pts = args
@@ -2752,7 +2882,7 @@ class Geometry():
         a2 = a2 * radius
 
         c = np.array(center)
-        print(a1, a2, c)
+        #print(a1, a2, c)
         if npts == 0:
             edges = [self.add_circle_by_axis_radius(c, dirct, radius)]
         else:
@@ -2869,7 +2999,7 @@ class Geometry():
 
         edges = [self.add_circle_by_axis_radius(c, dirct, r, npts=npts)
                  for c, r in zip(centers, radius)]
-        print(edges)
+        #print(edges)
 
         newkeys = []
         for e in edges:
@@ -3168,7 +3298,7 @@ class Geometry():
         results = []
 
         for offset, altitude in zip(offsets, altitudes):
-            print(offset)
+            #print(offset)
             OM.Perform(float(offset), float(altitude))
             if not OM.IsDone():
                 assert False, "Faile to make offset"
@@ -3965,7 +4095,7 @@ class Geometry():
                 gids_new.extend(self.translate_rot(gids, tt, poa,
                                                    v2, ang, copy=True))
 
-        print(gids_new)
+        #print(gids_new)
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'arr'))
 
@@ -4042,7 +4172,7 @@ class Geometry():
         gid_face = self.get_target1(objs, faces, 'f')[0]
         gid_edges = self.get_target1(objs, edges, 'l')
 
-        print(gid_edges)
+        #print(gid_edges)
 
         gids_new = self.chamfer2d(gid_face, gid_edges, e1, e2)
 
@@ -4332,7 +4462,7 @@ class Geometry():
 
     def Circle2DRadiusTwoTangentCurve_build_geom(self, objs, *args):
         tlines, radius, make_face = args
-        print(tlines, radius, make_face)
+        #print(tlines, radius, make_face)
 
         tlines = [x.strip() for x in tlines.split(',')]
         gids = self.get_target1(objs, tlines, 'l')
@@ -4358,7 +4488,7 @@ class Geometry():
 
         l1 = gp_Lin2d(p1, gp_Dir2d(v1))
         l2 = gp_Lin2d(p2, gp_Dir2d(v2))
-        print(l1, l2)
+        #print(l1, l2)
 
         from OCC.Core.GccEnt import gccent_Unqualified, GccEnt_QualifiedLin
         from OCC.Core.Geom2d import Geom2d_Circle
@@ -4371,8 +4501,8 @@ class Geometry():
 
         c_solver = GccAna_Circ2d2TanRad(l1_q, l2_q,
                                         radius, self.occ_geom_tolerance)
-        print(c_solver.IsDone())
-        print(c_solver.NbSolutions())
+        #print(c_solver.IsDone())
+        #print(c_solver.NbSolutions())
         for i in range(c_solver.NbSolutions()):
             c_sol = c_solver.ThisSolution(i + 1)
             c = Geom2d_Circle(c_sol)
@@ -5430,17 +5560,25 @@ class Geometry():
                 print('tesselation of face is missing, iface=', iface)
                 return
             else:
-                tab = facing.Nodes()
-                tri = facing.Triangles()
-                idx = [tri.Value(i).Get()
-                       for i in range(1, facing.NbTriangles() + 1)]
-                values = [tab.Value(i) for i in range(1, tab.Length() + 1)]
+                if not OCC_after_7_6_0:
+                    tab = facing.Nodes()
+                    tri = facing.Triangles()
+                    idx = [tri.Value(i).Get()
+                           for i in range(1, facing.NbTriangles() + 1)]
+                    values = [tab.Value(i) for i in range(1, tab.Length() + 1)]
+                    LL = tab.Length()
+                else:
+                    values = [facing.Node(i) for i in range(1, facing.NbNodes() + 1)]
+                    idx = [facing.Triangle(i).Get()
+                           for i in range(1, facing.NbTriangles() + 1)]
+                    LL = len(values)
+                
                 ptx = value2coord(values, location)
 
                 all_ptx.append(np.vstack(ptx))
 
                 face_idx[iface] = np.vstack(idx) - 1 + offset()
-                offset.increment(tab.Length())
+                offset.increment(LL)
                 return
 
         def work_on_edge_on_face(iedge, edge):
@@ -5822,7 +5960,37 @@ class Geometry():
         stlmode = filename.endswith('.stl')
 
         if selection is None:
-            comp = self.shape
+            # create temporary compound to avoid writing duplicate objects
+            #
+            shape = self.shape
+            comp = self.new_compound()
+            b = self.builder
+
+            ex1 = TopExp_Explorer(shape, TopAbs_SOLID)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_SHELL, TopAbs_SOLID)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_FACE, TopAbs_SHELL)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_WIRE, TopAbs_FACE)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_EDGE, TopAbs_WIRE)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+            ex1 = TopExp_Explorer(shape, TopAbs_VERTEX, TopAbs_EDGE)
+            while ex1.More():
+                b.Add(comp, ex1.Current())
+                ex1.Next()
+
         else:
             gids = []
             for i in selection[0]:

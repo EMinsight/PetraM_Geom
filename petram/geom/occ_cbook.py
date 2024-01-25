@@ -1,3 +1,5 @@
+
+
 from petram.geom.geom_id import (GeomIDBase, VertexID, LineID, SurfaceID, VolumeID,
                                  LineLoopID, SurfaceLoopID)
 import numpy as np
@@ -5,10 +7,12 @@ import numpy as np
 hasOCC = False
 
 try:
+    import OCC
+    import OCC.Core.Geom
     from OCC.Core.GeomAPI import (GeomAPI_Interpolate,
                                   GeomAPI_ProjectPointOnSurf,
-                                  GeomAPI_ProjectPointOnCurve)    
-    from OCC.Core.Geom import Geom_Plane    
+                                  GeomAPI_ProjectPointOnCurve)
+    from OCC.Core.Geom import Geom_Plane
     from OCC.Core.BRepMesh import BRepMesh_IncrementalMesh
     from OCC.Core.TopLoc import TopLoc_Location
     from OCC.Core.TopExp import (TopExp_Explorer,
@@ -17,7 +21,9 @@ try:
     from OCC.Core.BRep import BRep_Builder, BRep_Tool
     from OCC.Core.BRepTools import (breptools_Write,
                                     breptools_Read,
-                                    breptools_Clean)
+                                    breptools_Clean,
+                                    BRepTools_WireExplorer)
+
     from OCC.Core.TopTools import (TopTools_IndexedMapOfShape,
                                    TopTools_IndexedDataMapOfShapeListOfShape,
                                    TopTools_ListIteratorOfListOfShape,
@@ -47,7 +53,7 @@ try:
                                  topods_Edge,
                                  topods_Vertex)
     from OCC.Core.TopAbs import (TopAbs_COMPSOLID,
-                                 TopAbs_COMPOUND,                                 
+                                 TopAbs_COMPOUND,
                                  TopAbs_SOLID,
                                  TopAbs_SHELL,
                                  TopAbs_FACE,
@@ -71,7 +77,7 @@ try:
                                         BRepOffsetAPI_ThruSections,
                                         BRepOffsetAPI_NormalProjection,
                                         BRepOffsetAPI_MakeThickSolid)
-    
+
     from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_Sewing,
                                          BRepBuilderAPI_Copy,
                                          BRepBuilderAPI_Transform,
@@ -82,9 +88,9 @@ try:
                                          BRepBuilderAPI_MakeWire,
                                          BRepBuilderAPI_MakeEdge,
                                          BRepBuilderAPI_MakeVertex)
-    
+
     from OCC.Core.BRepAlgo import BRepAlgo_NormalProjection
-    
+
     from OCC.Core.BRepAlgoAPI import (BRepAlgoAPI_Fuse,
                                       BRepAlgoAPI_Cut,
                                       BRepAlgoAPI_Common,
@@ -107,17 +113,17 @@ try:
 
     from OCC.Core.ShapeBuild import ShapeBuild_ReShape
     from OCC.Core.ShapeExtend import (ShapeExtend_OK,
-                                  ShapeExtend_DONE1,
-                                  ShapeExtend_DONE2,
-                                  ShapeExtend_DONE3,
-                                  ShapeExtend_DONE4,
-                                  ShapeExtend_DONE5,
-                                  ShapeExtend_DONE6,
-                                  ShapeExtend_DONE7,
-                                  ShapeExtend_DONE8,
-                                  ShapeExtend_FAIL1,
-                                  ShapeExtend_FAIL2,
-                                  ShapeExtend_FAIL3)
+                                      ShapeExtend_DONE1,
+                                      ShapeExtend_DONE2,
+                                      ShapeExtend_DONE3,
+                                      ShapeExtend_DONE4,
+                                      ShapeExtend_DONE5,
+                                      ShapeExtend_DONE6,
+                                      ShapeExtend_DONE7,
+                                      ShapeExtend_DONE8,
+                                      ShapeExtend_FAIL1,
+                                      ShapeExtend_FAIL2,
+                                      ShapeExtend_FAIL3)
 
     from OCC.Core.IMeshTools import IMeshTools_Parameters
 
@@ -127,13 +133,21 @@ try:
     from OCC.Core.ShapeUpgrade import (ShapeUpgrade_UnifySameDomain,
                                        ShapeUpgrade_RemoveInternalWires)
 
+    from OCC.Core.GeomPlate import (GeomPlate_BuildPlateSurface,
+                                    GeomPlate_PointConstraint,
+                                    GeomPlate_MakeApprox)
+
+    #from OCC.Core.BRepAdaptor import BRepAdaptor_HCurve
+    from OCC.Core.BRepFill import BRepFill_CurveConstraint
+    from OCC.Core.GeomAbs import GeomAbs_C0
+
     __ex1 = TopExp_Explorer()
     __ex2 = TopExp_Explorer()
     _system = GProp_GProps()
     _bt = BRep_Tool()
     __expparam = {'compound': (TopAbs_COMPOUND, topods_Compound, ''),
                   'compsolid': (TopAbs_COMPSOLID, topods_CompSolid, ''),
-                  'solid': (TopAbs_SOLID, topods_Solid, ''),                  
+                  'solid': (TopAbs_SOLID, topods_Solid, ''),
                   'shell': (TopAbs_SHELL, topods_Shell, 'solid'),
                   'face': (TopAbs_FACE, topods_Face, 'shell'),
                   'wire': (TopAbs_WIRE, topods_Wire, 'face'),
@@ -141,6 +155,11 @@ try:
                   'vertex': (TopAbs_VERTEX, topods_Vertex, 'edge')}
     __topo_names = ('solid', 'shell', 'face', 'wire', 'edge', 'vertex')
     hasOCC = True
+
+    from packaging import version
+    OCC_after_7_7_0 = version.parse(OCC.VERSION) >= version.parse("7.7.0")
+    OCC_after_7_6_0 = version.parse(OCC.VERSION) >= version.parse("7.6.0")
+    OCC_after_7_5_0 = version.parse(OCC.VERSION) >= version.parse("7.5.0")
 
 except ImportError:
     import traceback
@@ -168,6 +187,7 @@ def iter_shape(shape, shape_type='shell', exclude_parent=False, use_ex2=False):
         yield sub_shape
         ex.Next()
 
+
 def iter_shape_once(shape, shape_type='shell', exclude_parent=False, use_ex2=False):
     mapper = get_mapper(shape, shape_type)
     seen = topo_seen(mapping=mapper)
@@ -177,6 +197,7 @@ def iter_shape_once(shape, shape_type='shell', exclude_parent=False, use_ex2=Fal
                         use_ex2=use_ex2):
         if seen.check_shape(s) == 0:
             yield s
+
 
 def shape_dim(shape):
     if isinstance(shape, TopoDS_Solid):
@@ -192,6 +213,7 @@ def shape_dim(shape):
     if isinstance(shape, TopoDS_Wire):
         return -2
     return -3
+
 
 def shape_name(shape):
     if isinstance(shape, TopoDS_Solid):
@@ -212,13 +234,15 @@ def shape_name(shape):
         return 'compound'
     else:
         assert False, "unknown topoDS:" + str(type(shape))
-        
+
+
 def get_mapper(shape, shape_type):
     mapper = TopTools_IndexedMapOfShape()
     topo_abs = __expparam[shape_type][0]
     topexp_MapShapes(shape, topo_abs, mapper)
     return mapper
-        
+
+
 def iterdouble_shape(shape_in, inner_type='shell'):
     outer_type = __expparam[inner_type][2]
 
@@ -262,12 +286,14 @@ def do_translate(shape, delta):
         assert False, "can not translate (WP) "
     return transformer.ModifiedShape(shape)
 
+
 def get_topo_list():
     lists = {}
     for x in __topo_names:
         cls = 'topo_list_'+x
         lists[x] = globals()[cls]()
     return lists
+
 
 def calc_wp_projection(c1, a1, a2):
     x1 = np.array([1., 0., 0.])
@@ -328,20 +354,21 @@ def prep_maps(shape, return_all=True, return_compound=False):
 
     shellMap = get_mapper(shape, 'shell')
     wireMap = get_mapper(shape, 'wire')
-    
+
     maps['shell'] = shellMap
     maps['wire'] = wireMap
-    
+
     if not return_compound:
         return maps
 
     compoundMap = get_mapper(shape, 'compound')
     compsolidMap = get_mapper(shape, 'compsolid')
-    
+
     maps['compound'] = compoundMap
     maps['compsolid'] = compsolidMap
 
     return maps
+
 
 def register_shape(shape, topolists):
     maps = prep_maps(shape)
@@ -415,37 +442,40 @@ def register_shape(shape, topolists):
                   topods_Vertex, topods_Edge,self.vertices, dim=0)
     '''
 
+
 def read_interface_value(name, R=False, I=False, C=False, verbose=True):
     from OCC.Core.Interface import (Interface_Static_CVal,
                                     Interface_Static_RVal,
                                     Interface_Static_IVal)
 
     if R:
-       rp = Interface_Static_RVal(name)
+        rp = Interface_Static_RVal(name)
     if I:
-       rp = Interface_Static_IVal(name)
+        rp = Interface_Static_IVal(name)
     if C:
-       rp = Interface_Static_CVal(name)
+        rp = Interface_Static_CVal(name)
 
-    if verbose:       
-       print(name, rp)
-       
+    if verbose:
+        print(name, rp)
+
     return rp
-           
-    
+
+
 def display_shape(shape):
-    ### show shape on python-occ display for debug.
+    # show shape on python-occ display for debug.
     from OCC.Display.SimpleGui import init_display
-    
+
     display, start_display, add_menu, add_function_to_menu = init_display()
     display.DisplayShape(shape)
     display.FitAll()
     start_display()
-    
+
+
 def project_ptx_2_plain(normal, cptx, p):
     dp = p - cptx
     dp = dp - np.sum(dp * normal) * normal
     return dp + cptx
+
 
 def rect_by_bbox_projection(normal, cptx, xmin, ymin, zmin,
                             xmax, ymax, zmax, scale=1.5):
@@ -475,7 +505,8 @@ def rect_by_bbox_projection(normal, cptx, xmin, ymin, zmin,
     e2 = n2 * dist2*scale
 
     return [c1+e1, c1+e2, c1-e1, c1-e2]
-    
+
+
 def box_containing_bbox(normal, cptx, xmin, ymin, zmin,
                         xmax, ymax, zmax, scale=1.2):
     corners = (np.array([xmin, ymin, zmin]),
@@ -514,13 +545,16 @@ def box_containing_bbox(normal, cptx, xmin, ymin, zmin,
 
     return box
 
+
 def measure_edge_length(edge):
     brepgprop_LinearProperties(edge, _system)
     return _system.Mass()
 
+
 def measure_face_area(face):
     brepgprop_SurfaceProperties(face, _system)
     return _system.Mass()
+
 
 def find_point_on_curve(edge, lengths, tol=1e-4, flip=False):
 
@@ -560,6 +594,7 @@ def find_point_on_curve(edge, lengths, tol=1e-4, flip=False):
     ufit = np.interp(lengths[flag], l, u)
     return ufit
 
+
 def check_shape_area(shape, thr, return_area=False):
     surfacecount = []
     faces = []
@@ -582,6 +617,7 @@ def check_shape_area(shape, thr, return_area=False):
         return len(idx), smax, faces, areas
     return len(idx), smax, faces
 
+
 def check_shape_length(shape, thr, return_area=False):
     lcount = []
     edges = []
@@ -598,6 +634,7 @@ def check_shape_length(shape, thr, return_area=False):
         ll = [lcount[i] for i in idx]
         return len(idx), lmax, edges, ll
     return len(idx), lmax, edges
+
 
 c_kinds = ('Geom_BezierCurve',
            'Geom_BSplineCurve',
@@ -629,7 +666,6 @@ s_kinds = ('Geom_BezierSurface',
            'Geom_ElementarySurface',
            'Geom_Surface',)
 
-import OCC.Core.Geom
 
 def downcast_curve(curve):
     kind = 'unknown'
@@ -642,6 +678,7 @@ def downcast_curve(curve):
 
     return curve, kind.split('_')[-1]
 
+
 def downcast_surface(surf):
     kind = 'unknown'
     for k in s_kinds:
@@ -652,6 +689,7 @@ def downcast_surface(surf):
     surf = handle.DownCast(surf)
 
     return surf, kind.split('_')[-1]
+
 
 class topo_seen(list):
     def __init__(self, mapping):
@@ -682,7 +720,7 @@ class topo_list():
     name = 'base'
     myclass = type(None)
     gidclass = type(None)
-    
+
     def __init__(self):
         self.gg = {0: {}, }
         self.d = self.gg[0]
@@ -782,11 +820,12 @@ class topo_list():
         shape = self[val]
         return iter_shape(shape, kind)
 
+
 class topo_list_vertex(topo_list):
     name = 'vertex'
     myclass = TopoDS_Vertex
     gidclass = VertexID
-    
+
     def child_generator(self, val):
         del val  # unused
         return []
@@ -891,7 +930,7 @@ class topo_list_face(topo_list):
     name = 'face'
     myclass = TopoDS_Face
     gidclass = SurfaceID
-    
+
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'wire')
@@ -927,7 +966,7 @@ class topo_list_shell(topo_list):
     name = 'shell'
     myclass = TopoDS_Shell
     gidclass = SurfaceLoopID
-    
+
     def get_children(self, val):
         shape = self[val]
         return iter_shape(shape, 'face')
@@ -967,7 +1006,7 @@ class topo_list_solid(topo_list):
         if mapper.FindFromKey(shape).Size() == 0:
             return True
         return False
-    
+
     def get_mapper(self, shape):
         mapper = TopTools_IndexedMapOfShape()
         topexp_MapShapes(shape, TopAbs_SOLID, mapper)
@@ -984,5 +1023,3 @@ class topo_list_solid(topo_list):
 
     def keys(self):
         return [VolumeID(x) for x in self.d]
-
-

@@ -2,8 +2,10 @@ import numpy as np
 
 from petram.geom.occ_cbook import *
 
+
 def xyz2txt(c):
     return ", ".join([str(x) for x in (c.X(), c.Y(), c.Z())])
+
 
 def shape_property_txt(bt, shape):
     if isinstance(shape, TopoDS_Vertex):
@@ -21,7 +23,7 @@ def shape_property_txt(bt, shape):
         length = measure_edge_length(shape)
         txt = ['Curve:',
                '  Kind:\t' + kind,
-               '  Length:\t' + str(length), 
+               '  Length:\t' + str(length),
                '  Parameter:\t' + str([first, last]),
                '  Closed:\t' + str(is_closed),
                '  Periodic:\t' + str(is_periodic)]
@@ -66,8 +68,7 @@ def shape_property_txt(bt, shape):
                         '  #Poles:\t' + str(curve.NbPoles())])
         if curve.IsKind('Geom_TrimmedCurve'):
             txt.extend(['  Start:\t' + xyz2txt(curve.StartPoint()),
-                        '  End:\t' + xyz2txt(curve.EndPoint()),])
-
+                        '  End:\t' + xyz2txt(curve.EndPoint()), ])
 
     if isinstance(shape, TopoDS_Face):
         surf = bt.Surface(shape)
@@ -80,13 +81,13 @@ def shape_property_txt(bt, shape):
         surfacecount = system.Mass()
 
         surf, kind = downcast_surface(surf)
-        
+
         txt = ['Surface:',
                ' Kind:\t' + kind,
                ' Area:\t' + str(surfacecount),
                ' U-Parameter:\t' + str([u1, u2]),
                ' V-Parameter:\t' + str([v1, v2]),
-               ' Periodic (U,V):\t' + str([is_uperiodic, is_vperiodic]),]
+               ' Periodic (U,V):\t' + str([is_uperiodic, is_vperiodic]), ]
 
         if surf.IsKind('Geom_Plane'):
             a, b, c, d = surf.Coefficients()
@@ -94,9 +95,10 @@ def shape_property_txt(bt, shape):
             txt.extend(['  Coefficient:\t' + txt2])
 
     if isinstance(shape, TopoDS_Solid):
-        txt = ['',]
+        txt = ['', ]
 
     return '\n'.join(txt)
+
 
 def find_sameface(bt, shape, faces, tol):
     '''
@@ -147,12 +149,13 @@ def find_sameface(bt, shape, faces, tol):
 
         subset = [x for x in subset
                   if np.all([abs(l1 - l2)/(l1 + l2) < tol for l1, l2 in zip(x[3], lengths2)])]
-                  
+
         if len(subset) == 0:
             continue
         samefaces.append(f2)
 
     return samefaces
+
 
 def find_sameedge(bt, shape, edges, tol):
     '''
@@ -169,8 +172,8 @@ def find_sameedge(bt, shape, edges, tol):
         l1 = measure_len(edge)
         params = bt.Curve(edge)
         if len(params) == 2:
-           ## null handle case
-           continue
+            # null handle case
+            continue
         curve = params[0]
         curve, kind = downcast_curve(curve)
         dataset.append((kind, l1))
@@ -180,7 +183,7 @@ def find_sameedge(bt, shape, edges, tol):
     for e2 in iter_shape_once(shape, 'edge'):
         params = bt.Curve(e2)
         if len(params) == 2:
-            ## null handle case            
+            # null handle case
             continue
         curve2 = params[0]
         curve2, kind2 = downcast_curve(curve2)
@@ -188,7 +191,7 @@ def find_sameedge(bt, shape, edges, tol):
         subset = [x for x in dataset if x[0] == kind2]
         if len(subset) == 0:
             continue
-                  
+
         l2 = measure_len(e2)
         subset = [x for x in subset
                   if abs(x[1] - l2)/(x[1] + l2) < tol]
@@ -198,9 +201,35 @@ def find_sameedge(bt, shape, edges, tol):
         sameedges.append(e2)
     return sameedges
 
+
+def find_min_distance_in_face(bt, shape):
+    '''
+    shape is face
+    check all distances between vertices in face
+    '''
+    from scipy.spatial import distance_matrix
+
+    vertices = [p for p in iter_shape_once(shape, 'vertex')]
+
+    ptx = []
+    for v in vertices:
+        pnt = bt.Pnt(v)
+        p = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
+        ptx.append(p)
+
+    ptx = np.vstack(ptx)
+    md = distance_matrix(ptx, ptx, p=2)
+
+    # diagnal is zero. needs to inflate it to find minimum
+    for i in range(len(vertices)):
+        md[i, i] = np.infty
+
+    return np.min(md.flatten())
+
+
 def shape_inspector(shape, inspect_type, shapes):
 
-    #print("inspection ", shape, inspect_type, shapes)
+    # print("inspection ", shape, inspect_type, shapes)
     bt = BRep_Tool()
 
     ret = ''
@@ -216,8 +245,11 @@ def shape_inspector(shape, inspect_type, shapes):
         nsmall, smax, faces, areas = check_shape_area(shape, thr,
                                                       return_area=True)
         gids = [topolist.find_gid(f) for f in faces]
-        txt = ',\n'.join([str(int(gid)) + " (area = "+str(a) + ")"
-                          for gid, a in zip(gids, areas)])
+        kinds = [downcast_surface(bt.Surface(f))[1] for f in faces]
+        min_ds = [find_min_distance_in_face(bt, f) for f in faces]
+        txt = '\n'.join([str(int(gid)) + "\t(area = "+str(a) +
+                         ",\tmin D= " + str(min_d) + ")\t:" + k
+                         for gid, a, k, min_d in zip(gids, areas, kinds, min_ds)])
 
         txt = txt + '\n smax = ' + str(smax)
 
@@ -231,8 +263,19 @@ def shape_inspector(shape, inspect_type, shapes):
         nsmall, lmax, edges, ll = check_shape_length(shape, thr,
                                                      return_area=True)
         gids = [topolist.find_gid(e) for e in edges]
-        txt = ',\n'.join([str(int(gid)) + " (L = "+str(l) + ")"
-                          for gid, l in zip(gids, ll)])
+        kinds = []
+        for e in edges:
+            params = bt.Curve(e)
+            if len(params) == 2:
+                # null handle case
+                kinds.append("Unknown")
+            else:
+                curve = params[0]
+                curve, kind = downcast_curve(curve)
+                kinds.append(kind)
+
+        txt = ',\n'.join([str(int(gid)) + " (L = "+str(l) + "): "+k
+                          for gid, l, k in zip(gids, ll, kinds)])
 
         txt = txt + '\n smax = ' + str(lmax)
 
@@ -246,13 +289,13 @@ def shape_inspector(shape, inspect_type, shapes):
 
         if (isinstance(shapes[0], TopoDS_Vertex) and
                 isinstance(shapes[1], TopoDS_Face)):
-            # distance between point and surface            
+            # distance between point and surface
             pnt = bt.Pnt(shapes[0])
             p1 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
             surf = bt.Surface(shapes[1])
 
             pj = GeomAPI_ProjectPointOnSurf(pnt, surf)
-            #print("number of solution ", pj.NbPoints())
+            # print("number of solution ", pj.NbPoints())
 
             pnt = pj.NearestPoint()
             p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
@@ -261,7 +304,7 @@ def shape_inspector(shape, inspect_type, shapes):
             ret = dist
             txt = "\n".join(["Number of projection point: " +
                              str(pj.NbPoints()),
-                             "Nearest point: "+  str(p2),
+                             "Nearest point: " + str(p2),
                              "Distance: " + str(dist)])
             return txt, data
 
@@ -273,7 +316,7 @@ def shape_inspector(shape, inspect_type, shapes):
             curve, _first, _last = bt.Curve(shapes[1])
 
             pj = GeomAPI_ProjectPointOnCurve(pnt, curve)
-            #print("number of solution ", pj.NbPoints())
+            # print("number of solution ", pj.NbPoints())
 
             pnt = pj.NearestPoint()
             p2 = np.array((pnt.X(), pnt.Y(), pnt.Z(),))
@@ -283,7 +326,7 @@ def shape_inspector(shape, inspect_type, shapes):
 
             txt = "\n".join(["Number of projection point: " +
                              str(pj.NbPoints()),
-                             "Nearest point: "+  str(p2),
+                             "Nearest point: " + str(p2),
                              "Distance: " + str(dist)])
             return txt, data
 
@@ -298,7 +341,7 @@ def shape_inspector(shape, inspect_type, shapes):
 
             txt = "Distance: " + str(dist)
             return txt, data
-            
+
         elif (isinstance(shapes[0], TopoDS_Edge) and
               isinstance(shapes[1], TopoDS_Face)):
             # distance between edge and face
@@ -323,12 +366,12 @@ def shape_inspector(shape, inspect_type, shapes):
         gids = []
         nface = 0
         nedge = 0
-        for s in  shapes:
+        for s in shapes:
             if isinstance(s, TopoDS_Face):
                 nface = nface + 1
             if isinstance(s, TopoDS_Edge):
                 nedge = nedge + 1
-                
+
         assert nface > 0 or nedge > 0, "Specify either faces or edges"
         assert nface == 0 or nedge == 0, "Specify either faces or edges"
 
@@ -355,4 +398,3 @@ def shape_inspector(shape, inspect_type, shapes):
     else:
         assert False, "unknown mode" + inspect_type
     return ret, data
-

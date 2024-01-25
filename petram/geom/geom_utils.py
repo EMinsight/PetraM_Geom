@@ -73,7 +73,7 @@ def map_points_in_geom_info(info1, info2, th=1e-10):
     if np.any(dist > th):
         print(dist)
         print("ptx1", ptx1)
-        print("ptx2", ptx2)        
+        print("ptx2", ptx2)
         assert False, "could not able to find vertex mapping"
 
     # {point in info2 : point in info1}
@@ -107,7 +107,8 @@ def map_lines_in_geom_info(info1, info2, pmap_r, th=1e-10, trans=None):
             if (info1[2][x][0] == p1 and
                     info1[2][x][1] == p2):
                 if dist(info1[5][x], info2[5][l], trans) > th:
-                    print("rejectedy by dist", dist(info1[5][x], info2[5][l], trans))
+                    print("rejectedy by dist(1)", dist(
+                        info1[5][x], info2[5][l], trans))
                     continue
                 lmap[x] = l
                 lmap_r[l] = x
@@ -115,7 +116,9 @@ def map_lines_in_geom_info(info1, info2, pmap_r, th=1e-10, trans=None):
             elif (info1[2][x][0] == p2 and
                   info1[2][x][1] == p1):
                 if dist(info1[5][x], info2[5][l], trans) > th:
-                    print("rejectedy by dist", dist(info1[5][x], info2[5][l], trans))
+                    print("rejectedy by dist(2)", dist(
+                        info1[5][x], info2[5][l], trans))
+                    continue
                 lmap[x] = -l
                 lmap_r[l] = -x
                 break
@@ -271,17 +274,38 @@ def find_translate_between_surface(src, dst, edge_tss, geom=None,
 
     p_pairs = dict(zip(p1p, p2p[mapping]))  # point mapping
 
-    #print("l1", [(ll, l[ll]) for ll in l1])
-    #print("l2", [(ll, l[ll]) for ll in l2])
-    l2dict = {tuple(sorted(l[ll])): ll for ll in l2}
-
-    l_pairs = {
-        ll: l2dict[tuple(sorted((p_pairs[l[ll][0]], p_pairs[l[ll][1]])))] for ll in l1}
-
     affine = np.zeros((4, 4), dtype=float)
     affine[:3, :3] = np.linalg.inv(R)
     affine[:3, -1] = np.dot(np.linalg.inv(R), d)
     affine[-1, -1] = 1.0
+
+    R = affine[:3, :3]
+    D = affine[:3, -1]
+
+    def translate(pos):
+        pos = (np.dot(R, pos).transpose() + D)
+        return pos
+
+    #print("l1", [(ll, l[ll], translate(mid_points[ll])) for ll in l1])
+    #print("l2", [(ll, l[ll], mid_points[ll]) for ll in l2])
+
+    #
+    #  look for pairs of lines using edge vertex and midpoints
+    #
+    l_pairs = {}
+    for ll in l1:
+        target = tuple(sorted((p_pairs[l[ll][0]], p_pairs[l[ll][1]])))
+        m1 = translate(mid_points[ll])
+        for ll2 in l2:
+            m2 = mid_points[ll2]
+            dist = np.sqrt(np.sum((m1 - m2)**2))
+            if tuple(sorted(l[ll2])) == target and dist < mind_eps:
+                l_pairs[ll] = ll2
+                break
+
+#    l2dict = {tuple(sorted(l[ll])): ll for ll in l2}
+#    l_pairs = {
+#        ll: l2dict[tuple(sorted((p_pairs[l[ll][0]], p_pairs[l[ll][1]])))] for ll in l1}
 
     px = np.dot(np.linalg.pinv(-R + np.diag((1, 1, 1))), -d)
 

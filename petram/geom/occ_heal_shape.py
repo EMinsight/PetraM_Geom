@@ -62,10 +62,11 @@ def _fix_Degenerated(shape, verbose=False):
 
     return shape
 
+
 def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
     if verbose:
         print(" - Fixing small edges")
-        
+
     mapper = TopTools_IndexedMapOfShape()
     topexp_MapShapes(shape, TopAbs_WIRE, mapper)
 
@@ -104,7 +105,7 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
         elif sfw.StatusSmall(ShapeExtend_FAIL3):
             print("Failed to fix small edge in wire, CheckConnected has failed",
                   mapper.FindIndex(oldwire))
-            
+
         replace = (sfw.FixConnected() or replace)
         replace = (sfw.FixEdgeCurves() or replace)
         replace = (sfw.FixDegenerated() or replace)
@@ -115,12 +116,12 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
             replace_count = replace_count + 1
             newwire = sfw.Wire()
             rebuild.Replace(oldwire, newwire)
-            
-    if verbose and replace_count > 0 :
+
+    if verbose and replace_count > 0:
         print("  . number of replaced wires", replace_count)
 
     shape = rebuild.Apply(shape)
-    
+
     rebuild = ShapeBuild_ReShape()
     for edge in iter_shape_once(shape, 'edge'):
         system = GProp_GProps()
@@ -140,7 +141,7 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
     sfwf.SetPrecision(tolerance)
     sfwf.Load(shape)
     sfwf.SetModeDropSmallEdges(True)
-    
+
     num_fix = sfwf.FixWireGaps()
     if num_fix >= 0:
         if verbose:
@@ -155,7 +156,7 @@ def _fix_SmallEdges(shape, verbose=False, tolerance=1e-6):
                 print(" . Failed to fix some 2D gaps")
             if sfwf.StatusWireGaps(ShapeExtend_FAIL2):
                 print(" . Failed to fix some 3D gaps")
-            
+
     num_fix = sfwf.FixSmallEdges()
     if num_fix >= 0:
         if verbose:
@@ -177,7 +178,7 @@ def _fix_SmallFaces(shape, verbose=False, tolerance=1e-6):
     sffsm.Init(shape)
     sffsm.SetPrecision(tolerance)
     sffsm.Perform()
-
+    # sffsm.FixStripFace()
     shape = sffsm.FixShape()
     return shape
 
@@ -200,17 +201,18 @@ def _sew_Faces(shape, verbose=False, tolerance=1e-6):
 
     return shape
 
+
 def _make_Solids(shape, verbose=False, tolerance=1e-6):
     if verbose:
         print(" - Making solid")
-    
+
     ms = BRepBuilderAPI_MakeSolid()
 
     count = 0
     for shell in iter_shape_once(shape, 'shell'):
         ms.Add(shell)
         count = count + 1
-        
+
     result = ms.Solid()
     if count == 0:
         print(" . Could not make solid (no shell)")
@@ -236,6 +238,7 @@ def _make_Solids(shape, verbose=False, tolerance=1e-6):
                 print(" . Could not apply ShapeFix_Shape")
 
     return shape
+
 
 def make_new_compound(shape, builder=None):
 
@@ -290,7 +293,7 @@ def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
         assert trsf.IsDone(), "Can not perform scaling"
 
         shape = trsf.Shape()
-        shape = make_new_compound(shape)        
+        shape = make_new_compound(shape)
 
     if verbose:
         t1 = time.perf_counter()
@@ -309,12 +312,12 @@ def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
 
     if fixSmallEdges:
         shape = _fix_SmallEdges(shape, verbose=verbose, tolerance=tolerance)
-        do_final = True        
+        do_final = True
 
     if fixSmallFaces:
         shape = _fix_SmallFaces(shape, verbose=verbose, tolerance=tolerance)
         do_final = True
-        
+
     if sewFaces:
         shape = _sew_Faces(shape, verbose=verbose, tolerance=tolerance)
         do_final = True
@@ -346,6 +349,6 @@ def heal_shape(oshape, scaling=1.0, fixDegenerated=False,
             print("    - " + name.capitalize() + ",\t" +
                   str(n1) + " --> " + str(n2))
         print("    - Total surface area,  \t" +
-              str(surfacecount) +  " --> " + str(surfacecount2))
+              str(surfacecount) + " --> " + str(surfacecount2))
 
     return shape
