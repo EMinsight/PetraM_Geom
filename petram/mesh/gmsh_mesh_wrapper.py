@@ -439,11 +439,12 @@ class GMSHMeshWrapper():
                 gmsh.option.setNumber("Mesh.HighOrderThresholdMax", self.optimize_lim[1])
                 gmsh.option.setNumber("Mesh.HighOrderThresholdMin", self.optimize_lim[0])
 
-                if self.queue is not None:
-                    self.queue.put((False,
-                                    "Optimizing mesh (FastCurving)"))
-                gmsh.model.mesh.optimize(
-                    "HighOrderFastCurving", dimTags=dimTags)
+                if HighOrderOptimize[self.optimize_ho] != 0:
+                    if self.queue is not None:
+                        self.queue.put((False,
+                                        "Optimizing mesh (FastCurving)"))
+                    gmsh.model.mesh.optimize(
+                        "HighOrderFastCurving", dimTags=dimTags)
 
                 if HighOrderOptimize[self.optimize_ho] in [2, 3]:
                     if self.queue is not None:
@@ -451,7 +452,6 @@ class GMSHMeshWrapper():
                                         "Optimizing mesh (HighOrder-Elastic)"))
                     gmsh.model.mesh.optimize(
                         "HighOrderElastic", dimTags=dimTags)
-
                 if HighOrderOptimize[self.optimize_ho] in [1, 2]:
                     if self.queue is not None:
                         self.queue.put((False,
