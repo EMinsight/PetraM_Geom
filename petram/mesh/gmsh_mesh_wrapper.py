@@ -361,7 +361,7 @@ class GMSHMeshWrapper():
         maxdim = max([x for x, tag in gmsh.model.getEntities()])
         maxdim = min([maxdim, dim])
         #adim, idx_dim = self.check_algorith_dim()
-        #adim  = self.check_algorith_dim()
+        need_opt  = self.check_need_optimize()
 
         for mdim in range(maxdim+1):
             for idx, sq in enumerate(self.mesh_sequence):
@@ -381,7 +381,7 @@ class GMSHMeshWrapper():
                     self.queue.put((False,
                                     "Processing " + proc+"_"+str(mdim)+"D"))
 
-                if mdim == maxdim and idx == len(self.mesh_sequence)-1:
+                if mdim == maxdim and need_opt[idx] == 1:
                     gmsh.option.setNumber("Mesh.Optimize", 1)
                     # if self.use_ho and finalize:
                     #    gmsh.option.setNumber("Mesh.HighOrderDistCAD", 0)
@@ -461,6 +461,7 @@ class GMSHMeshWrapper():
                         gmsh.model.mesh.optimize("HighOrder", dimTags=[dt])
                     #gmsh.model.mesh.optimize("HighOrder", dimTags=dimTags)
 
+        print("calling removeDuplicateNodes")
         gmsh.model.mesh.removeDuplicateNodes()
 
         # somehow add_physical is very slow when there are too many physicals...
@@ -792,6 +793,28 @@ class GMSHMeshWrapper():
             d.append(dims[proc])
 
         return max(d)
+
+    def check_need_optimize(self):
+        dims = {'cl': 0,
+                'freevolume': 1,
+                'freeface': 1,
+                'freeedge': 1,
+                'transfinite_volume': 0,
+                'transfinite_face': 0,
+                'transfinite_edge': 0,
+                'recombine_surface': 0,
+                'copyface': 0,
+                'extrude_face': 0,
+                'revolve_face': 0,
+                'mergetxt': 0,
+                }
+        d = []
+        for sq in self.mesh_sequence:
+            proc, _args, _kwargs = sq
+            if dims[proc] == 1:
+                d = [0]*len(d)
+            d.append(dims[proc])
+        return d
 
     def setCL(self, dimtags, size):
         for dimtag in dimtags:
