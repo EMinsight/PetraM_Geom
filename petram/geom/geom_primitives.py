@@ -2391,6 +2391,17 @@ class Subsequence(GeomPB):
     def fancy_tree_name(self):
         return 'Sequence'
 
+    @property
+    def ns_name(self):
+        return self.fullname()
+
+    @ns_name.setter
+    def ns_name(self, value):
+        pass
+
+    def get_default_ns(self):
+        return self.seq_values
+
     def attribute_set(self, v):
         v = super(Subsequence, self).attribute_set(v)
         v["seq_values"] = {}

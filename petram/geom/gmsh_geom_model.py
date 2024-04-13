@@ -195,10 +195,12 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
         try:
             p = self.parent
-            if isinstance(p, GmshGeom):
-                rootg = p
-            else:  # work plane
-                rootg = p.parent
+            while True:
+                if isinstance(p, GmshGeom):
+                    rootg = p
+                    break
+                p = p.parent
+
             rootg._geom_finalized = False
 
             od = os.getcwd()
@@ -528,6 +530,7 @@ class GmshGeom(GeomTopBase):
         return self.onUpdateGeoView4(evt, filename=filename)
 
     def walk_over_geom_chidlren(self, geom, stop1=None, stop2=None):
+        print("stops", stop1, stop2)
         geom.clear_sequence()
 
         self._build_stop = (None, None)
@@ -538,77 +541,73 @@ class GmshGeom(GeomTopBase):
             if hasattr(child, "_newobjs"):
                 del child._newobjs
 
-        children = self.get_children()
-        for child in children:
-            if not child.enabled:
-                continue
+        def proccess_children(children, local_ns=None):
+            if local_ns is None:
+                local_ns = {}
 
-            if len(child.get_children()) == 0 and not child.isWP:
-                child.vt.preprocess_params(child)
-                if child is stop1:
-                    break            # for build before
-                child.add_geom_sequence(geom)
-                if child is stop2:
-                    break            # for build after
+            do_break = False
 
-            elif len(child.get_children()) > 0 and not child.isWP:  # subsequence
-                children2 = child.get_children()
-                child.vt.preprocess_params(child)
-                if child is stop1:
-                    break            # for build before
+            for child in children:
+                if not child.enabled:
+                    continue
 
-                do_break = False
-                for child2 in children2:
-                    if not child2.enabled:
-                        continue
-                    child2.vt.preprocess_params(child2)
-                    if child2 is stop1:
-                        do_break = True
+                if len(child.get_children()) > 0 and not child.isWP:
+                    children2 = child.get_children()
+                    ll = local_ns.copy()
+                    ll.update(child.seq_values)
+                    do_break = proccess_children(children2, local_ns=ll)
+                    if child is stop2:
+                        break
+                    if do_break:
+                        break            # for build after
+
+                elif len(child.get_children()) == 0 and not child.isWP:
+                    child.vt.preprocess_params(child)
+                    if child is stop1:
                         break            # for build before
-                    child2.add_geom_sequence(geom)
-                    if child2 is stop2:
+                    child.add_geom_sequence(geom)
+                    if child is stop2:
                         do_break = True
                         break            # for build after
-                if do_break:
-                    break
-                if child is stop2:
-                    break            # for build after
 
-            elif child.isWP:
-                children2 = child.get_children()
-                child.vt.preprocess_params(child)
-                if child is stop1:
-                    break            # for build before
-
-                do_break = False
-
-                geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
-                child.add_geom_sequence_wp_start(geom)
-                for child2 in children2:
-                    if not child2.enabled:
-                        continue
-                    child2.vt.preprocess_params(child2)
-                    if child2 is stop1:
-                        do_break = True
+                elif child.isWP:
+                    children2 = child.get_children()
+                    child.vt.preprocess_params(child)
+                    if child is stop1:
                         break            # for build before
-                    child2.add_geom_sequence(geom)
-                    if child2 is stop2:
-                        do_break = True
-                        break            # for build after
+
+                    geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
+                    child.add_geom_sequence_wp_start(geom)
+                    for child2 in children2:
+                        if not child2.enabled:
+                            continue
+                        child2.vt.preprocess_params(child2)
+                        if child2 is stop1:
+                            do_break = True
+                            break            # for build before
+                        child2.add_geom_sequence(geom)
+                        if child2 is stop2:
+                            do_break = True
+                            break            # for build after
+                    else:
+                        if self.use_occ_preview:
+                            geom.add_sequence(
+                                'WP_End_OCC', 'WP_End_OCC', 'WP_End_OCC')
+                        child.add_geom_sequence_wp_end(geom)
+
+                    geom.add_sequence('WP_End', 'WP_End', 'WP_End')
+
+                    if do_break:
+                        break
+                    if child is stop2:
+                        break
+
                 else:
-                    if self.use_occ_preview:
-                        geom.add_sequence(
-                            'WP_End_OCC', 'WP_End_OCC', 'WP_End_OCC')
-                    child.add_geom_sequence_wp_end(geom)
+                    assert False, "Should not come here"
+            return do_break
 
-                geom.add_sequence('WP_End', 'WP_End', 'WP_End')
-
-                if do_break:
-                    break
-                if child is stop2:
-                    break            # for build after
-            else:
-                assert False, "Should not come here"
+        children = self.get_children()
+        proccess_children(children)
 
         if stop1 is not None:
             self._build_stop = (stop1, None)
