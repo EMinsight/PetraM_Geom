@@ -52,6 +52,7 @@ def get_gmsh_exe():
             return macos_gmsh_location
     return 'gmsh'
 
+
 def get_gmsh_major_version():
     gmsh_exe = get_gmsh_exe()
     try:
@@ -64,7 +65,9 @@ def get_gmsh_major_version():
     ex = out.split('.')
     return int(ex[0])
 
+
 use_gmsh_api = True
+
 
 def get_geom_key(obj):
     if obj.__class__.__name__ in geom_key_dict:
@@ -145,12 +148,12 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
 
     def panel1_param(self):
         from wx import BU_EXACTFIT
-        #b1 = {"label": "S", "func": self.onBuildBefore,
+        # b1 = {"label": "S", "func": self.onBuildBefore,
         #      "noexpand": True, "style": BU_EXACTFIT}
         b2 = {"label": "R", "func": self.onBuildAfter,
               "noexpand": True, "style": BU_EXACTFIT}
 
-        ll = [[None, None, 241, {'buttons': [b2],# b2],
+        ll = [[None, None, 241, {'buttons': [b2],  # b2],
                                  'alignright':True,
                                  'noexpand': True}, ], ]
         ll.extend(self.vt.panel_param(self))
@@ -205,14 +208,14 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
             success = True
         except BaseException:
             os.chdir(od)
-            
+
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to build geometry',
                                  title='Error',
                                  traceback=traceback.format_exc())
             success = False
-            
+
         dlg.OnRefreshTree()
         rootg.onUpdateGeoView(evt)
         return success
@@ -241,7 +244,7 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
             dlg = evt.GetEventObject().GetTopLevelParent()
             import wx
             wx.CallAfter(dlg.select_next_enabled)
-            
+
         evt.Skip()
 
     def add_geom_sequence(self, geom):
@@ -251,13 +254,14 @@ class GmshPrimitiveBase(GeomBase, Vtable_mixin):
         geom_name = self.__class__.__name__
         geom.add_sequence(gui_name, gui_param, geom_name)
 
+
 class GmshGeom(GeomTopBase):
     has_2nd_panel = False
-    
-    @classmethod        
+
+    @classmethod
     def fancy_menu_name(self):
         return 'Gmsh Geometry'
-    
+
     @classmethod
     def fancy_tree_name(self):
         return 'GmshSequence'
@@ -299,7 +303,7 @@ class GmshGeom(GeomTopBase):
     @property
     def geom_data(self):
         return self._gmsh4_data
-    
+
     @property
     def build_stop(self):
         if not hasattr(self, "_build_stop"):
@@ -308,16 +312,16 @@ class GmshGeom(GeomTopBase):
 
     @property
     def geom_brep(self):
-        if not hasattr(self, "_geom_brep"):        
+        if not hasattr(self, "_geom_brep"):
             return ''
         base = self._geom_brep
-        
+
         if self._geom_brep_dir == '':
             import wx
             trash = wx.GetApp().GetTopWindow().proj.get_trash()
         else:
             trash = self._geom_brep_dir
-            
+
         return os.path.join(trash, base)
 
     def attribute_set(self, v):
@@ -365,7 +369,7 @@ class GmshGeom(GeomTopBase):
 
     def get_possible_child_menu(self):
         from petram.geom.geom_primitives import (Point, PointCenter, PointCircleCenter,
-                                                 PointOnEdge, PointByUV,  Line, Spline,  
+                                                 PointOnEdge, PointByUV,  Line, Spline,
                                                  Circle, CircleByAxisPoint, CircleBy3Points,
                                                  Rect, Polygon, Box, Ball,
                                                  Cone, Wedge, Cylinder, Torus, Extrude, Revolve, Sweep,
@@ -377,9 +381,9 @@ class GmshGeom(GeomTopBase):
                                                  Fillet, Chamfer,
                                                  Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
                                                  ThruSection, RotateCenterPoints, MoveByPoints)
-        
-        return [("", Point),("", Line), ("", Circle), ("", Rect), ("", Polygon),
-                ("", Spline),("", Fillet), ("", Chamfer), 
+
+        return [("", Point), ("", Line), ("", Circle), ("", Rect), ("", Polygon),
+                ("", Spline), ("", Fillet), ("", Chamfer),
                 ("3D shape...", Box),
                 ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
                 ("!", Torus),
@@ -387,13 +391,13 @@ class GmshGeom(GeomTopBase):
                 #("", LineLoop), ("", SurfaceLoop),
                 ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
                 ("", Copy), ("", Remove),
-                ("Translate...", Move,), ("", Rotate),("", Flip),("", Scale),
+                ("Translate...", Move,), ("", Rotate), ("", Flip), ("", Scale),
                 ("", Array), ("!", ArrayRot),
-                ("Boolean...", Union),("",Intersection),("",Difference),("",Fragments), ("!", SplitByPlane),
+                ("Boolean...", Union), ("", Intersection), ("",
+                                                            Difference), ("", Fragments), ("!", SplitByPlane),
                 ("WorkPlane...", WorkPlane), ("!", WorkPlaneByPoints),
-                ("Import...", BrepImport),("", CADImport),("!", healCAD),
+                ("Import...", BrepImport), ("", CADImport), ("!", healCAD),
                 ]
-
 
     def get_special_menu(self, evt):
         menu = [('Build All', self.onBuildAll, None),
@@ -405,7 +409,7 @@ class GmshGeom(GeomTopBase):
                 m2 = [('---', None, None),
                       ('Terminate geometry process.',
                        self.onTerminateChild, None),
-                      ('---', None, None),]
+                      ('---', None, None), ]
                 print(m2)
                 menu.extend(m2)
         return menu
@@ -426,8 +430,8 @@ class GmshGeom(GeomTopBase):
                 [None, self.skip_final_frag, 3, {
                     "text": "Skip fragmentationn"}],
                 [None, self.use_1d_preview, 3, {"text": "Use line preview"}],
-#                [None, self.use_occ_preview, 3, {
-#                    "text": "OCC preview (in dev.)"}],
+                #                [None, self.use_occ_preview, 3, {
+                #                    "text": "OCC preview (in dev.)"}],
                 [None, self.use_curvature, 3, {
                     "text": "Consider curvature in preview generation"}],
                 [None, None, 341, {"label": "Finalize Geom",
@@ -474,7 +478,7 @@ class GmshGeom(GeomTopBase):
             os.chdir(od)
         except BaseException:
             os.chdir(od)
-            
+
             import ifigure.widgets.dialog as dialog
             dialog.showtraceback(parent=dlg,
                                  txt='Failed to build geometry',
@@ -514,7 +518,7 @@ class GmshGeom(GeomTopBase):
 
         self._geom_coords = ret
         viewer.set_figure_data('geom', self.name(), ret)
-        viewer.set_figure_data('mesh', self.name(), ret)        
+        viewer.set_figure_data('mesh', self.name(), ret)
         viewer.update_figure('geom', self.name())
 
         viewer._s_v_loop['geom'] = s, v
@@ -525,7 +529,7 @@ class GmshGeom(GeomTopBase):
 
     def walk_over_geom_chidlren(self, geom, stop1=None, stop2=None):
         geom.clear_sequence()
-        
+
         self._build_stop = (None, None)
 
         children = [x for x in self.walk()]
@@ -547,6 +551,29 @@ class GmshGeom(GeomTopBase):
                 if child is stop2:
                     break            # for build after
 
+            elif len(child.get_children()) > 0 and not child.isWP:  # subsequence
+                children2 = child.get_children()
+                child.vt.preprocess_params(child)
+                if child is stop1:
+                    break            # for build before
+
+                do_break = False
+                for child2 in children2:
+                    if not child2.enabled:
+                        continue
+                    child2.vt.preprocess_params(child2)
+                    if child2 is stop1:
+                        do_break = True
+                        break            # for build before
+                    child2.add_geom_sequence(geom)
+                    if child2 is stop2:
+                        do_break = True
+                        break            # for build after
+                if do_break:
+                    break
+                if child is stop2:
+                    break            # for build after
+
             elif child.isWP:
                 children2 = child.get_children()
                 child.vt.preprocess_params(child)
@@ -556,7 +583,7 @@ class GmshGeom(GeomTopBase):
                 do_break = False
 
                 geom.add_sequence('WP_Start', 'WP_Start', 'WP_Start')
-                child.add_geom_sequence_wp_start(geom)                
+                child.add_geom_sequence_wp_start(geom)
                 for child2 in children2:
                     if not child2.enabled:
                         continue
@@ -570,10 +597,11 @@ class GmshGeom(GeomTopBase):
                         break            # for build after
                 else:
                     if self.use_occ_preview:
-                         geom.add_sequence('WP_End_OCC', 'WP_End_OCC', 'WP_End_OCC')
+                        geom.add_sequence(
+                            'WP_End_OCC', 'WP_End_OCC', 'WP_End_OCC')
                     child.add_geom_sequence_wp_end(geom)
-                    
-                geom.add_sequence('WP_End', 'WP_End', 'WP_End')                    
+
+                geom.add_sequence('WP_End', 'WP_End', 'WP_End')
 
                 if do_break:
                     break
@@ -581,7 +609,7 @@ class GmshGeom(GeomTopBase):
                     break            # for build after
             else:
                 assert False, "Should not come here"
-                
+
         if stop1 is not None:
             self._build_stop = (stop1, None)
             return stop1.name()
@@ -617,10 +645,11 @@ class GmshGeom(GeomTopBase):
             from petram.geom.geom_sequence_operator import GeomSequenceOperator
             self._gso = GeomSequenceOperator()
 
-        stopname = self.walk_over_geom_chidlren(self._gso, stop1=stop1, stop2=stop2)
+        stopname = self.walk_over_geom_chidlren(
+            self._gso, stop1=stop1, stop2=stop2)
 
         L = len(self._gso.geom_sequence) + 3
-        
+
         if gui_parent is not None:
             import wx
             #gui_parent = wx.GetApp().TopWindow
@@ -632,7 +661,7 @@ class GmshGeom(GeomTopBase):
                 pgb.Destroy()
             pgb.Bind(wx.EVT_CLOSE, close_dlg)
             trash = wx.GetApp().GetTopWindow().proj.get_trash()
-            self._geom_brep_dir = ''            
+            self._geom_brep_dir = ''
         else:
             pgb = None
             trash = os.path.join(cwd, '.trash')
@@ -650,14 +679,14 @@ class GmshGeom(GeomTopBase):
         gui_data, objs, brep_file, data, vcl, esize = dataset
 
         self._geom_brep = os.path.basename(brep_file)
-        
+
         self.update_GUI_after_geom(gui_data, objs)
 
         if data is None:  # if no_mesh = True
             self._gso.terminate_child()
             return
-        
-        #if finalize:
+
+        # if finalize:
         #    self._gso.terminate_child()
         # for the readablity I expend data here, do we need geom?
         ptx, cells, cell_data, l, s, v = data
@@ -672,21 +701,20 @@ class GmshGeom(GeomTopBase):
         self._vcl = vcl
         self._esize = esize
         return
- 
+
     def build_geom4(self, stop1=None, stop2=None, filename=None,
                     finalize=False, no_mesh=False, gui_parent=None,
                     cwd=None):
-        
+
         self.use_occ_preview = False
         self.do_build_geom4(stop1=stop1, stop2=stop2, filename=filename,
                             finalize=finalize, no_mesh=no_mesh,
                             gui_parent=gui_parent, cwd=cwd)
 
-        
     def onTerminateChild(self, evt):
         self._gso.terminate_child()
         evt.Skip()
-        
+
     def generate_final_geometry(self):
         cwd = os.getcwd()
         dprint1("Generating Geometry in " + cwd)
@@ -702,9 +730,9 @@ class GmshGeom(GeomTopBase):
     def build_geom(self, stop1=None, stop2=None, filename=None,
                    finalize=False, gui_parent=None):
         self.do_build_geom4(stop1=stop1, stop2=stop2,
-                             filename=filename,
-                             finalize=finalize,
-                             gui_parent=gui_parent)
+                            filename=filename,
+                            finalize=finalize,
+                            gui_parent=gui_parent)
 
     def onExportGeom(self, evt):
         if not hasattr(self, "_txt_unrolled"):
@@ -724,7 +752,7 @@ class GmshGeom(GeomTopBase):
         if self.geom_brep == '':
             evt.Skip()
             return
-        
+
         from ifigure.widgets.dialog import write
         parent = evt.GetEventObject()
         path = write(parent,
@@ -732,7 +760,7 @@ class GmshGeom(GeomTopBase):
                      wildcard='*.brep')
         if path != '':
             if not path.endswith('.brep'):
-                path = path + '.brep'            
+                path = path + '.brep'
             from shutil import copyfile
             copyfile(self.geom_brep, path)
 
@@ -878,5 +906,3 @@ def read_loops(unrolled):
             tmp.extend(ll[k])
         s[ks] = list(set(tmp))
     return s, v
-
-
