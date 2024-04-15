@@ -557,8 +557,10 @@ class GmshGeom(GeomTopBase):
                     ll.update(child.seq_values)
                     do_break = proccess_children(children2, local_ns=ll)
                     if child is stop2:
+                        do_break = True
                         break
                     if do_break:
+                        do_break = True
                         break            # for build after
 
                 elif len(child.get_children()) == 0 and not child.isWP:
@@ -598,8 +600,10 @@ class GmshGeom(GeomTopBase):
                     geom.add_sequence('WP_End', 'WP_End', 'WP_End')
 
                     if do_break:
+                        do_break = True
                         break
                     if child is stop2:
+                        do_break = True
                         break
 
                 else:
