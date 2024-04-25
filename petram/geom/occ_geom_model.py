@@ -227,7 +227,7 @@ class OCCGeom(GmshGeom):
                                                  RotateCenterPoints, MoveByPoints, ExtendedLine,
                                                  CreateOffset, CreateOffsetFace, CreateProjection,
                                                  Simplifiers, MovePoint, SplitHairlineFace, CapFaces,
-                                                 ReplaceFaces)
+                                                 ReplaceFaces, Subsequence)
 
         return [PointOCC, LineOCC, CircleOCC, Polygon2,
                 Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
@@ -246,7 +246,7 @@ class OCCGeom(GmshGeom):
                 ArrayPath,
                 ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine,
                 CreateOffset, CreateOffsetFace, CreateProjection, Simplifiers, MovePoint,
-                SplitHairlineFace, CapFaces, ReplaceFaces]
+                SplitHairlineFace, CapFaces, ReplaceFaces, Subsequence]
 
     def get_possible_child_menu(self):
         from petram.geom.geom_primitives import (PointOCC, LineOCC, CircleOCC, Polygon2,
@@ -271,7 +271,7 @@ class OCCGeom(GmshGeom):
                                                  RotateCenterPoints, MoveByPoints, ExtendedLine,
                                                  CreateOffset, CreateOffsetFace, CreateProjection,
                                                  Simplifiers, MovePoint, SplitHairlineFace, CapFaces,
-                                                 ReplaceFaces)
+                                                 ReplaceFaces, Subsequence)
         return [("Geometry Element...", None),
                 ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
                 ("", PointCircleCenter), ("!", PointByUV),
@@ -306,6 +306,8 @@ class OCCGeom(GmshGeom):
                 ("Import...", BrepImport), ("", CADImport), ("", healCAD),
                 ("Extra(under Dev,)...", Simplifiers), ("", MovePoint),
                 ("", CapFaces), ("", ReplaceFaces), ("!", SplitHairlineFace),
+                ("!", None),
+                ("Subsequence", Subsequence),
                 ("!", None),
                 ]
 

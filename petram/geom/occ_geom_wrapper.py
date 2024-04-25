@@ -892,6 +892,7 @@ class Geometry():
 
         return new_objs
     '''
+
     def add_surface_filling(self, gids_edge, gids_vertex):
         from OCC.Core.GeomAbs import GeomAbs_C0
         from OCC.Core.BRepTools import BRepTools_WireExplorer
@@ -2999,7 +3000,7 @@ class Geometry():
 
         edges = [self.add_circle_by_axis_radius(c, dirct, r, npts=npts)
                  for c, r in zip(centers, radius)]
-        #print(edges)
+        # print(edges)
 
         newkeys = []
         for e in edges:
@@ -3298,7 +3299,7 @@ class Geometry():
         results = []
 
         for offset, altitude in zip(offsets, altitudes):
-            #print(offset)
+            # print(offset)
             OM.Perform(float(offset), float(altitude))
             if not OM.IsDone():
                 assert False, "Faile to make offset"
@@ -3833,7 +3834,7 @@ class Geometry():
 
         cptx, normal = self.process_plane_parameters(plane_param, objs, gids)
 
-        d = -np.sum(normal * cptx)
+        d = np.sum(normal * cptx)
         abcd = (normal[0], normal[1], normal[2], d)
 
         for gid in gids:
@@ -4095,7 +4096,7 @@ class Geometry():
                 gids_new.extend(self.translate_rot(gids, tt, poa,
                                                    v2, ang, copy=True))
 
-        #print(gids_new)
+        # print(gids_new)
         for gid in gids_new:
             newkeys.append(objs.addobj(gid, 'arr'))
 
@@ -4172,7 +4173,7 @@ class Geometry():
         gid_face = self.get_target1(objs, faces, 'f')[0]
         gid_edges = self.get_target1(objs, edges, 'l')
 
-        #print(gid_edges)
+        # print(gid_edges)
 
         gids_new = self.chamfer2d(gid_face, gid_edges, e1, e2)
 
@@ -4501,8 +4502,8 @@ class Geometry():
 
         c_solver = GccAna_Circ2d2TanRad(l1_q, l2_q,
                                         radius, self.occ_geom_tolerance)
-        #print(c_solver.IsDone())
-        #print(c_solver.NbSolutions())
+        # print(c_solver.IsDone())
+        # print(c_solver.NbSolutions())
         for i in range(c_solver.NbSolutions()):
             c_sol = c_solver.ThisSolution(i + 1)
             c = Geom2d_Circle(c_sol)
@@ -5137,6 +5138,9 @@ class Geometry():
         self._last_wp_param = c1, d1, d2
         return objs, []
 
+    def Subsequence_build_geom(self, objs, *args):
+        return objs, []
+
     def select_highest_dim(self, shape):
         comp = TopoDS_Compound()
         b = self.builder
@@ -5568,11 +5572,12 @@ class Geometry():
                     values = [tab.Value(i) for i in range(1, tab.Length() + 1)]
                     LL = tab.Length()
                 else:
-                    values = [facing.Node(i) for i in range(1, facing.NbNodes() + 1)]
+                    values = [facing.Node(i)
+                              for i in range(1, facing.NbNodes() + 1)]
                     idx = [facing.Triangle(i).Get()
                            for i in range(1, facing.NbTriangles() + 1)]
                     LL = len(values)
-                
+
                 ptx = value2coord(values, location)
 
                 all_ptx.append(np.vstack(ptx))

@@ -2379,6 +2379,110 @@ class WorkPlane(WPBase):
         return 'WorkPlane'
 
 
+class Subsequence(GeomPB):
+    vt = Vtable(tuple())
+    can_rename = True
+
+    @classmethod
+    def fancy_menu_name(self):
+        return 'Sequence'
+
+    @classmethod
+    def fancy_tree_name(self):
+        return 'Sequence'
+
+    @property
+    def ns_name(self):
+        return self.fullname()
+
+    @ns_name.setter
+    def ns_name(self, value):
+        pass
+
+    def get_default_ns(self):
+        return self.seq_values
+
+    def attribute_set(self, v):
+        v = super(Subsequence, self).attribute_set(v)
+        v["seq_values"] = {}
+        return v
+
+    def get_possible_child(self):
+        return [PointOCC, LineOCC, CircleOCC, Polygon2,
+                Point, PointCenter, PointOnEdge, PointByUV, PointCircleCenter,
+                Line, Circle, CircleByAxisPoint, CircleBy3Points,
+                CircleByAxisCenterRadius,
+                Rect, Polygon,  OCCPolygon, Spline, Box,
+                Ball, Cone, Wedge, Cylinder,
+                Torus, CreateLine, CreateSurface, CreateVolume, LineLoop, SurfaceLoop,
+                Extrude, Revolve, Sweep, Union, Union2, MergeFace,
+                Intersection, Difference, Fragments, SplitByPlane, Copy, Remove,
+                Remove2, RemoveFaces, Move, Rotate,
+                Flip, Scale, WorkPlane, WorkPlaneByPoints, WPParallelToPlane,
+                WPNormalToPlane,
+                healCAD, CADImport, BrepImport,
+                Fillet, Chamfer, Array, ArrayRot, ArrayByPoints, ArrayRotByPoints,
+                ArrayPath,
+                ThruSection, CreateShell, RotateCenterPoints, MoveByPoints, ExtendedLine,
+                CreateOffset, CreateOffsetFace, CreateProjection, Simplifiers, MovePoint,
+                SplitHairlineFace, CapFaces, ReplaceFaces, Subsequence]
+
+    def get_possible_child_menu(self):
+        return [("Geometry Element...", None),
+                ("Points...", PointOCC), ("", PointCenter), ("", PointOnEdge),
+                ("", PointCircleCenter), ("!", PointByUV),
+                ("Lines...", LineOCC), ("!", ExtendedLine),
+                ("Polygon...", Polygon2), ("!", OCCPolygon),
+                ("Circle...", CircleOCC), ("", CircleByAxisPoint),
+                ("", CircleByAxisCenterRadius), ("!", CircleBy3Points),
+                ("", Rect),
+                ("", Spline),
+                ("!", None),
+                ("3D shape...", Box),
+                ("", Ball), ("", Cone), ("", Wedge), ("", Cylinder),
+                ("!", Torus),
+                ("Create...", CreateLine), ("", CreateSurface), ("", CreateVolume),
+                ("", ThruSection), ("", CreateOffset), ("",
+                                                        CreateOffsetFace), ("", CreateShell),
+                ("!", CreateProjection),
+                ("Protrude...", Extrude), ("", Revolve), ("!", Sweep),
+                ("Fillet/Chamfer", Fillet), ("!", Chamfer),
+                ("Copy/Remove...", Copy), ("",
+                                           Remove), ("", Remove2), ("!", RemoveFaces),
+                ("Translate...", Move,), ("", MoveByPoints), ("",
+                                                              Rotate), ("", RotateCenterPoints),
+                ("", Flip), ("!", Scale),
+                ("Array...", Array), ("", ArrayRot), ("",
+                                                      ArrayByPoints), ("", ArrayRotByPoints),
+                ("!", ArrayPath),
+                ("Boolean...", Union), ("", MergeFace), ("", Intersection),
+                ("", Difference), ("", Fragments), ("!", SplitByPlane),
+                ("WorkPlane...", WorkPlane), ("", WorkPlaneByPoints),
+                ("", WPParallelToPlane), ("!", WPNormalToPlane),
+                ("Import...", BrepImport), ("", CADImport), ("", healCAD),
+                ("Extra(under Dev,)...", Simplifiers), ("", MovePoint),
+                ("", CapFaces), ("", ReplaceFaces), ("!", SplitHairlineFace),
+                ("!", None),
+                ("Subsequence", Subsequence),
+                ("!", None),
+                ]
+
+    def panel1_param(self):
+        ll = super(Subsequence, self).panel1_param()
+        from petram.pi.widget_parameters import WidgetParameters
+        ll.append([None, None, 99, {"UI": WidgetParameters, "span": (1, 2)}])
+        return ll
+
+    def get_panel1_value(self):
+        values = super(Subsequence, self).get_panel1_value()
+        values.append(self.seq_values)
+        return values
+
+    def import_panel1_value(self, v):
+        self.seq_values = v[-1]
+        v = super(Subsequence, self).import_panel1_value(v[:-1])
+
+
 data0 = (('center', VtableElement('pts1', type='string',
                                   guilabel='Center point',
                                   default="",
