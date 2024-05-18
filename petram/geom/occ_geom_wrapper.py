@@ -3834,7 +3834,7 @@ class Geometry():
 
         cptx, normal = self.process_plane_parameters(plane_param, objs, gids)
 
-        d = -np.sum(normal * cptx)
+        d = np.sum(normal * cptx)
         abcd = (normal[0], normal[1], normal[2], d)
 
         for gid in gids:

@@ -1,11 +1,7 @@
 ## Petra-M geometry
+Geometry/Meshing interface for Petra-M
 
-Geometry editor interface. This module provdes
-
-1) Geometry interfaces:
-    OCC interface : use OpenCASCADE (via pythonocc)
-    GMSH interface : use GMSH (via pythonocc)     
-
+1) Geometry interfaces: 
 2) Meshing interfaces:
-    GMSH interface : use GMSH
-    (PUMI interface will come here)
+     
+Current version is developed with PyOCC 7.5.1 and gmsh 4.10.5
